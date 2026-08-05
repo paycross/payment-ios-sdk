@@ -182,8 +182,17 @@ final class APIClientTests: XCTestCase {
     func testBrowserInfoEncodesSnakeCase() throws {
         let data = try JSONEncoder().encode(sampleBrowserInfo)
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        XCTAssertNotNil(json["user_agent"])
-        XCTAssertNotNil(json["ip_address"])
+        // Non-EMPTY, not merely non-nil: the backend trims and rejects blanks,
+        // and "" is present-but-invalid. Asserting presence is what allowed an
+        // SDK whose ip_address was always "" to pass this test.
+        for key in ["user_agent", "ip_address", "language", "accept_header"] {
+            let value = json[key] as? String
+            XCTAssertNotNil(value, "\(key) missing")
+            XCTAssertFalse(
+                (value ?? "").trimmingCharacters(in: .whitespaces).isEmpty,
+                "\(key) is blank; the backend rejects it"
+            )
+        }
         XCTAssertNotNil(json["screen_width"])
         XCTAssertNotNil(json["timezone_offset"])
         XCTAssertEqual(json["java_enabled"] as? Bool, false)

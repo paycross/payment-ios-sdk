@@ -1,6 +1,7 @@
 #if os(iOS)
 import SwiftUI
 import UIKit
+import WebKit
 import PayCrossCore
 
 /// Presents the PayCross payment flow.
@@ -122,6 +123,7 @@ final class PaymentSheetModel: ObservableObject {
     /// Set once the host controller exists, since the presenter needs somewhere
     /// to attach its web view.
     var threeDSPresenter: (any ThreeDSPresenting)?
+    private lazy var ipProvider = IPAddressProvider(transport: URLSessionTransport())
 
     init(
         sessionToken: String,
@@ -160,6 +162,10 @@ final class PaymentSheetModel: ObservableObject {
     /// Fetches the session so the form knows what the server wants shown.
     func load() async {
         defer { isPreparing = false }
+        // Warmed off the critical path so submit does not pay for the lookup.
+        async let ip: Void = ipProvider.warm()
+        async let ua: Void = DeviceInfo.warmUserAgent()
+        _ = await (ip, ua)
         guard let data = try? await makeClient()
             .session(id: claims.sessionID, sessionToken: sessionToken).data else {
             // A failed fetch is not fatal: a new-card form with no saved cards
@@ -222,7 +228,7 @@ final class PaymentSheetModel: ObservableObject {
         let request = SubmitCardRequest(
             session: sessionToken,
             card: card,
-            browserInfo: DeviceInfo.browserInfo(),
+            browserInfo: DeviceInfo.browserInfo(ipAddress: await ipProvider.current()),
             // Only visible, non-blank values go on the wire; a hidden field's
             // stale value must not be submitted.
             fieldGroups: FieldGroupLogic.submissionValues(
@@ -246,18 +252,56 @@ private struct ThreeDSPresenterStub: ThreeDSPresenting {
 }
 
 /// Collects the device characteristics 3DS v2 requires.
+///
+/// Every field here is validated non-blank by the backend, so this is assembled
+/// from real values rather than placeholders and asserted by
+/// `BrowserInfo.isSubmittable`.
+@MainActor
 enum DeviceInfo {
-    @MainActor
-    static func browserInfo(ipAddress: String = "") -> BrowserInfo {
-        let screen = UIScreen.main.bounds
+
+    /// The real device user agent, which the ACS fingerprints against.
+    ///
+    /// Android sends `WebSettings.getDefaultUserAgent(context)`; sending the SDK
+    /// version string instead is a value the backend accepts and the ACS does
+    /// not recognise, which raises the odds of a forced challenge.
+    private static var cachedUserAgent: String?
+
+    static func warmUserAgent() async {
+        guard cachedUserAgent == nil else { return }
+        let webView = WKWebView(frame: .zero)
+        cachedUserAgent = try? await webView.evaluateJavaScript("navigator.userAgent") as? String
+    }
+
+    static func browserInfo(ipAddress: String) -> BrowserInfo {
+        let bounds = screenBounds()
+        let scale = UITraitCollection.current.displayScale
         return BrowserInfo(
-            userAgent: "PayCrossSDK-iOS/\(PayCrossAPI.version)",
+            userAgent: cachedUserAgent ?? defaultUserAgent,
             ipAddress: ipAddress,
-            screenWidth: Int(screen.width),
-            screenHeight: Int(screen.height),
+            // Pixels, not points: 3DS specifies browserScreenWidth in pixels and
+            // Android sends displayMetrics.widthPixels.
+            screenWidth: Int(bounds.width * scale),
+            screenHeight: Int(bounds.height * scale),
             timezoneOffset: BrowserInfo.timezoneOffsetMinutes(),
-            language: Locale.current.identifier
+            // BCP-47 ("en-GB"), not the ICU identifier ("en_GB") that
+            // Locale.identifier returns.
+            language: Locale.current.identifier(.bcp47)
         )
+    }
+
+    /// Used only until the real user agent resolves; still non-blank so a
+    /// submission is never rejected outright for want of it.
+    static let defaultUserAgent =
+        "Mozilla/5.0 (iPhone; CPU iPhone OS like Mac OS X) AppleWebKit/605.1.15 "
+        + "(KHTML, like Gecko) PayCrossSDK-iOS/\(PayCrossAPI.version)"
+
+    private static func screenBounds() -> CGRect {
+        // UIScreen.main is deprecated in iOS 16; read the active scene instead.
+        let scene = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first { $0.activationState == .foregroundActive }
+            ?? UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+        return scene?.screen.bounds ?? CGRect(x: 0, y: 0, width: 390, height: 844)
     }
 }
 

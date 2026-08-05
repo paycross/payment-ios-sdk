@@ -85,10 +85,11 @@ struct CardFormView: View {
             }
 
             LabeledField(title: "Card Number", trailing: BrandBadge(brand: state.brand)) {
-                // NumberPassword, not Number: the framework treats the password
-                // variation as a password input type and withholds the field's
-                // contents from the keyboard process. Masking stays off - the
-                // shopper must be able to read their own card number.
+                // NOTE: Android uses KeyboardType.NumberPassword here, which
+                // makes the framework withhold the field's contents from the
+                // keyboard process. UIKeyboardType has no such variation, so
+                // iOS has NO equivalent protection on this field today. Do not
+                // record this as covered in a security review.
                 TextField("1234 5678 9012 3456", text: panBinding)
                     .keyboardType(.numberPad)
                     .textContentType(.creditCardNumber)

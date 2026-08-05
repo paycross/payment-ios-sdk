@@ -55,6 +55,9 @@ public actor PaymentFlowRunner {
     private let scheduler: any FlowScheduler
     private var state: PaymentFlowState
     private var presentationTask: Task<Void, Never>?
+    /// The server's last rejection text, for diagnostics. Never shown to a
+    /// shopper -- it can name internal fields.
+    public private(set) var lastServerDiagnostic: String?
 
     public init(
         client: PayCrossAPIClient,
@@ -102,6 +105,12 @@ public actor PaymentFlowRunner {
                 if case .transport = error {
                     return .failure("Network error. Please try again.")
                 }
+                // The server's own message is kept as a diagnostic rather than
+                // collapsed to a generic string. Swallowing it is why an SDK
+                // that could never submit -- every request rejected for
+                // "missing browser_info.ip_address" -- looked like a plain
+                // decline for its entire development.
+                lastServerDiagnostic = error.serverMessage
                 return .failure("Payment submission failed")
             } catch {
                 return .failure("Network error. Please try again.")

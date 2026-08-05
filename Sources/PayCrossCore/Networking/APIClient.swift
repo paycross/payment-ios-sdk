@@ -24,6 +24,12 @@ public enum PayCrossError: Error, Sendable, Equatable {
     /// The response body did not decode.
     case decoding(String)
 
+    /// The server's own explanation, when it sent one.
+    public var serverMessage: String? {
+        if case .http(_, let body) = self { return body }
+        return nil
+    }
+
     /// Whether a submit should be retried after this error.
     ///
     /// Only server-side rejections are retried; a transport failure or a timeout
