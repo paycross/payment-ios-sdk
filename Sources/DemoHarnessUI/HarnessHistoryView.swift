@@ -19,11 +19,19 @@ public struct HarnessHistoryView: View {
     public var body: some View {
         Group {
             if runs.isEmpty {
-                ContentUnavailableView(
-                    "No runs yet",
-                    systemImage: "clock",
-                    description: Text("Sessions you mint will appear here.")
-                )
+                // Hand-rolled rather than ContentUnavailableView, which is iOS 17+
+                // while this package targets iOS 16.
+                VStack(spacing: 8) {
+                    Image(systemName: "clock")
+                        .font(.largeTitle)
+                        .foregroundStyle(.secondary)
+                    Text("No runs yet")
+                        .font(.headline)
+                    Text("Sessions you mint will appear here.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 List(runs) { run in
                     Button { onSelect(run) } label: { RunRow(run: run) }
