@@ -53,6 +53,11 @@ jobs:
       # Renders every card-form state to a PNG. This is the only way the UI gets
       # looked at until there is a Mac in the loop, so it runs on every push.
       # TEST_RUNNER_ prefixed variables are forwarded into the test process.
+      # SwiftPM's per-library scheme has no test action; the generated
+      # "<Package>-Package" scheme is the one that carries the test targets.
+      - name: List schemes
+        run: xcodebuild -list
+
       - name: Test and render screenshots
         env:
           TEST_RUNNER_PAYCROSS_SCREENSHOT_DIR: ${{ github.workspace }}/screenshots
@@ -60,7 +65,7 @@ jobs:
           set -euo pipefail
           mkdir -p "${{ github.workspace }}/screenshots"
           xcodebuild test \
-            -scheme PayCross \
+            -scheme PayCross-Package \
             -destination "platform=iOS Simulator,name=iPhone 17,OS=${{ steps.sim.outputs.os }}" \
             -resultBundlePath "${{ github.workspace }}/TestResults.xcresult" \
             CODE_SIGNING_ALLOWED=NO
