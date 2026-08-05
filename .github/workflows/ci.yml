@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # The whole point of the Core/UI split: this job proves the payment state
+  # machine, validation, JWT decoding and wire models on a free Linux runner,
+  # in seconds, on every push. Most of the SDK's behaviour is verified here.
+  core:
+    name: Core (Linux)
+    runs-on: ubuntu-latest
+    container: swift:6.2
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: swift build --build-tests
+      - name: Test
+        run: swift test
+
+  # macOS minutes are ~10x Linux and draw down the monthly allotment on a private
+  # repo, so this job exists to prove one thing Linux cannot: that the UIKit /
+  # SwiftUI / WebKit target actually compiles for iOS.
+  ios:
+    name: iOS build
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      # The runtime advertised as "iOS 26.4" has version string 26.4.1, so an
+      # OS= pin written by hand silently fails to match. Ask simctl instead.
+      - name: Resolve a simulator destination
+        id: sim
+        run: |
+          set -euo pipefail
+          xcrun simctl list runtimes
+          OS=$(xcrun simctl list runtimes --json \
+            | python3 -c "import json,sys; rs=[r for r in json.load(sys.stdin)['runtimes'] if r['isAvailable'] and r['identifier'].find('iOS')>=0]; print(sorted(r['version'] for r in rs)[-1])")
+          echo "Selected iOS runtime: $OS"
+          echo "os=$OS" >> "$GITHUB_OUTPUT"
+
+      - name: Build for simulator
+        run: |
+          set -euo pipefail
+          xcodebuild build \
+            -scheme PayCross \
+            -destination "platform=iOS Simulator,name=iPhone 17,OS=${{ steps.sim.outputs.os }}" \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcbeautify --renderer github-actions || \
+          xcodebuild build \
+            -scheme PayCross \
+            -destination "platform=iOS Simulator,name=iPhone 17,OS=${{ steps.sim.outputs.os }}" \
+            CODE_SIGNING_ALLOWED=NO
+
+  # Guards the property the Linux job depends on: nothing in PayCrossCore may
+  # import a UI framework, and every file in PayCross must be platform-guarded.
+  # Without this the Core/UI split rots the first time someone adds an import.
+  invariants:
+    name: Invariants
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: PayCrossCore imports no UI framework
+        run: |
+          set -euo pipefail
+          if grep -rnE '^\s*import (UIKit|SwiftUI|WebKit|PassKit)' Sources/PayCrossCore; then
+            echo "::error::PayCrossCore must stay platform-agnostic so it builds on Linux."
+            exit 1
+          fi
+          echo "ok"
+
+      - name: Every PayCross source is guarded by #if os(iOS)
+        run: |
+          set -euo pipefail
+          status=0
+          for f in $(find Sources/PayCross -name '*.swift'); do
+            if ! head -5 "$f" | grep -q '#if os(iOS)'; then
+              echo "::error file=$f::missing '#if os(iOS)' guard; this breaks the Linux build"
+              status=1
+            fi
+          done
+          exit $status
+
+      - name: No card data may reach disk
+        run: |
+          set -euo pipefail
+          # Strip comments first: the sources legitimately *discuss* these APIs.
+          if find Sources -name '*.swift' -exec sed -E 's://.*::' {} + \
+             | grep -nE '@AppStorage|@SceneStorage|UserDefaults|SecItemAdd|UIPasteboard'; then
+            echo "::error::persistence API referenced in SDK sources"
+            exit 1
+          fi
+          echo "ok"

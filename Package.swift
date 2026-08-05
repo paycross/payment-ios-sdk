@@ -1,0 +1,31 @@
+// swift-tools-version: 6.0
+import PackageDescription
+
+// PayCrossCore is deliberately free of UIKit/SwiftUI/WebKit so it builds and tests
+// on Linux. That is not an abstract nicety: the SDK is developed from WSL2 with no
+// Apple hardware, so every behaviour that lives in Core is verifiable on every
+// commit, and everything in PayCross is not.
+let package = Package(
+    name: "PayCross",
+    platforms: [.iOS(.v16)],
+    products: [
+        .library(name: "PayCross", targets: ["PayCross"]),
+        .library(name: "PayCrossCore", targets: ["PayCrossCore"])
+    ],
+    targets: [
+        .target(
+            name: "PayCrossCore",
+            swiftSettings: [.swiftLanguageMode(.v6)]
+        ),
+        .target(
+            name: "PayCross",
+            dependencies: ["PayCrossCore"],
+            swiftSettings: [.swiftLanguageMode(.v6)]
+        ),
+        .testTarget(
+            name: "PayCrossCoreTests",
+            dependencies: ["PayCrossCore"],
+            swiftSettings: [.swiftLanguageMode(.v6)]
+        )
+    ]
+)
