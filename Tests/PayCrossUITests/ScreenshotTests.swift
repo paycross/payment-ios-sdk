@@ -22,14 +22,29 @@ final class ScreenshotTests: XCTestCase {
         return url
     }
 
+    /// Renders through a real `UIHostingController` in a real window.
+    ///
+    /// `ImageRenderer` looks like the obvious tool and produces blank images here:
+    /// it cannot render UIKit-backed views, and `TextField`/`SecureField` are
+    /// exactly that. Hosting in a window and calling `drawHierarchy` renders the
+    /// genuine view hierarchy, text fields included.
     private func capture(_ name: String, @ViewBuilder _ content: () -> some View) throws {
-        let renderer = ImageRenderer(
-            content: content()
-                .frame(width: Self.size.width, height: Self.size.height)
-        )
-        renderer.scale = 2
+        let controller = UIHostingController(rootView: content())
+        let window = UIWindow(frame: CGRect(origin: .zero, size: Self.size))
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
 
-        let image = try XCTUnwrap(renderer.uiImage, "ImageRenderer produced no image for \(name)")
+        controller.view.frame = window.bounds
+        controller.view.setNeedsLayout()
+        controller.view.layoutIfNeeded()
+        // One run-loop turn so UIKit-backed subviews commit their text.
+        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+
+        let renderer = UIGraphicsImageRenderer(bounds: window.bounds)
+        let image = renderer.image { _ in
+            window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
+        }
+
         let data = try XCTUnwrap(image.pngData(), "no PNG data for \(name)")
         let url = outputDirectory.appendingPathComponent("\(name).png")
         try data.write(to: url)
@@ -41,8 +56,45 @@ final class ScreenshotTests: XCTestCase {
         attachment.lifetime = .keepAlways
         add(attachment)
 
-        XCTAssertGreaterThan(data.count, 1000, "\(name) rendered suspiciously small")
+        // A blank render is comfortably larger than 1KB, so size proves nothing.
+        // The first version of this harness shipped seven byte-identical blank
+        // PNGs and passed. Assert the image actually has content in it.
+        XCTAssertTrue(
+            Self.hasVariedContent(image),
+            "\(name) rendered as a flat colour - the view hierarchy did not draw"
+        )
+        Self.captured.insert(data.count)
     }
+
+    /// True when the image contains meaningfully more than one colour.
+    private static func hasVariedContent(_ image: UIImage) -> Bool {
+        guard let cgImage = image.cgImage else { return false }
+        let width = min(cgImage.width, 80)
+        let height = min(cgImage.height, 160)
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+
+        guard let context = CGContext(
+            data: &pixels,
+            width: width, height: height,
+            bitsPerComponent: 8, bytesPerRow: width * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return false }
+
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+        let first = Array(pixels.prefix(4))
+        for index in stride(from: 0, to: pixels.count, by: 4) {
+            let pixel = Array(pixels[index..<index + 4])
+            // Any pixel differing by more than a rounding wobble means content.
+            if zip(pixel, first).contains(where: { abs(Int($0) - Int($1)) > 8 }) {
+                return true
+            }
+        }
+        return false
+    }
+
+    private static var captured: Set<Int> = []
 
     private var amount: Amount { Amount(minorUnits: 2599, currencyCode: "EUR") }
 
