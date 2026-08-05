@@ -82,6 +82,17 @@ private actor RecordingPresenter: ThreeDSPresenting {
     func dismiss() async { dismissals += 1 }
 }
 
+/// Stands in for a shopper who is staring at their bank's challenge page and has
+/// not answered yet. Never resolves.
+private struct NeverResolvingPresenter: ThreeDSPresenting {
+    func present(_ step: ThreeDSStep) async -> ThreeDSOutcome {
+        await withCheckedContinuation { (_: CheckedContinuation<Void, Never>) in }
+        return .completed
+    }
+
+    func dismiss() async {}
+}
+
 final class PaymentFlowRunnerTests: XCTestCase {
 
     private let baseURL = URL(string: "https://checkout.test-pay-cross.com/api")!
@@ -89,7 +100,7 @@ final class PaymentFlowRunnerTests: XCTestCase {
     private func makeRunner(
         transport: ScriptedTransport,
         scheduler: VirtualScheduler,
-        presenter: RecordingPresenter
+        presenter: any ThreeDSPresenting
     ) -> PaymentFlowRunner {
         PaymentFlowRunner(
             client: PayCrossAPIClient(baseURL: baseURL, transport: transport, userAgent: "test"),
@@ -246,6 +257,37 @@ final class PaymentFlowRunnerTests: XCTestCase {
 
         let presented = await presenter.presented
         XCTAssertEqual(presented.count, 1, "the same action must be presented once")
+    }
+
+    /// Android's handleStatus sets the 3DS state and returns false, so polling
+    /// keeps running while the challenge is on screen. If presentation were
+    /// awaited inline, a shopper who takes a minute to answer their bank would
+    /// stall the poll loop for that whole minute and the server's verdict would
+    /// arrive late or not at all.
+    func testPollingContinuesWhileAChallengeIsOnScreen() async {
+        let challenge = """
+        {"transaction_id":"t1","status":"threeds_challenge",
+         "action":{"url":"https://acs/ch","method":"GET"}}
+        """
+        let transport = ScriptedTransport(
+            submit: [.init(json: #"{"success":true,"transaction_id":"t1"}"#)],
+            status: [
+                .init(json: challenge),
+                .init(json: challenge),
+                .init(json: #"{"transaction_id":"t1","status":"success","amount":1,"currency":"EUR"}"#)
+            ]
+        )
+        let runner = makeRunner(
+            transport: transport,
+            scheduler: VirtualScheduler(),
+            presenter: NeverResolvingPresenter()
+        )
+
+        let outcome = await runner.run(sampleRequest)
+
+        guard case .finished(.succeeded) = outcome else {
+            return XCTFail("polling stalled behind the challenge; got \(outcome)")
+        }
     }
 
     // MARK: - Declines

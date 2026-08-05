@@ -54,6 +54,7 @@ public actor PaymentFlowRunner {
     private let presenter: any ThreeDSPresenting
     private let scheduler: any FlowScheduler
     private var state: PaymentFlowState
+    private var presentationTask: Task<Void, Never>?
 
     public init(
         client: PayCrossAPIClient,
@@ -147,6 +148,15 @@ public actor PaymentFlowRunner {
         return await apply(effects) ?? .finished(.failed(transactionID: transactionID, recovery: .retry))
     }
 
+    /// Called when a presented 3DS step resolves.
+    ///
+    /// A failed challenge is not itself terminal: the server still owns the
+    /// verdict, and polling is what surfaces it. Clearing the pending step lets
+    /// a subsequent, genuinely different action be presented.
+    private func threeDSFinished(_ outcome: ThreeDSOutcome) {
+        _ = PaymentFlowReducer.reduce(state: &state, event: .threeDSCompleted)
+    }
+
     /// Runs the reducer's effects. Returns an outcome when the run is over.
     ///
     /// `stopPolling` without a `finish` is the retryable-decline case: the loop
@@ -160,9 +170,15 @@ public actor PaymentFlowRunner {
                 await presenter.dismiss()
 
             case .present3DS(let step):
-                let result = await presenter.present(step)
-                if result == .completed {
-                    _ = PaymentFlowReducer.reduce(state: &state, event: .threeDSCompleted)
+                // Deliberately NOT awaited. Android's handleStatus sets the 3DS
+                // state and returns false, so polling keeps running while the
+                // challenge is on screen - the server decides the outcome, not
+                // the web view. Awaiting here would stall the poll loop for as
+                // long as the shopper takes to answer their bank.
+                presentationTask?.cancel()
+                presentationTask = Task { [presenter] in
+                    let outcome = await presenter.present(step)
+                    await self.threeDSFinished(outcome)
                 }
 
             case .finish(let result):

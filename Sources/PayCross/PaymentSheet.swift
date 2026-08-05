@@ -57,6 +57,7 @@ public final class PaymentSheet {
         let host = PaymentHostController(model: model)
         // The shopper must not be able to swipe the sheet away mid-authorization.
         host.isModalInPresentation = true
+        model.threeDSPresenter = WebKitThreeDSPresenter(host: host)
         presenter.present(host, animated: true)
 
         let result = await model.awaitResult()
@@ -100,6 +101,9 @@ final class PaymentSheetModel: ObservableObject {
     private let sessionToken: String
     private let configuration: Configuration
     private var continuation: CheckedContinuation<PaymentResult, Never>?
+    /// Set once the host controller exists, since the presenter needs somewhere
+    /// to attach its web view.
+    var threeDSPresenter: (any ThreeDSPresenting)?
 
     init(
         sessionToken: String,
@@ -166,7 +170,10 @@ final class PaymentSheetModel: ObservableObject {
         )
         let runner = PaymentFlowRunner(
             client: client,
-            presenter: ThreeDSPresenterStub(),
+            // If the presenter is missing the sheet has no host, so a 3DS step
+            // could not be shown. Reporting .failed rather than .completed keeps
+            // an unanswered challenge from looking like an answered one.
+            presenter: threeDSPresenter ?? ThreeDSPresenterStub(),
             claims: claims
         )
         let request = SubmitCardRequest(
