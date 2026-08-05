@@ -32,6 +32,17 @@ let package = Package(
             name: "PayCrossUITests",
             dependencies: ["PayCross", "PayCrossCore"],
             swiftSettings: [.swiftLanguageMode(.v6)]
+        ),
+        // The demo harness's logic: seeds, minting, deep links, outcome reading.
+        // Platform-agnostic on purpose, so the automation contract is testable.
+        .target(
+            name: "DemoHarnessCore",
+            swiftSettings: [.swiftLanguageMode(.v6)]
+        ),
+        .testTarget(
+            name: "DemoHarnessCoreTests",
+            dependencies: ["DemoHarnessCore"],
+            swiftSettings: [.swiftLanguageMode(.v6)]
         )
     ]
 )
