@@ -117,8 +117,11 @@ final class ScreenshotTests: XCTestCase {
     private func form(
         _ state: CardFormState,
         savedCards: [SavedCard] = [],
-        isLoading: Bool = false
+        isLoading: Bool = false,
+        fieldGroups: [FieldGroup] = [],
+        fieldErrors: [FieldGroupError] = []
     ) -> some View {
+        StatefulPreviewWrapper([String: [String: String]]()) { values in
         StatefulPreviewWrapper(state) { binding in
             CardFormView(
                 state: binding,
@@ -126,8 +129,12 @@ final class ScreenshotTests: XCTestCase {
                 savedCards: savedCards,
                 allowsSaving: true,
                 isLoading: isLoading,
+                fieldGroups: fieldGroups,
+                fieldValues: values,
+                fieldErrors: fieldErrors,
                 onPay: {}
             )
+        }
         }
     }
 
@@ -187,6 +194,38 @@ final class ScreenshotTests: XCTestCase {
     func testNewCardAlongsideSavedCards() throws {
         let saved = [SavedCard(id: "a", brand: .visa, last4: "1111", expiryLabel: "12/30")]
         try capture("07-new-card-with-saved") { form(CardFormState(), savedCards: saved) }
+    }
+
+    /// A checkout the server has decorated with extra fields, one of them
+    /// conditional and one showing a validation failure.
+    func testFormWithServerDrivenFields() throws {
+        var state = CardFormState()
+        CardFormReducer.reduce(state: &state, event: .nameChanged("A Person"))
+        CardFormReducer.reduce(state: &state, event: .panChanged("4111111111111111"))
+        CardFormReducer.reduce(state: &state, event: .expiryChanged("1230"))
+
+        let groups = [FieldGroup(key: "billing", label: "Billing address", fields: [
+            FieldDefinition(
+                name: "country", type: "select", label: "Country", required: true,
+                options: [FieldOption(value: "US", label: "United States"),
+                          FieldOption(value: "GB", label: "United Kingdom")]
+            ),
+            FieldDefinition(
+                name: "postcode", type: "text", label: "Postcode",
+                placeholder: "SW1A 1AA", required: true,
+                validation: FieldValidation(pattern: "^[A-Z0-9 ]+$", maxLength: 8)
+            )
+        ])]
+
+        try capture("08-field-groups") {
+            form(
+                state, fieldGroups: groups,
+                fieldErrors: [FieldGroupError(
+                    groupKey: "billing", fieldName: "postcode",
+                    message: "Postcode is required"
+                )]
+            )
+        }
     }
 
     // MARK: - Harness screens

@@ -14,6 +14,9 @@ struct CardFormView: View {
     let savedCards: [SavedCard]
     let allowsSaving: Bool
     let isLoading: Bool
+    let fieldGroups: [FieldGroup]
+    @Binding var fieldValues: [String: [String: String]]
+    let fieldErrors: [FieldGroupError]
     let onPay: () -> Void
 
     private var canPay: Bool { state.canSubmit() && !isLoading }
@@ -36,6 +39,19 @@ struct CardFormView: View {
                         newCardFields
                     } else {
                         cvvField
+                    }
+
+                        if !fieldGroups.isEmpty {
+                        FieldGroupsView(
+                            groups: fieldGroups,
+                            values: $fieldValues,
+                            errors: fieldErrors
+                        )
+                    }
+
+                    if allowsSaving && state.source.isNewCard {
+                        Toggle("Save this card", isOn: saveCardBinding)
+                            .font(.subheadline)
                     }
 
                     if let error = state.inlineError {
@@ -130,6 +146,13 @@ struct CardFormView: View {
         Binding(
             get: { state[keyPath: keyPath] },
             set: { send(event($0)) }
+        )
+    }
+
+    private var saveCardBinding: Binding<Bool> {
+        Binding(
+            get: { state.saveCard },
+            set: { send(.saveCardToggled($0)) }
         )
     }
 

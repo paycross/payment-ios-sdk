@@ -99,6 +99,8 @@ final class PaymentSheetModel: ObservableObject {
     /// then because the server decides what it contains.
     @Published private(set) var isPreparing = true
     @Published private(set) var sessionData: SessionData?
+    @Published var fieldValues: [String: [String: String]] = [:]
+    @Published private(set) var fieldErrors: [FieldGroupError] = []
 
     let claims: SessionClaims
 
@@ -108,6 +110,10 @@ final class PaymentSheetModel: ObservableObject {
 
     var allowsSavingCard: Bool {
         sessionData?.allowsSavingCard ?? false
+    }
+
+    var fieldGroups: [FieldGroup] {
+        sessionData?.fieldGroups ?? []
     }
 
     private let sessionToken: String
@@ -161,6 +167,7 @@ final class PaymentSheetModel: ObservableObject {
             return
         }
         sessionData = data
+        fieldValues = FieldGroupLogic.initialValues(data.fieldGroups ?? [])
         // Default to the first saved card, matching the checkout page.
         if let first = data.savedCards?.first?.presentable {
             CardFormReducer.reduce(state: &form, event: .sourceSelected(.saved(first)))
@@ -179,6 +186,12 @@ final class PaymentSheetModel: ObservableObject {
 
     func pay() {
         guard let card = form.cardData(), !isLoading else { return }
+
+        // Server-driven fields are validated here, not in the form reducer: only
+        // visible fields count, and visibility depends on sibling values.
+        fieldErrors = FieldGroupLogic.validate(groups: fieldGroups, values: fieldValues)
+        guard fieldErrors.isEmpty else { return }
+
         isLoading = true
         // Clears the CVV from form state the moment it is handed off (Req 3.3.1).
         CardFormReducer.reduce(state: &form, event: .paySubmitted)
@@ -209,7 +222,12 @@ final class PaymentSheetModel: ObservableObject {
         let request = SubmitCardRequest(
             session: sessionToken,
             card: card,
-            browserInfo: DeviceInfo.browserInfo()
+            browserInfo: DeviceInfo.browserInfo(),
+            // Only visible, non-blank values go on the wire; a hidden field's
+            // stale value must not be submitted.
+            fieldGroups: FieldGroupLogic.submissionValues(
+                groups: fieldGroups, values: fieldValues
+            ).nilIfEmpty
         )
         return await runner.run(request)
     }
@@ -259,6 +277,9 @@ struct PaymentSheetView: View {
                         savedCards: model.savedCards,
                         allowsSaving: model.allowsSavingCard,
                         isLoading: model.isLoading,
+                        fieldGroups: model.fieldGroups,
+                        fieldValues: $model.fieldValues,
+                        fieldErrors: model.fieldErrors,
                         onPay: model.pay
                     )
                 }
@@ -276,3 +297,8 @@ struct PaymentSheetView: View {
     }
 }
 #endif
+
+private extension Dictionary {
+    /// Sends nothing rather than an empty object when there is nothing to send.
+    var nilIfEmpty: Self? { isEmpty ? nil : self }
+}
