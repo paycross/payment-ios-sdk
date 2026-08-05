@@ -102,20 +102,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: PayCrossCore imports no UI framework
-        run: |
-          set -euo pipefail
-          if grep -rnE '^\s*import (UIKit|SwiftUI|WebKit|PassKit)' Sources/PayCrossCore; then
-            echo "::error::PayCrossCore must stay platform-agnostic so it builds on Linux."
-            exit 1
-          fi
-          echo "ok"
-
-      - name: Every PayCross source is guarded by #if os(iOS)
+      - name: Linux-buildable targets import no UI framework
         run: |
           set -euo pipefail
           status=0
-          for f in $(find Sources/PayCross -name '*.swift'); do
+          for t in PayCrossCore DemoHarnessCore; do
+            if grep -rnE '^\s*import (UIKit|SwiftUI|WebKit|PassKit)' "Sources/$t"; then
+              echo "::error::$t must stay platform-agnostic so it builds on Linux."
+              status=1
+            fi
+          done
+          exit $status
+
+      - name: Every iOS-only source is guarded by #if os(iOS)
+        run: |
+          set -euo pipefail
+          status=0
+          for f in $(find Sources/PayCross Sources/DemoHarnessUI -name '*.swift'); do
             if ! head -5 "$f" | grep -q '#if os(iOS)'; then
               echo "::error file=$f::missing '#if os(iOS)' guard; this breaks the Linux build"
               status=1

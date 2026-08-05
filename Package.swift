@@ -30,13 +30,20 @@ let package = Package(
         // Renders the SwiftUI surfaces to PNGs on a macOS runner. Empty on Linux.
         .testTarget(
             name: "PayCrossUITests",
-            dependencies: ["PayCross", "PayCrossCore"],
+            dependencies: ["PayCross", "PayCrossCore", "DemoHarnessCore", "DemoHarnessUI"],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         // The demo harness's logic: seeds, minting, deep links, outcome reading.
         // Platform-agnostic on purpose, so the automation contract is testable.
         .target(
             name: "DemoHarnessCore",
+            swiftSettings: [.swiftLanguageMode(.v6)]
+        ),
+        // Harness screens. Lives in the package rather than only in an app target
+        // so the screenshot pipeline can render it before an app exists.
+        .target(
+            name: "DemoHarnessUI",
+            dependencies: ["DemoHarnessCore", "PayCross"],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .testTarget(

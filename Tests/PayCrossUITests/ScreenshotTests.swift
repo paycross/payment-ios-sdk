@@ -3,6 +3,8 @@ import XCTest
 import SwiftUI
 @testable import PayCross
 @testable import PayCrossCore
+import DemoHarnessCore
+import DemoHarnessUI
 
 /// Renders the card form in each of its meaningful states and writes PNGs.
 ///
@@ -185,6 +187,99 @@ final class ScreenshotTests: XCTestCase {
     func testNewCardAlongsideSavedCards() throws {
         let saved = [SavedCard(id: "a", brand: .visa, last4: "1111", expiryLabel: "12/30")]
         try capture("07-new-card-with-saved") { form(CardFormState(), savedCards: saved) }
+    }
+
+    // MARK: - Harness screens
+
+    private var seededData: DemoData {
+        let merchant = Merchant(
+            id: "m1", name: "Sandbox merchant", environment: .staging,
+            tokenURL: "https://auth.example.com/token", clientID: "id",
+            clientSecret: "secret", paymentAPIURL: "https://api.example.com/payment-sessions"
+        )
+        let production = Merchant(id: "m2", name: "LIVE merchant", environment: .production)
+        var data = DemoData(
+            merchants: [merchant, production],
+            scenarios: [
+                Scenario(
+                    id: "s1", merchantID: "m1", name: "Approve",
+                    card: CardPrefill(pan: "4111111111111111"),
+                    requestBody: "{}", hint: "Straight-through approval"
+                ),
+                Scenario(
+                    id: "s2", merchantID: "m1", name: "3DS challenge",
+                    card: CardPrefill(pan: "4000027891380961"),
+                    requestBody: "{}", hint: "Presents an ACS challenge"
+                ),
+                Scenario(
+                    id: "s3", merchantID: "m1", name: "Decline",
+                    requestBody: "{}", hint: "Issuer decline, retryable"
+                )
+            ],
+            selectedMerchantID: "m1"
+        )
+        data.record(RunRecord(
+            scenarioName: "Approve", surface: .sdk, sessionID: "sess_a1b2c3",
+            outcome: "succeeded", transactionID: "txn_1", amount: 2599, currency: "EUR"
+        ))
+        data.record(RunRecord(
+            scenarioName: "3DS challenge", surface: .browser,
+            sessionID: "sess_d4e5f6", outcome: "pending"
+        ))
+        data.record(RunRecord(
+            scenarioName: "Decline", surface: .qr, sessionID: "sess_g7h8i9",
+            outcome: "failed · declined"
+        ))
+        return data
+    }
+
+    func testHarnessHome() throws {
+        try capture("10-harness-home") {
+            StatefulPreviewWrapper(seededData) { data in
+                StatefulPreviewWrapper(CheckoutSurface.sdk) { surface in
+                    NavigationStack {
+                        HarnessHomeView(
+                            data: data, surface: surface,
+                            onRun: { _, _ in }, onShowHistory: {}
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    func testHarnessHomeWithProductionMerchantSelected() throws {
+        var data = seededData
+        data.selectedMerchantID = "m2"
+        try capture("11-harness-production") {
+            StatefulPreviewWrapper(data) { bound in
+                StatefulPreviewWrapper(CheckoutSurface.browser) { surface in
+                    NavigationStack {
+                        HarnessHomeView(
+                            data: bound, surface: surface,
+                            onRun: { _, _ in }, onShowHistory: {}
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    func testHarnessHistory() throws {
+        try capture("12-harness-history") {
+            NavigationStack {
+                HarnessHistoryView(runs: seededData.runs, onSelect: { _ in })
+            }
+        }
+    }
+
+    func testProductionGate() throws {
+        try capture("13-production-gate") {
+            ProductionGateView(
+                merchantName: "LIVE merchant", scenarioName: "Approve",
+                onConfirm: {}, onCancel: {}
+            )
+        }
     }
 }
 

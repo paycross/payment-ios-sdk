@@ -19,31 +19,41 @@ struct CardFormView: View {
     private var canPay: Bool { state.canSubmit() && !isLoading }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                AmountHeader(amount: amount)
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    AmountHeader(amount: amount)
 
-                if !savedCards.isEmpty {
-                    SavedCardPicker(
-                        cards: savedCards,
-                        selection: state.source,
-                        onSelect: { send(.sourceSelected($0)) }
-                    )
+                    if !savedCards.isEmpty {
+                        SavedCardPicker(
+                            cards: savedCards,
+                            selection: state.source,
+                            onSelect: { send(.sourceSelected($0)) }
+                        )
+                    }
+
+                    if state.source.isNewCard {
+                        newCardFields
+                    } else {
+                        cvvField
+                    }
+
+                    if let error = state.inlineError {
+                        ErrorBanner(message: error)
+                    }
                 }
-
-                if state.source.isNewCard {
-                    newCardFields
-                } else {
-                    cvvField
-                }
-
-                if let error = state.inlineError {
-                    ErrorBanner(message: error)
-                }
-
-                PayButton(amount: amount, isLoading: isLoading, isEnabled: canPay, action: onPay)
+                .padding(20)
             }
-            .padding(20)
+
+            // Pinned rather than trailing the fields. A Pay button that floats
+            // mid-screen reads as unfinished, and on a taller device it drifts
+            // further from the thumb the longer the form is.
+            VStack(spacing: 0) {
+                Divider()
+                PayButton(amount: amount, isLoading: isLoading, isEnabled: canPay, action: onPay)
+                    .padding(20)
+            }
+            .background(.ultraThinMaterial)
         }
         .background(Color(.systemGroupedBackground))
     }
