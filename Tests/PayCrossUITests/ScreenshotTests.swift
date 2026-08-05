@@ -31,18 +31,32 @@ final class ScreenshotTests: XCTestCase {
     private func capture(_ name: String, @ViewBuilder _ content: () -> some View) throws {
         let controller = UIHostingController(rootView: content())
         let window = UIWindow(frame: CGRect(origin: .zero, size: Self.size))
+        // Attach to the live scene when there is one. A SwiftPM test bundle often
+        // has no foreground scene, which is why drawHierarchy alone renders blank.
+        if let scene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene }).first {
+            window.windowScene = scene
+        }
         window.rootViewController = controller
+        window.isHidden = false
         window.makeKeyAndVisible()
 
         controller.view.frame = window.bounds
         controller.view.setNeedsLayout()
         controller.view.layoutIfNeeded()
-        // One run-loop turn so UIKit-backed subviews commit their text.
-        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        // Let SwiftUI commit its layout and UIKit-backed subviews draw their text.
+        RunLoop.current.run(until: Date().addingTimeInterval(0.3))
 
         let renderer = UIGraphicsImageRenderer(bounds: window.bounds)
-        let image = renderer.image { _ in
-            window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
+        // layer.render(in:) walks the layer tree directly and does not require the
+        // window to be attached to a live screen, unlike drawHierarchy.
+        var image = renderer.image { context in
+            window.layer.render(in: context.cgContext)
+        }
+        if !Self.hasVariedContent(image) {
+            image = renderer.image { _ in
+                window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
+            }
         }
 
         let data = try XCTUnwrap(image.pngData(), "no PNG data for \(name)")
