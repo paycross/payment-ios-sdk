@@ -1,6 +1,7 @@
 #if os(iOS)
 import SwiftUI
 import DemoHarnessCore
+import PayCrossCore
 
 /// Every session this harness has minted, newest first.
 ///
@@ -63,7 +64,12 @@ private struct RunRow: View {
                     .padding(.vertical, 2)
                     .background(Color.secondary.opacity(0.15), in: Capsule())
                 if let amount = run.amount, let currency = run.currency {
-                    Text("\(amount) \(currency)").monospacedDigit()
+                    // Minor units. Interpolating them raw renders 2599 cents as
+                    // "2,599 EUR" - SwiftUI's Text even adds a grouping separator -
+                    // which reads as two and a half thousand euros. Amounts knows
+                    // about zero-decimal currencies too.
+                    Text(Amounts.formatted(Amount(minorUnits: amount, currencyCode: currency)))
+                        .monospacedDigit()
                 }
                 Text(run.sessionID.isEmpty ? "—" : run.sessionID)
                     .lineLimit(1)
@@ -121,7 +127,12 @@ public struct RunDetailView: View {
                     LabeledContent("Transaction", value: transactionID)
                 }
                 if let amount = run.amount, let currency = run.currency {
-                    LabeledContent("Amount", value: "\(amount) \(currency)")
+                    LabeledContent(
+                        "Amount",
+                        value: Amounts.formatted(
+                            Amount(minorUnits: amount, currencyCode: currency)
+                        )
+                    )
                 }
                 LabeledContent("Surface", value: run.surface.rawValue)
             }

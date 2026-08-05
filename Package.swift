@@ -43,7 +43,7 @@ let package = Package(
         // so the screenshot pipeline can render it before an app exists.
         .target(
             name: "DemoHarnessUI",
-            dependencies: ["DemoHarnessCore", "PayCross"],
+            dependencies: ["DemoHarnessCore", "PayCross", "PayCrossCore"],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .testTarget(
