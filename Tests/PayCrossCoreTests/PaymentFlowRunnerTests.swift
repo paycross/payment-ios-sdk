@@ -325,6 +325,51 @@ final class PaymentFlowRunnerTests: XCTestCase {
         XCTAssertEqual(outcome, .finished(.failed(transactionID: "t1", recovery: .doNotRetry)))
     }
 
+    /// I3: the deadline must start when polling starts. Server-controlled
+    /// retry_after sleeps are uncapped, so measuring from the runner's
+    /// construction let four 120s replies consume the entire 480s budget before
+    /// the first poll -- reporting failure for a transaction that was created.
+    func testRetryAfterDoesNotEatThePollBudget() async {
+        let transport = ScriptedTransport(
+            submit: [
+                .init(json: #"{"success":false,"retry_after":120}"#),
+                .init(json: #"{"success":false,"retry_after":120}"#),
+                .init(json: #"{"success":false,"retry_after":120}"#),
+                .init(json: #"{"success":false,"retry_after":120}"#),
+                .init(json: #"{"success":true,"transaction_id":"t1"}"#)
+            ],
+            status: [.init(json: #"{"transaction_id":"t1","status":"pending"}"#)]
+        )
+        let scheduler = VirtualScheduler()
+        let runner = makeRunner(
+            transport: transport, scheduler: scheduler, presenter: RecordingPresenter()
+        )
+
+        _ = await runner.run(sampleRequest)
+
+        // 480s spent in retry-after must not reduce the poll budget at all.
+        let statusCount = await transport.statusCount
+        XCTAssertEqual(statusCount, 240, "the poll loop lost its budget to retry_after")
+    }
+
+    /// Resuming an existing transaction must poll it, never submit again.
+    func testResumePollsWithoutSubmitting() async {
+        let transport = ScriptedTransport(
+            status: [.init(json: #"{"transaction_id":"t1","status":"success","amount":1,"currency":"EUR"}"#)]
+        )
+        let runner = makeRunner(
+            transport: transport, scheduler: VirtualScheduler(), presenter: RecordingPresenter()
+        )
+
+        let outcome = await runner.resume(transactionID: "t1")
+
+        let submitCount = await transport.submitCount
+        XCTAssertEqual(submitCount, 0, "resuming must never create a second transaction")
+        guard case .finished(.succeeded) = outcome else {
+            return XCTFail("expected success, got \(outcome)")
+        }
+    }
+
     // MARK: - Deadline and transients
 
     func testPollingGivesUpAtTheDeadline() async {

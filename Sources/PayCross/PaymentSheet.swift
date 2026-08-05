@@ -159,25 +159,51 @@ final class PaymentSheetModel: ObservableObject {
         )
     }
 
-    /// Fetches the session so the form knows what the server wants shown.
+    /// Fetches the session and acts on what it says.
+    ///
+    /// A completed session must never render the form: the shopper would pay a
+    /// second time, and the new idempotency key gives the backend nothing to
+    /// relate the two submissions by.
     func load() async {
-        defer { isPreparing = false }
         // Warmed off the critical path so submit does not pay for the lookup.
         async let ip: Void = ipProvider.warm()
         async let ua: Void = DeviceInfo.warmUserAgent()
         _ = await (ip, ua)
-        guard let data = try? await makeClient()
-            .session(id: claims.sessionID, sessionToken: sessionToken).data else {
-            // A failed fetch is not fatal: a new-card form with no saved cards
-            // and no field groups is still a usable checkout.
-            return
+
+        let response = try? await makeClient()
+            .session(id: claims.sessionID, sessionToken: sessionToken)
+
+        switch SessionResolver.resolve(response, claims: claims) {
+        case .finish(let result):
+            isPreparing = false
+            finish(result)
+
+        case .resume(let transactionID):
+            // A transaction already exists. Poll it rather than creating another.
+            isPreparing = false
+            isLoading = true
+            let outcome = await makeRunner().resume(transactionID: transactionID)
+            switch outcome {
+            case .finished(let result):
+                finish(result)
+            case .reArmForm(let message):
+                isLoading = false
+                applySessionData(response?.data)
+                CardFormReducer.reduce(state: &form, event: .declined(message: message))
+            }
+
+        case .showForm(let data):
+            applySessionData(data)
+            isPreparing = false
         }
+    }
+
+    private func applySessionData(_ data: SessionData?) {
+        guard let data else { return }
         sessionData = data
         fieldValues = FieldGroupLogic.initialValues(data.fieldGroups ?? [])
-        // Default to the first saved card, matching the checkout page.
-        if let first = data.savedCards?.first?.presentable {
-            CardFormReducer.reduce(state: &form, event: .sourceSelected(.saved(first)))
-        }
+        // Android initialises the selection to null and shows "Use a new card";
+        // auto-selecting a stored card is one unnoticed tap from charging it.
     }
 
     func awaitResult() async -> PaymentResult {
@@ -215,16 +241,19 @@ final class PaymentSheetModel: ObservableObject {
         }
     }
 
-    private func runFlow(with card: CardData) async -> FlowOutcome {
-        let client = makeClient()
-        let runner = PaymentFlowRunner(
-            client: client,
+    private func makeRunner() -> PaymentFlowRunner {
+        PaymentFlowRunner(
+            client: makeClient(),
             // If the presenter is missing the sheet has no host, so a 3DS step
             // could not be shown. Reporting .failed rather than .completed keeps
             // an unanswered challenge from looking like an answered one.
             presenter: threeDSPresenter ?? ThreeDSPresenterStub(),
             claims: claims
         )
+    }
+
+    private func runFlow(with card: CardData) async -> FlowOutcome {
+        let runner = makeRunner()
         let request = SubmitCardRequest(
             session: sessionToken,
             card: card,

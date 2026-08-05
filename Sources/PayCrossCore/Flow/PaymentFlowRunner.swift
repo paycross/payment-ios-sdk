@@ -73,6 +73,16 @@ public actor PaymentFlowRunner {
 
     public func currentState() -> PaymentFlowState { state }
 
+    /// Polls an existing transaction to its terminal state without submitting.
+    ///
+    /// Used when the session already has one in flight - the shopper backgrounded
+    /// the app mid-3DS, or the sheet was re-presented. Submitting again would
+    /// create a second transaction against the same session.
+    public func resume(transactionID: String) async -> FlowOutcome {
+        state.transactionID = transactionID
+        return await poll(transactionID: transactionID)
+    }
+
     /// Submits a card and runs the flow to a terminal state.
     public func run(_ request: SubmitCardRequest) async -> FlowOutcome {
         switch await submitWithRetry(request) {
@@ -134,8 +144,15 @@ public actor PaymentFlowRunner {
 
     private func poll(transactionID: String) async -> FlowOutcome {
         state.isPolling = true
+        // Measured from the START of polling, not from the runner's construction.
+        // Android computes its deadline inside pollStatus (PaymentViewModel.kt:266)
+        // so the retry-after loop cannot eat the budget. Server-controlled
+        // retry_after values are uncapped, so four 120s replies would otherwise
+        // consume all 480s and the loop would run ZERO iterations - reporting
+        // failure for a transaction that was created and may be authorized.
+        let start = await scheduler.elapsed()
 
-        while await scheduler.elapsed() < FlowLimits.pollDeadline {
+        while await scheduler.elapsed() - start < FlowLimits.pollDeadline {
             do {
                 let status = try await client.status(transactionID: transactionID)
                 let effects = PaymentFlowReducer.reduce(
@@ -191,6 +208,9 @@ public actor PaymentFlowRunner {
                 }
 
             case .finish(let result):
+                // Nothing is waiting on a presented step once the flow is over.
+                presentationTask?.cancel()
+                presentationTask = nil
                 outcome = .finished(result)
 
             case .stopPolling:
