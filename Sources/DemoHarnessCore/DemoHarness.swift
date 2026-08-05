@@ -155,10 +155,15 @@ public enum SessionOutcome {
 
     /// The latest parentless `payment` transaction.
     static func primaryPaymentTransaction(_ session: [String: Any]) -> [String: Any]? {
-        guard let transactions = session["transactions"] as? [[String: Any]] else { return nil }
+        // Cast to [Any] and filter element-wise. `as? [[String: Any]]` fails
+        // WHOLESALE on a single JSON null, so one malformed element reported a
+        // session that had taken the money as "Completed with no payment
+        // transaction". Kotlin skips bad elements individually
+        // (DemoViewModel.kt:367, `?: continue`).
+        guard let transactions = session["transactions"] as? [Any] else { return nil }
 
         var latest: [String: Any]?
-        for txn in transactions {
+        for case let txn as [String: Any] in transactions {
             guard (txn["type"] as? String) == "payment" else { continue }
             // A transaction with a parent is a refund/capture of another one.
             if let parent = txn["parent_transaction_id"] as? String, !parent.isEmpty { continue }

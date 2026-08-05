@@ -33,12 +33,26 @@ public struct SessionMinter: Sendable {
     public func mint(
         merchant: Merchant,
         requestBody: String,
-        deepLinkReturn: Bool = false
+        deepLinkReturn: Bool = false,
+        timestamp: Int64,
+        uuid: String
     ) async throws -> MintedSession {
         let token = try await accessToken(for: merchant)
+
+        // Substitute FIRST, then rewrite the URLs. Order matters: a {{uuid}}
+        // inside return_url would otherwise be substituted and then overwritten.
+        // Kotlin does the same at SessionMinter.kt:43.
+        //
+        // This call is the fix for a defect where BodyTemplate.substitute had no
+        // production caller at all, so every seed body posted the literal string
+        // "IOS-{{timestamp}}" as its merchant reference.
+        let substituted = BodyTemplate.substitute(
+            requestBody, timestamp: timestamp, uuid: uuid
+        )
         let body = deepLinkReturn
-            ? try BodyTemplate.withDeepLinkReturn(requestBody)
-            : requestBody
+            ? try BodyTemplate.withDeepLinkReturn(substituted)
+            : substituted
+
         return try await postSession(merchant: merchant, token: token, body: body)
     }
 
@@ -106,6 +120,12 @@ public struct SessionMinter: Sendable {
         guard let sessionToken = object["session_token"] as? String else {
             throw HarnessError.missingField("session_token")
         }
+        // A browser or QR run opens this URL. Defaulting it to "" made such a run
+        // silently open nothing and then hang until the poll timeout.
+        guard let checkoutURL = (object["checkout_url"] as? String),
+              !checkoutURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw HarnessError.missingField("checkout_url")
+        }
 
         let base = merchant.sessionsURL.hasSuffix("/")
             ? String(merchant.sessionsURL.dropLast())
@@ -114,7 +134,7 @@ public struct SessionMinter: Sendable {
         return MintedSession(
             sessionID: id,
             sessionToken: sessionToken,
-            checkoutURL: (object["checkout_url"] as? String) ?? "",
+            checkoutURL: checkoutURL,
             sessionURL: "\(base)/\(id)",
             sentBody: body
         )

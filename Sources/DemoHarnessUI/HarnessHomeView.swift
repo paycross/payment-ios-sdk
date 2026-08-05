@@ -152,9 +152,15 @@ private struct ScenarioRow: View {
 
 /// The confirmation gate for production runs.
 ///
-/// It must be answered BEFORE anything is minted — a gate that fires after the
-/// session exists has already spent real money's worth of setup. This is the
-/// exact defect a review found in the Android harness.
+/// Presented when `HarnessRunner.decide` returns `.confirmProduction`, which is
+/// evaluated before anything is minted — a gate that fires after the session
+/// exists has already spent real money's worth of setup.
+///
+/// The decision deliberately lives in Core rather than here, because the
+/// deep-link entry point never passes through this view. An earlier version of
+/// this file carried a comment claiming the gate was enforced when no gate
+/// existed at all, and wrongly attributed the defect to the Android harness,
+/// which gates correctly.
 public struct ProductionGateView: View {
     let merchantName: String
     let scenarioName: String

@@ -159,30 +159,59 @@ final class SessionOutcomeTests: XCTestCase {
         XCTAssertEqual(result.phase, .success)
     }
 
+    /// The non-payment entry sorts LATER, so removing the type filter changes the
+    /// answer. The previous version gave it an empty sort key, meaning it lost on
+    /// recency anyway and the test passed with the filter deleted.
     func testNonPaymentTypesAreIgnored() {
         let result = SessionOutcome.resolve(session: session(
             status: "completed",
             transactions: [
-                ["id": "auth", "type": "verification", "status": "succeeded"],
                 ["id": "pay", "type": "payment", "status": "captured",
-                 "created_at": "2026-01-01T00:00:00Z"]
+                 "created_at": "2026-01-01T00:00:00Z"],
+                ["id": "verify", "type": "verification", "status": "succeeded",
+                 "updated_at": "2026-06-01T00:00:00Z"]
             ]
         ))
         XCTAssertEqual(result.transactionID, "pay")
+        XCTAssertEqual(result.phase, .success)
     }
 
+    /// The winner is FIRST in the array, so the sort-key comparison has to do the
+    /// work. Previously the winner was also last and the tie-break was `>=`, so
+    /// deleting the comparison entirely still passed.
     func testLatestTransactionWins() {
         let result = SessionOutcome.resolve(session: session(
             status: "completed",
             transactions: [
-                ["id": "old", "type": "payment", "status": "declined",
-                 "created_at": "2026-01-01T00:00:00Z"],
                 ["id": "new", "type": "payment", "status": "succeeded",
                  "created_at": "2026-01-01T00:00:00Z",
-                 "updated_at": "2026-02-01T00:00:00Z"]
+                 "updated_at": "2026-02-01T00:00:00Z"],
+                ["id": "old", "type": "payment", "status": "declined",
+                 "created_at": "2026-01-01T00:00:00Z"]
             ]
         ))
         XCTAssertEqual(result.transactionID, "new")
+        XCTAssertEqual(result.phase, .success)
+    }
+
+    /// One malformed element must not discard the rest. `as? [[String: Any]]`
+    /// fails wholesale on a single JSON null, which reported a session that HAD
+    /// taken the money as "Completed with no payment transaction".
+    func testOneMalformedTransactionDoesNotHideThePayment() {
+        let raw: [String: Any] = [
+            "status": "completed",
+            "transactions": [
+                NSNull(),
+                "not an object",
+                ["id": "pay", "type": "payment", "status": "succeeded",
+                 "amount": 2599, "currency": "EUR", "created_at": "2026-01-01T00:00:00Z"]
+            ]
+        ]
+        let result = SessionOutcome.resolve(session: raw)
+
+        XCTAssertEqual(result.phase, .success, "a paid session reported as failed")
+        XCTAssertEqual(result.transactionID, "pay")
+        XCTAssertEqual(result.amount, 2599)
     }
 
     /// updated_at wins over created_at, and a missing updated_at must not sort
@@ -239,7 +268,10 @@ final class SessionMinterTests: XCTestCase {
             )
         }
 
-        let minted = try await minter.mint(merchant: merchant(), requestBody: #"{"amount":100}"#)
+        let minted = try await minter.mint(
+            merchant: merchant(), requestBody: #"{"amount":100}"#,
+            timestamp: 1_700_000_000_000, uuid: "fixed-uuid"
+        )
 
         XCTAssertEqual(minted.sessionID, "sess_1")
         XCTAssertEqual(minted.sessionToken, "jwt-1")
@@ -267,7 +299,7 @@ final class SessionMinterTests: XCTestCase {
             await recorder.add(request)
             let json = (request.url?.path ?? "").contains("token")
                 ? #"{"access_token":"t"}"#
-                : #"{"id":"s","session_token":"j"}"#
+                : #"{"id":"s","session_token":"j","checkout_url":"https://pay/x"}"#
             return (
                 Data(json.utf8),
                 HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
@@ -277,7 +309,9 @@ final class SessionMinterTests: XCTestCase {
         let minted = try await minter.mint(
             merchant: merchant(),
             requestBody: #"{"amount":100}"#,
-            deepLinkReturn: true
+            deepLinkReturn: true,
+            timestamp: 1_700_000_000_000,
+            uuid: "fixed-uuid"
         )
 
         XCTAssertTrue(minted.sentBody.contains("paycross-demo://result"))
@@ -286,12 +320,92 @@ final class SessionMinterTests: XCTestCase {
         XCTAssertTrue(body.contains("paycross-demo://result?nav=return"))
     }
 
+    /// The regression test for the defect this file's own placeholder test
+    /// missed: its fixture contained no placeholders, so it passed while
+    /// substitution had no production caller at all.
+    func testPlaceholdersAreSubstitutedInTheBodyThatIsPosted() async throws {
+        let recorder = Recorder()
+        let minter = SessionMinter { request in
+            await recorder.add(request)
+            let json = (request.url?.path ?? "").contains("token")
+                ? #"{"access_token":"t"}"#
+                : #"{"id":"s","session_token":"j","checkout_url":"https://pay/x"}"#
+            return (
+                Data(json.utf8),
+                HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            )
+        }
+
+        _ = try await minter.mint(
+            merchant: merchant(),
+            requestBody: #"{"merchant_reference":"IOS-{{timestamp}}","key":"{{uuid}}"}"#,
+            timestamp: 1_700_000_000_000,
+            uuid: "fixed-uuid"
+        )
+
+        let body = String(decoding: await recorder.requests[1].httpBody ?? Data(), as: UTF8.self)
+        XCTAssertFalse(body.contains("{{"), "placeholders reached the wire: \(body)")
+        XCTAssertTrue(body.contains("IOS-1700000000000"))
+        XCTAssertTrue(body.contains("fixed-uuid"))
+    }
+
+    /// Substitution must happen before the URL rewrite, or a {{uuid}} inside
+    /// return_url is substituted and then thrown away.
+    func testSubstitutionHappensBeforeTheDeepLinkRewrite() async throws {
+        let recorder = Recorder()
+        let minter = SessionMinter { request in
+            await recorder.add(request)
+            let json = (request.url?.path ?? "").contains("token")
+                ? #"{"access_token":"t"}"#
+                : #"{"id":"s","session_token":"j","checkout_url":"https://pay/x"}"#
+            return (
+                Data(json.utf8),
+                HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            )
+        }
+
+        _ = try await minter.mint(
+            merchant: merchant(),
+            requestBody: #"{"return_url":"https://x/{{uuid}}","ref":"{{timestamp}}"}"#,
+            deepLinkReturn: true,
+            timestamp: 42,
+            uuid: "u"
+        )
+
+        let body = String(decoding: await recorder.requests[1].httpBody ?? Data(), as: UTF8.self)
+        XCTAssertTrue(body.contains("paycross-demo://result?nav=return"), "rewrite must win")
+        XCTAssertTrue(body.contains("\"ref\":\"42\""), "other placeholders still substitute")
+        XCTAssertFalse(body.contains("{{"))
+    }
+
+    /// A browser or QR run opens this URL; swallowing a missing one made the run
+    /// open nothing and hang until the timeout.
+    func testMissingCheckoutURLIsAnError() async {
+        let minter = SessionMinter { request in
+            let isToken = (request.url?.path ?? "").contains("token")
+            return (
+                Data((isToken ? #"{"access_token":"t"}"# : #"{"id":"s","session_token":"j"}"#).utf8),
+                HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            )
+        }
+        do {
+            _ = try await minter.mint(
+                merchant: merchant(), requestBody: "{}", timestamp: 1, uuid: "u"
+            )
+            XCTFail("expected a throw")
+        } catch {
+            XCTAssertEqual(error as? HarnessError, .missingField("checkout_url"))
+        }
+    }
+
     func testTokenFailureSurfacesTheStatus() async {
         let minter = SessionMinter { request in
             (Data(), HTTPURLResponse(url: request.url!, statusCode: 401, httpVersion: nil, headerFields: nil)!)
         }
         do {
-            _ = try await minter.mint(merchant: merchant(), requestBody: "{}")
+            _ = try await minter.mint(
+                merchant: merchant(), requestBody: "{}", timestamp: 1, uuid: "u"
+            )
             XCTFail("expected a throw")
         } catch {
             XCTAssertEqual(error as? HarnessError, .tokenRequestFailed(401))
@@ -310,7 +424,9 @@ final class SessionMinterTests: XCTestCase {
             )
         }
         do {
-            _ = try await minter.mint(merchant: merchant(), requestBody: "{}")
+            _ = try await minter.mint(
+                merchant: merchant(), requestBody: "{}", timestamp: 1, uuid: "u"
+            )
             XCTFail("expected a throw")
         } catch {
             XCTAssertEqual(
