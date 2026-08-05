@@ -66,11 +66,28 @@ private struct FieldRow: View {
     }
 
     var body: some View {
+        // Label above the box, matching the card fields. Putting it inside made
+        // the same form use two different field shapes, which the CI screenshot
+        // showed plainly and no test could.
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
                 .font(.footnote.weight(.medium))
                 .foregroundStyle(.secondary)
 
+            inputBox
+
+            if let error {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(Color(.systemRed))
+            }
+        }
+        .accessibilityIdentifier("field-\(field.name)")
+    }
+
+    @ViewBuilder
+    private var inputBox: some View {
+        Group {
             if let options = field.options, !options.isEmpty {
                 Picker(title, selection: $value) {
                     // An empty tag so an unset optional select has somewhere to sit;
@@ -97,20 +114,14 @@ private struct FieldRow: View {
                         }
                     }
             }
-
-            if let error {
-                Text(error)
-                    .font(.caption)
-                    .foregroundStyle(Color(.systemRed))
-            }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 12)
         .padding(.vertical, 12)
         .background(
             Color(.secondarySystemGroupedBackground),
             in: RoundedRectangle(cornerRadius: 10)
         )
-        .accessibilityIdentifier("field-\(field.name)")
     }
 }
 #endif
