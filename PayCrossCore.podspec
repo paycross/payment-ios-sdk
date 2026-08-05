@@ -1,0 +1,30 @@
+Pod::Spec.new do |s|
+  s.name             = 'PayCrossCore'
+  s.version          = '0.1.0'
+  s.summary          = 'Platform-agnostic core of the PayCross iOS SDK.'
+  s.description      = <<-DESC
+    The payment state machine, wire models, JWT decoding, card validation and 3DS
+    navigation rules. Free of UIKit, SwiftUI and WebKit by design so it builds and
+    tests on Linux; the UI layer lives in the PayCross pod.
+  DESC
+  s.homepage         = 'https://github.com/paycross/payment-ios-sdk'
+  s.license          = { :type => 'Proprietary', :text => 'Copyright PayCross. All rights reserved.' }
+  s.author           = 'PayCross'
+
+  s.source           = {
+    :git => 'https://github.com/paycross/payment-ios-sdk.git',
+    :tag => "v#{s.version}"
+  }
+
+  # Must track Package.swift's platforms:. A mismatch surfaces to the merchant as
+  # an opaque CocoaPods resolution failure rather than a clear minimum-version error.
+  s.ios.deployment_target = '16.0'
+
+  # .swiftLanguageMode(.v6) is a SwiftPM setting and is not carried into a Pods
+  # project, so the sources would silently build in Swift 5 mode. The strict
+  # concurrency this SDK is written against is not optional, so pin it here too.
+  s.swift_versions = ['6.0']
+  s.pod_target_xcconfig = { 'SWIFT_VERSION' => '6.0' }
+
+  s.source_files = 'Sources/PayCrossCore/**/*.swift'
+end
