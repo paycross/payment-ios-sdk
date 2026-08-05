@@ -50,18 +50,43 @@ jobs:
           echo "Selected iOS runtime: $OS"
           echo "os=$OS" >> "$GITHUB_OUTPUT"
 
-      - name: Build for simulator
+      # Renders every card-form state to a PNG. This is the only way the UI gets
+      # looked at until there is a Mac in the loop, so it runs on every push.
+      # TEST_RUNNER_ prefixed variables are forwarded into the test process.
+      - name: Test and render screenshots
+        env:
+          TEST_RUNNER_PAYCROSS_SCREENSHOT_DIR: ${{ github.workspace }}/screenshots
         run: |
           set -euo pipefail
-          xcodebuild build \
+          mkdir -p "${{ github.workspace }}/screenshots"
+          xcodebuild test \
             -scheme PayCross \
             -destination "platform=iOS Simulator,name=iPhone 17,OS=${{ steps.sim.outputs.os }}" \
-            CODE_SIGNING_ALLOWED=NO \
-            | xcbeautify --renderer github-actions || \
-          xcodebuild build \
-            -scheme PayCross \
-            -destination "platform=iOS Simulator,name=iPhone 17,OS=${{ steps.sim.outputs.os }}" \
+            -resultBundlePath "${{ github.workspace }}/TestResults.xcresult" \
             CODE_SIGNING_ALLOWED=NO
+
+      # Belt and braces: if writing to the workspace path is blocked by the
+      # simulator sandbox, the PNGs still exist as XCTAttachments in the bundle.
+      - name: Extract attachments if the direct write produced nothing
+        if: always()
+        run: |
+          set -uo pipefail
+          if [ -z "$(ls -A "${{ github.workspace }}/screenshots" 2>/dev/null)" ]; then
+            echo "No PNGs written directly; falling back to xcresult attachments."
+            xcrun xcresulttool export attachments \
+              --path "${{ github.workspace }}/TestResults.xcresult" \
+              --output-path "${{ github.workspace }}/screenshots" 2>&1 | tail -5 || \
+              echo "::warning::could not extract attachments"
+          fi
+          ls -la "${{ github.workspace }}/screenshots" || true
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: card-form-screenshots
+          path: ${{ github.workspace }}/screenshots
+          if-no-files-found: warn
 
   # Guards the property the Linux job depends on: nothing in PayCrossCore may
   # import a UI framework, and every file in PayCross must be platform-guarded.

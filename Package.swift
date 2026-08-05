@@ -26,6 +26,12 @@ let package = Package(
             name: "PayCrossCoreTests",
             dependencies: ["PayCrossCore"],
             swiftSettings: [.swiftLanguageMode(.v6)]
+        ),
+        // Renders the SwiftUI surfaces to PNGs on a macOS runner. Empty on Linux.
+        .testTarget(
+            name: "PayCrossUITests",
+            dependencies: ["PayCross", "PayCrossCore"],
+            swiftSettings: [.swiftLanguageMode(.v6)]
         )
     ]
 )
