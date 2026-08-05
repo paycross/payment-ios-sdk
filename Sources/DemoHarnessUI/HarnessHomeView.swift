@@ -142,6 +142,10 @@ private struct ScenarioRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
         }
+        // Without .plain the whole label inherits the accent tint and the
+        // foregroundStyle calls above are silently ignored - name, hint and
+        // last-four all render blue.
+        .buttonStyle(.plain)
         .accessibilityIdentifier("scenario-\(scenario.name)")
     }
 }

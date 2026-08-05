@@ -35,6 +35,9 @@ public struct HarnessHistoryView: View {
             } else {
                 List(runs) { run in
                     Button { onSelect(run) } label: { RunRow(run: run) }
+                        // Otherwise the row inherits the accent tint and the
+                        // outcome badge loses its green/red/orange meaning.
+                        .buttonStyle(.plain)
                 }
             }
         }
