@@ -171,7 +171,7 @@ private struct LabeledField<Content: View, Trailing: View>: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 12)
-            .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 10))
+            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10))
         }
     }
 }
@@ -234,7 +234,7 @@ private struct SavedCardPicker: View {
                 }
             }
             .padding(12)
-            .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 10))
+            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10))
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
@@ -254,7 +254,7 @@ private struct ErrorBanner: View {
         .foregroundStyle(Color(.systemRed))
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
-        .background(Color(.systemRed).opacity(0.1), in: .rect(cornerRadius: 10))
+        .background(Color(.systemRed).opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
         .accessibilityIdentifier("errorBanner")
     }
 }
@@ -277,7 +277,7 @@ private struct PayButton: View {
             }
             .frame(maxWidth: .infinity, minHeight: 50)
         }
-        .background(isEnabled ? Color.accentColor : Color.gray.opacity(0.4), in: .rect(cornerRadius: 12))
+        .background(isEnabled ? Color.accentColor : Color.gray.opacity(0.4), in: RoundedRectangle(cornerRadius: 12))
         .foregroundStyle(.white)
         .disabled(!isEnabled)
         .accessibilityIdentifier("payButton")
