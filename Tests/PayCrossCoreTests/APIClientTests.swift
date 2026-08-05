@@ -59,7 +59,7 @@ final class APIClientTests: XCTestCase {
     }
 
     func testSessionRequestCarriesBearerToken() async throws {
-        let transport = StubTransport(json: #"{"id":"s1","status":"pending"}"#)
+        let transport = StubTransport(json: #"{"session_id":"s1","status":"open"}"#)
         _ = try await makeClient(transport).session(id: "s1", sessionToken: "jwt-here")
 
         let request = await transport.sent[0]

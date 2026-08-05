@@ -21,11 +21,13 @@ import PayCrossCore
 @MainActor
 public final class PaymentSheet {
     private let sessionToken: String
-    private let savedCards: [SavedCard]
 
-    public init(sessionToken: String, savedCards: [SavedCard] = []) {
+    /// Saved cards, field groups and whether saving is offered all come from the
+    /// session, not from the integrator — the server decides what this checkout
+    /// may show. An earlier version took `savedCards` as a parameter, which put
+    /// the merchant app in charge of something it does not own.
+    public init(sessionToken: String) {
         self.sessionToken = sessionToken
-        self.savedCards = savedCards
     }
 
     /// Presents the sheet and resolves when the payment reaches a terminal state
@@ -50,7 +52,6 @@ public final class PaymentSheet {
         let model = PaymentSheetModel(
             sessionToken: sessionToken,
             claims: claims,
-            savedCards: savedCards,
             configuration: configuration
         )
 
@@ -94,9 +95,20 @@ final class PaymentHostController: UIHostingController<PaymentSheetView> {
 final class PaymentSheetModel: ObservableObject {
     @Published var form: CardFormState
     @Published private(set) var isLoading = false
+    /// True until the session has been fetched; the form cannot be shown before
+    /// then because the server decides what it contains.
+    @Published private(set) var isPreparing = true
+    @Published private(set) var sessionData: SessionData?
 
     let claims: SessionClaims
-    let savedCards: [SavedCard]
+
+    var savedCards: [SavedCard] {
+        sessionData?.savedCards?.map(\.presentable) ?? []
+    }
+
+    var allowsSavingCard: Bool {
+        sessionData?.allowsSavingCard ?? false
+    }
 
     private let sessionToken: String
     private let configuration: Configuration
@@ -108,15 +120,13 @@ final class PaymentSheetModel: ObservableObject {
     init(
         sessionToken: String,
         claims: SessionClaims,
-        savedCards: [SavedCard],
         configuration: Configuration
     ) {
         self.sessionToken = sessionToken
         self.claims = claims
-        self.savedCards = savedCards
         self.configuration = configuration
 
-        var initial = CardFormState(source: savedCards.first.map { .saved($0) } ?? .newCard)
+        var initial = CardFormState(source: .newCard)
         // Prefill is a test convenience and is nil in production by construction.
         if let prefill = configuration.effectiveTestCardPrefill {
             CardFormReducer.reduce(state: &initial, event: .nameChanged(prefill.cardholderName))
@@ -132,6 +142,30 @@ final class PaymentSheetModel: ObservableObject {
     }
 
     var amount: Amount { claims.amount }
+
+    private func makeClient() -> PayCrossAPIClient {
+        PayCrossAPIClient(
+            baseURL: configuration.environment.baseURL,
+            transport: URLSessionTransport(),
+            userAgent: "PayCrossSDK-iOS/\(PayCrossAPI.version)"
+        )
+    }
+
+    /// Fetches the session so the form knows what the server wants shown.
+    func load() async {
+        defer { isPreparing = false }
+        guard let data = try? await makeClient()
+            .session(id: claims.sessionID, sessionToken: sessionToken).data else {
+            // A failed fetch is not fatal: a new-card form with no saved cards
+            // and no field groups is still a usable checkout.
+            return
+        }
+        sessionData = data
+        // Default to the first saved card, matching the checkout page.
+        if let first = data.savedCards?.first?.presentable {
+            CardFormReducer.reduce(state: &form, event: .sourceSelected(.saved(first)))
+        }
+    }
 
     func awaitResult() async -> PaymentResult {
         await withCheckedContinuation { continuation in
@@ -163,11 +197,7 @@ final class PaymentSheetModel: ObservableObject {
     }
 
     private func runFlow(with card: CardData) async -> FlowOutcome {
-        let client = PayCrossAPIClient(
-            baseURL: configuration.environment.baseURL,
-            transport: URLSessionTransport(),
-            userAgent: "PayCrossSDK-iOS/\(PayCrossAPI.version)"
-        )
+        let client = makeClient()
         let runner = PaymentFlowRunner(
             client: client,
             // If the presenter is missing the sheet has no host, so a 3DS step
@@ -218,14 +248,22 @@ struct PaymentSheetView: View {
 
     var body: some View {
         NavigationStack {
-            CardFormView(
-                state: $model.form,
-                amount: model.amount,
-                savedCards: model.savedCards,
-                allowsSaving: true,
-                isLoading: model.isLoading,
-                onPay: model.pay
-            )
+            Group {
+                if model.isPreparing {
+                    ProgressView()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    CardFormView(
+                        state: $model.form,
+                        amount: model.amount,
+                        savedCards: model.savedCards,
+                        allowsSaving: model.allowsSavingCard,
+                        isLoading: model.isLoading,
+                        onPay: model.pay
+                    )
+                }
+            }
+            .task { await model.load() }
             .navigationTitle("Payment")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
