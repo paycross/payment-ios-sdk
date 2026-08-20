@@ -18,7 +18,9 @@ Pod::Spec.new do |s|
   s.ios.deployment_target = '16.0'
 
   s.swift_versions = ['6.0']
-  s.pod_target_xcconfig = { 'SWIFT_VERSION' => '6.0' }
+  # Both pods must compile as one Swift package so `package`-access symbols in
+  # Core stay invisible to merchants but usable by PayCross.
+  s.pod_target_xcconfig = { 'SWIFT_VERSION' => '6.0', 'OTHER_SWIFT_FLAGS' => '-package-name PayCross' }
 
   s.source_files = 'Sources/PayCross/**/*.swift'
   s.frameworks   = 'UIKit', 'SwiftUI', 'WebKit'

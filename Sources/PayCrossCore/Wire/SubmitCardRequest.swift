@@ -4,23 +4,23 @@ import Foundation
 ///
 /// The model lives in Core so it can be asserted on Linux; the *collection* of
 /// these values is platform-bound and lives in the iOS target.
-public struct BrowserInfo: Codable, Sendable, Hashable {
-    public let userAgent: String
-    public let ipAddress: String
-    public let screenWidth: Int
-    public let screenHeight: Int
-    public let colorDepth: Int
+package struct BrowserInfo: Codable, Sendable, Hashable {
+    package let userAgent: String
+    package let ipAddress: String
+    package let screenWidth: Int
+    package let screenHeight: Int
+    package let colorDepth: Int
     /// Minutes **west** of UTC, with DST applied — the JavaScript
     /// `Date.getTimezoneOffset()` convention that 3DS expects. A device at UTC+2
     /// reports -120, not +120.
-    public let timezoneOffset: Int
+    package let timezoneOffset: Int
     /// BCP-47 language tag, e.g. "en-GB".
-    public let language: String
-    public let acceptHeader: String
-    public let javaEnabled: Bool
-    public let javascriptEnabled: Bool
+    package let language: String
+    package let acceptHeader: String
+    package let javaEnabled: Bool
+    package let javascriptEnabled: Bool
 
-    public static let defaultAcceptHeader =
+    package static let defaultAcceptHeader =
         "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
 
     enum CodingKeys: String, CodingKey {
@@ -36,7 +36,7 @@ public struct BrowserInfo: Codable, Sendable, Hashable {
         case language
     }
 
-    public init(
+    package init(
         userAgent: String,
         ipAddress: String,
         screenWidth: Int,
@@ -61,7 +61,7 @@ public struct BrowserInfo: Codable, Sendable, Hashable {
     }
 
     /// Minutes west of UTC for `timeZone` at `date`, matching the Kotlin.
-    public static func timezoneOffsetMinutes(
+    package static func timezoneOffsetMinutes(
         timeZone: TimeZone = .current,
         at date: Date = Date()
     ) -> Int {
@@ -74,7 +74,7 @@ public struct BrowserInfo: Codable, Sendable, Hashable {
     /// home region produces "en-US-u-rg-lvzzzz", which fails validation and
     /// kills the payment server-side after submit already returned 200. Keep
     /// the meaningful prefix (language, script, region) and drop the rest.
-    public static func clampedLanguageTag(_ tag: String) -> String {
+    package static func clampedLanguageTag(_ tag: String) -> String {
         let maxLength = 10
         var subtags = tag.split(separator: "-").map(String.init)
         // A single-character subtag ("u", "x") starts an extension or
@@ -162,7 +162,8 @@ public struct SubmitCardRequest: Codable, Sendable {
     public let session: String
     public let paymentMethod: String
     public let card: CardData?
-    public let browserInfo: BrowserInfo
+    // Follows BrowserInfo's access level, now `package`.
+    package let browserInfo: BrowserInfo
     public let fieldGroups: [String: [String: String]]?
 
     enum CodingKeys: String, CodingKey {
@@ -172,7 +173,8 @@ public struct SubmitCardRequest: Codable, Sendable {
         case session, card
     }
 
-    public init(
+    // Capped at `package` by the browserInfo parameter, same as above.
+    package init(
         session: String,
         card: CardData,
         browserInfo: BrowserInfo,

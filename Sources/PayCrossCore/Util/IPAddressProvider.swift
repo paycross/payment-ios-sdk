@@ -58,7 +58,8 @@ public actor IPAddressProvider {
     }
 }
 
-public extension BrowserInfo {
+// Matches BrowserInfo's access level, now `package`.
+package extension BrowserInfo {
     /// The four fields the backend validates as non-blank.
     ///
     /// Asserted from both the wire-encoding tests and the device-assembly tests,
