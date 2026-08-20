@@ -102,6 +102,11 @@ public struct PayCrossAPIClient: Sendable {
         request.httpMethod = method
         request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        // A live test drive saw the second status poll after submit come back
+        // `cache_hit=true` from URLSession's URLCache, which could freeze
+        // polling on a stale value. Every call this client makes is a payments
+        // API request; none of them is cacheable, so none may be cache-served.
+        request.cachePolicy = .reloadIgnoringLocalCacheData
         return request
     }
 

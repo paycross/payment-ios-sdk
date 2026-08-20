@@ -58,6 +58,18 @@ final class APIClientTests: XCTestCase {
         XCTAssertEqual(request.value(forHTTPHeaderField: "User-Agent"), "PayCrossSDK-iOS/test")
     }
 
+    /// A cached status poll can freeze the caller on a stale value: a live test
+    /// drive saw the second poll after submit come back `cache_hit=true` from
+    /// URLSession's URLCache. Every request from this client is a payments API
+    /// call, none of which is cacheable, so none may be cache-served.
+    func testStatusRequestBypassesURLCache() async throws {
+        let transport = StubTransport(json: #"{"transaction_id":"t1","status":"success"}"#)
+        _ = try await makeClient(transport).status(transactionID: "t1")
+
+        let request = await transport.sent[0]
+        XCTAssertEqual(request.cachePolicy, .reloadIgnoringLocalCacheData)
+    }
+
     func testSessionRequestCarriesBearerToken() async throws {
         let transport = StubTransport(json: #"{"session_id":"s1","status":"open"}"#)
         _ = try await makeClient(transport).session(id: "s1", sessionToken: "jwt-here")
