@@ -271,7 +271,7 @@ final class PaymentSheetModel: ObservableObject {
     }
 }
 
-/// Placeholder until the WebKit 3DS layer lands. Reports failure rather than
+/// A fail-closed fallback used when no presenter is attached. Reports failure rather than
 /// silently succeeding, so a 3DS session cannot appear to pass without one.
 private struct ThreeDSPresenterStub: ThreeDSPresenting {
     func present(_ step: ThreeDSStep) async -> ThreeDSOutcome { .failed }
