@@ -204,7 +204,10 @@ public actor PaymentFlowRunner {
                 presentationTask?.cancel()
                 presentationTask = Task { [presenter] in
                     let outcome = await presenter.present(step)
-                    await self.threeDSFinished(outcome)
+                    // No await: this task inherited the actor's isolation at
+                    // creation, so we're back on it already, and
+                    // `threeDSFinished` does only synchronous reducer work.
+                    self.threeDSFinished(outcome)
                 }
 
             case .finish(let result):
