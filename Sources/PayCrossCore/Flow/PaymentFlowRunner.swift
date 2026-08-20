@@ -176,11 +176,14 @@ package actor PaymentFlowRunner {
 
     /// Called when a presented 3DS step resolves.
     ///
-    /// A failed challenge is not itself terminal: the server still owns the
-    /// verdict, and polling is what surfaces it. Clearing the pending step lets
-    /// a subsequent, genuinely different action be presented.
-    private func threeDSFinished(_ outcome: ThreeDSOutcome) {
-        _ = PaymentFlowReducer.reduce(state: &state, event: .threeDSCompleted)
+    /// Both outcomes are handled identically on purpose: a failed challenge is
+    /// not terminal, because the server owns the verdict and polling is what
+    /// surfaces it. The outcome is taken as a parameter rather than dropped so
+    /// the protocol's contract stays honest, and the reducer's effects are
+    /// applied rather than discarded — that is what dismisses the web view.
+    private func threeDSResolved(_ outcome: ThreeDSOutcome) async {
+        let effects = PaymentFlowReducer.reduce(state: &state, event: .threeDSCompleted)
+        _ = await apply(effects)
     }
 
     /// Runs the reducer's effects. Returns an outcome when the run is over.
@@ -204,10 +207,12 @@ package actor PaymentFlowRunner {
                 presentationTask?.cancel()
                 presentationTask = Task { [presenter] in
                     let outcome = await presenter.present(step)
-                    // No await: this task inherited the actor's isolation at
-                    // creation, so we're back on it already, and
-                    // `threeDSFinished` does only synchronous reducer work.
-                    self.threeDSFinished(outcome)
+                    // A superseded or abandoned step must not act on its late
+                    // outcome: its teardown already happened when it was
+                    // cancelled, and applying `.threeDSCompleted` here would
+                    // dismiss whatever step replaced it.
+                    guard !Task.isCancelled else { return }
+                    await self.threeDSResolved(outcome)
                 }
 
             case .finish(let result):

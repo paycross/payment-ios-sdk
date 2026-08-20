@@ -73,7 +73,11 @@ package enum PaymentFlowReducer {
         case .threeDSCompleted:
             // The action stays in the handled set, so polling won't re-show it.
             state.pendingThreeDS = nil
-            return []
+            // Emitting the dismissal is what actually removes the web view.
+            // Returning [] here left an answered challenge full-screen over the
+            // form until the next poll returned terminal, and left a completed
+            // fingerprint's web view in the hierarchy for the life of the sheet.
+            return [.dismiss3DS]
 
         case .pollDeadlineReached:
             state.isPolling = false

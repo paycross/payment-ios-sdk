@@ -207,10 +207,15 @@ final class PaymentFlowReducerTests: XCTestCase {
                 StatusResponse(transactionID: "t", status: "threeds_challenge", action: action)
             )
         )
-        _ = PaymentFlowReducer.reduce(state: &state, event: .threeDSCompleted)
+        let effects = PaymentFlowReducer.reduce(state: &state, event: .threeDSCompleted)
 
         XCTAssertNil(state.pendingThreeDS)
         XCTAssertEqual(state.handledThreeDSKeys.count, 1, "polling must not re-show the completed step")
+        // Emitting the dismissal is what actually removes the web view. Returning
+        // [] here left an answered challenge full-screen over the form until the
+        // next poll returned terminal, and left a completed fingerprint's web
+        // view in the hierarchy for the life of the sheet.
+        XCTAssertEqual(effects, [.dismiss3DS])
     }
 
     // MARK: - Unknown statuses and deadline

@@ -409,4 +409,35 @@ final class PaymentFlowRunnerTests: XCTestCase {
             return XCTFail("transient errors must not end the payment, got \(outcome)")
         }
     }
+
+    /// An answered 3DS step must come down when it resolves, not when the flow
+    /// ends. Discarding the reducer's `.threeDSCompleted` effects left an
+    /// answered challenge full-screen over the form until the next terminal
+    /// status, and left a completed fingerprint's web view in the hierarchy for
+    /// the life of the sheet.
+    func testResolvedThreeDSStepIsDismissedBeforeTheFlowEnds() async {
+        let transport = ScriptedTransport(
+            submit: [.init(json: #"{"success":true,"transaction_id":"t1"}"#)],
+            status: [
+                .init(json: """
+                {"transaction_id":"t1","status":"threeds_challenge",
+                 "action":{"url":"https://acs/ch","method":"GET"}}
+                """),
+                .init(json: #"{"transaction_id":"t1","status":"pending"}"#)
+            ]
+        )
+        let presenter = RecordingPresenter(outcome: .completed)
+        let runner = makeRunner(
+            transport: transport, scheduler: VirtualScheduler(), presenter: presenter
+        )
+
+        let outcome = await runner.run(sampleRequest)
+
+        // The run ends at the poll deadline, whose effects carry no dismissal —
+        // so any dismissal recorded here came from the resolved step itself.
+        XCTAssertEqual(outcome, .finished(.failed(transactionID: "t1", recovery: .retry)))
+        for _ in 0..<100 { await Task.yield() }
+        let dismissals = await presenter.dismissals
+        XCTAssertEqual(dismissals, 1, "an answered 3DS step must be torn down when it resolves")
+    }
 }
