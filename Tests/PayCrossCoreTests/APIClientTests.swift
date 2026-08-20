@@ -61,13 +61,39 @@ final class APIClientTests: XCTestCase {
     /// A cached status poll can freeze the caller on a stale value: a live test
     /// drive saw the second poll after submit come back `cache_hit=true` from
     /// URLSession's URLCache. Every request from this client is a payments API
-    /// call, none of which is cacheable, so none may be cache-served.
-    func testStatusRequestBypassesURLCache() async throws {
-        let transport = StubTransport(json: #"{"transaction_id":"t1","status":"success"}"#)
-        _ = try await makeClient(transport).status(transactionID: "t1")
+    /// call, none of which is cacheable, so none may be cache-served. All three
+    /// go through `makeRequest` today, but this asserts each call site
+    /// directly rather than trusting that they keep sharing it.
+    func testRequestsBypassURLCache() async throws {
+        let transport = StubTransport(replies: [
+            .init(body: Data(#"{"transaction_id":"t1","status":"success"}"#.utf8)),
+            .init(body: Data(#"{"session_id":"s1","status":"open"}"#.utf8)),
+            .init(body: Data(#"{"success":true,"transaction_id":"t1"}"#.utf8)),
+        ])
+        let client = makeClient(transport)
 
-        let request = await transport.sent[0]
-        XCTAssertEqual(request.cachePolicy, .reloadIgnoringLocalCacheData)
+        _ = try await client.status(transactionID: "t1")
+        _ = try await client.session(id: "s1", sessionToken: "jwt-here")
+        _ = try await client.submitCard(
+            SubmitCardRequest(
+                session: "jwt",
+                card: .newCard(
+                    cardholderName: "A PERSON",
+                    pan: "4111111111111111",
+                    expireMonth: "12",
+                    expireYear: "2030",
+                    cvv: "123"
+                ),
+                browserInfo: sampleBrowserInfo
+            ),
+            idempotencyKey: "key-1"
+        )
+
+        let sent = await transport.sent
+        XCTAssertEqual(sent.count, 3)
+        for request in sent {
+            XCTAssertEqual(request.cachePolicy, .reloadIgnoringLocalAndRemoteCacheData)
+        }
     }
 
     func testSessionRequestCarriesBearerToken() async throws {
