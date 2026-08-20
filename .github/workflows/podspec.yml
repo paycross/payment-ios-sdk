@@ -1,0 +1,55 @@
+name: Podspec
+
+# CocoaPods is how a Flutter plugin's iOS side consumes this SDK, and a podspec
+# can only be validated by CocoaPods on a Mac - there is no Linux equivalent, and
+# the machine these are written on has no Ruby at all.
+#
+# Deliberately not part of ci.yml: that runs on every push, and this is macOS
+# time (~10x Linux on a private repo) spent proving something that only changes
+# when a podspec or the source layout does.
+#
+# `tags:` is deliberately absent. Listing it alongside `paths:` under the same
+# push filter means branch pushes stop matching entirely, which is how the first
+# version of this file managed to never run at all.
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**.podspec'
+      - '.github/workflows/podspec.yml'
+  pull_request:
+    paths:
+      - '**.podspec'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: pod lib lint
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Show toolchain
+        run: |
+          pod --version
+          xcodebuild -version
+
+      # PayCrossCore first: PayCross depends on it, so linting PayCross against
+      # the trunk CDN would 404 on a pod that is not published there. --include-podspecs
+      # points it at the local sibling instead.
+      - name: Lint PayCrossCore
+        run: |
+          pod lib lint PayCrossCore.podspec \
+            --no-clean \
+            --verbose
+
+      - name: Lint PayCross
+        run: |
+          pod lib lint PayCross.podspec \
+            --include-podspecs='PayCrossCore.podspec' \
+            --no-clean \
+            --verbose

@@ -1,0 +1,138 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # The whole point of the Core/UI split: this job proves the payment state
+  # machine, validation, JWT decoding and wire models on a free Linux runner,
+  # in seconds, on every push. Most of the SDK's behaviour is verified here.
+  core:
+    name: Core (Linux)
+    runs-on: ubuntu-latest
+    container: swift:6.2
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build
+        run: swift build --build-tests
+      - name: Test
+        run: swift test
+
+  # macOS minutes are ~10x Linux and draw down the monthly allotment on a private
+  # repo, so this job exists to prove one thing Linux cannot: that the UIKit /
+  # SwiftUI / WebKit target actually compiles for iOS.
+  ios:
+    name: iOS build
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      # The runtime advertised as "iOS 26.4" has version string 26.4.1, so an
+      # OS= pin written by hand silently fails to match. Ask simctl instead.
+      - name: Resolve a simulator destination
+        id: sim
+        run: |
+          set -euo pipefail
+          xcrun simctl list runtimes
+          OS=$(xcrun simctl list runtimes --json \
+            | python3 -c "import json,sys; rs=[r for r in json.load(sys.stdin)['runtimes'] if r['isAvailable'] and r['identifier'].find('iOS')>=0]; print(sorted(r['version'] for r in rs)[-1])")
+          echo "Selected iOS runtime: $OS"
+          echo "os=$OS" >> "$GITHUB_OUTPUT"
+
+      # Renders every card-form state to a PNG. This is the only way the UI gets
+      # looked at until there is a Mac in the loop, so it runs on every push.
+      # TEST_RUNNER_ prefixed variables are forwarded into the test process.
+      # SwiftPM's per-library scheme has no test action; the generated
+      # "<Package>-Package" scheme is the one that carries the test targets.
+      - name: List schemes
+        run: xcodebuild -list
+
+      - name: Test and render screenshots
+        env:
+          TEST_RUNNER_PAYCROSS_SCREENSHOT_DIR: ${{ github.workspace }}/screenshots
+        run: |
+          set -euo pipefail
+          mkdir -p "${{ github.workspace }}/screenshots"
+          xcodebuild test \
+            -scheme PayCross-Package \
+            -destination "platform=iOS Simulator,name=iPhone 17,OS=${{ steps.sim.outputs.os }}" \
+            -resultBundlePath "${{ github.workspace }}/TestResults.xcresult" \
+            CODE_SIGNING_ALLOWED=NO
+
+      # Belt and braces: if writing to the workspace path is blocked by the
+      # simulator sandbox, the PNGs still exist as XCTAttachments in the bundle.
+      - name: Extract attachments if the direct write produced nothing
+        if: always()
+        run: |
+          set -uo pipefail
+          if [ -z "$(ls -A "${{ github.workspace }}/screenshots" 2>/dev/null)" ]; then
+            echo "No PNGs written directly; falling back to xcresult attachments."
+            xcrun xcresulttool export attachments \
+              --path "${{ github.workspace }}/TestResults.xcresult" \
+              --output-path "${{ github.workspace }}/screenshots" 2>&1 | tail -5 || \
+              echo "::warning::could not extract attachments"
+          fi
+          ls -la "${{ github.workspace }}/screenshots" || true
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: card-form-screenshots
+          path: ${{ github.workspace }}/screenshots
+          if-no-files-found: warn
+
+  # Guards the property the Linux job depends on: nothing in PayCrossCore may
+  # import a UI framework, and every file in PayCross must be platform-guarded.
+  # Without this the Core/UI split rots the first time someone adds an import.
+  invariants:
+    name: Invariants
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Linux-buildable targets import no UI framework
+        run: |
+          set -euo pipefail
+          status=0
+          for t in PayCrossCore DemoHarnessCore; do
+            if grep -rnE '^\s*import (UIKit|SwiftUI|WebKit|PassKit)' "Sources/$t"; then
+              echo "::error::$t must stay platform-agnostic so it builds on Linux."
+              status=1
+            fi
+          done
+          exit $status
+
+      - name: Every iOS-only source is guarded by #if os(iOS)
+        run: |
+          set -euo pipefail
+          status=0
+          for f in $(find Sources/PayCross Sources/DemoHarnessUI -name '*.swift'); do
+            if ! head -5 "$f" | grep -q '#if os(iOS)'; then
+              echo "::error file=$f::missing '#if os(iOS)' guard; this breaks the Linux build"
+              status=1
+            fi
+          done
+          exit $status
+
+      - name: No card data may reach disk
+        run: |
+          set -euo pipefail
+          # Strip comments first: the sources legitimately *discuss* these APIs.
+          if find Sources -name '*.swift' -exec sed -E 's://.*::' {} + \
+             | grep -nE '@AppStorage|@SceneStorage|UserDefaults|SecItemAdd|UIPasteboard'; then
+            echo "::error::persistence API referenced in SDK sources"
+            exit 1
+          fi
+          echo "ok"
