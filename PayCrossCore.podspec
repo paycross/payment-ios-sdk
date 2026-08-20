@@ -24,7 +24,9 @@ Pod::Spec.new do |s|
   # project, so the sources would silently build in Swift 5 mode. The strict
   # concurrency this SDK is written against is not optional, so pin it here too.
   s.swift_versions = ['6.0']
-  s.pod_target_xcconfig = { 'SWIFT_VERSION' => '6.0' }
+  # Both pods must compile as one Swift package so `package`-access symbols in
+  # Core stay invisible to merchants but usable by PayCross.
+  s.pod_target_xcconfig = { 'SWIFT_VERSION' => '6.0', 'OTHER_SWIFT_FLAGS' => '-package-name PayCross' }
 
   s.source_files = 'Sources/PayCrossCore/**/*.swift'
 end
