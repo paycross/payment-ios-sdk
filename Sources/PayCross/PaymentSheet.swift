@@ -313,8 +313,10 @@ enum DeviceInfo {
             screenHeight: Int(bounds.height * scale),
             timezoneOffset: BrowserInfo.timezoneOffsetMinutes(),
             // BCP-47 ("en-GB"), not the ICU identifier ("en_GB") that
-            // Locale.identifier returns.
-            language: Locale.current.identifier(.bcp47)
+            // Locale.identifier returns — clamped, because a device whose
+            // Region differs from the language's home region yields a tag with
+            // extension subtags ("en-US-u-rg-lvzzzz") that the backend rejects.
+            language: BrowserInfo.clampedLanguageTag(Locale.current.identifier(.bcp47))
         )
     }
 

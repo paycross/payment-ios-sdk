@@ -67,6 +67,32 @@ public struct BrowserInfo: Codable, Sendable, Hashable {
     ) -> Int {
         -timeZone.secondsFromGMT(for: date) / 60
     }
+
+    /// The backend validates `language` as `max:10`, and EMVCo 3DS caps
+    /// browserLanguage at 8 characters, but a full BCP-47 identifier can carry
+    /// extension subtags: a device whose Region differs from the language's
+    /// home region produces "en-US-u-rg-lvzzzz", which fails validation and
+    /// kills the payment server-side after submit already returned 200. Keep
+    /// the meaningful prefix (language, script, region) and drop the rest.
+    public static func clampedLanguageTag(_ tag: String) -> String {
+        let maxLength = 10
+        var subtags = tag.split(separator: "-").map(String.init)
+        // A single-character subtag ("u", "x") starts an extension or
+        // private-use section; nothing after it is a language fact.
+        if let singleton = subtags.firstIndex(where: { $0.count == 1 }) {
+            subtags = Array(subtags[..<singleton])
+        }
+        var clamped = ""
+        for subtag in subtags {
+            let candidate = clamped.isEmpty ? subtag : clamped + "-" + subtag
+            guard candidate.count <= maxLength else { break }
+            clamped = candidate
+        }
+        // Purely private-use ("x-private") or an oversized first subtag leaves
+        // nothing; the backend also requires the field non-blank, so send a
+        // hard-truncated prefix rather than an empty string.
+        return clamped.isEmpty ? String(tag.prefix(maxLength)) : clamped
+    }
 }
 
 /// Card details for submission. New card or saved card; never both.
