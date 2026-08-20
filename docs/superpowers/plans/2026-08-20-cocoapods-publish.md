@@ -12,7 +12,14 @@
 
 ## Ground rules for every worker
 
-- **NEVER touch `/home/silvo/projects/payments/paycross-ios-sdk`** — another agent session owns that working tree. iOS work happens in the WSL clone `/tmp/claude-1000/-home-silvo/ee22b658-fa12-436d-bfbe-3890362167b2/scratchpad/fix-ios-sdk` (PR management) and a Mac clone `~/work/publish-prep/payment-ios-sdk` (compilation).
+- **NEVER touch `/home/silvo/projects/payments/paycross-ios-sdk`** — another agent session owns that working tree. The WSL clone `/tmp/claude-1000/-home-silvo/ee22b658-fa12-436d-bfbe-3890362167b2/scratchpad/fix-ios-sdk` is the single git authority: all edits, branches, commits, and pushes happen there. The Mac has NO GitHub credentials; `~/work/publish-prep/payment-ios-sdk` is a build mirror, refreshed by piping a tar of the WSL worktree over SSH:
+
+```bash
+cd /tmp/claude-1000/-home-silvo/ee22b658-fa12-436d-bfbe-3890362167b2/scratchpad/fix-ios-sdk \
+  && git ls-files -z | tar -czf - --null -T - | ssh mac 'rm -rf ~/work/publish-prep/payment-ios-sdk && mkdir -p ~/work/publish-prep/payment-ios-sdk && tar -xzf - -C ~/work/publish-prep/payment-ios-sdk'
+```
+
+(`git ls-files` ships tracked files including uncommitted edits, so the edit → sync → remote-build loop works mid-task. Re-run the sync after every edit batch, before every remote build.)
 - Mac SSH host is `mac`. Every non-interactive shell there needs `export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer PATH=/opt/homebrew/bin:$PATH`.
 - No Swift toolchain exists in WSL. Compile/test on the Mac; CI is the authority.
 - One PR per task, base `main`. Do not merge PRs; do not push tags; the repo owner does both. Steps marked **[HUMAN]** are the owner's.
@@ -25,10 +32,11 @@
 
 **Files:** none (environment only)
 
-- [ ] **Step 1: Clone on the Mac**
+- [ ] **Step 1: Mirror the WSL clone to the Mac** (the Mac cannot clone — no GitHub auth there; see ground rules)
 
 ```bash
-ssh mac 'git clone https://github.com/paycross/payment-ios-sdk ~/work/publish-prep/payment-ios-sdk'
+cd /tmp/claude-1000/-home-silvo/ee22b658-fa12-436d-bfbe-3890362167b2/scratchpad/fix-ios-sdk && git fetch -q origin && git checkout -q main && git pull -q
+git ls-files -z | tar -czf - --null -T - | ssh mac 'rm -rf ~/work/publish-prep/payment-ios-sdk && mkdir -p ~/work/publish-prep/payment-ios-sdk && tar -xzf - -C ~/work/publish-prep/payment-ios-sdk'
 ```
 
 - [ ] **Step 2: Baseline swift test**
@@ -56,7 +64,8 @@ Expected: `CORE-OK` and `PAYCROSS-OK`. If baseline lint fails, STOP and report �
 - [ ] **Step 1: Branch on the Mac clone**
 
 ```bash
-ssh mac 'cd ~/work/publish-prep/payment-ios-sdk && git checkout -b spike/package-access'
+cd /tmp/claude-1000/-home-silvo/ee22b658-fa12-436d-bfbe-3890362167b2/scratchpad/fix-ios-sdk && git checkout -b spike/package-access
+# edits happen here in WSL; after each edit batch re-run the mirror sync from the ground rules
 ```
 
 - [ ] **Step 2: Add the package name to both podspecs**
