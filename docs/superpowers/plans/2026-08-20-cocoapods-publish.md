@@ -91,7 +91,7 @@ ssh mac 'export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer PATH=/o
 - [ ] **Step 6: Record the gate decision**
 
 `SPIKE-PASS` → Tasks 5 and later proceed as written; keep the branch for Task 5 to build on.
-`SPIKE-FAIL` → STOP. Report the lint error verbatim to the owner and present the spec's named fallback (single `PayCross` pod with Core as a subspec). Do not improvise a third option; Tasks 5, 9, 11 change shape and the plan must be revised.
+`SPIKE-FAIL` → STOP. Report the lint error verbatim to the owner and present the spec's named fallback (single `PayCross` pod with Core as a subspec). Do not improvise a third option; Tasks 5, 7, 8, 9 and 11 change shape and the plan must be revised.
 
 ---
 
@@ -147,7 +147,16 @@ gh pr create --title "Fill browser_info.ip_address from the request when the cli
 
 - [ ] **Step 7: Verify in the test environment (gate for Task 6)**
 
-Mint a session with the existing rig, then submit WITHOUT `ip_address` in `browser_info` and poll:
+Mint a session (source `~/projects/payments/payment_testing_go/.env.staging` in a subshell; POST `$TOKEN_URL` with basic auth `$CLIENT_PAYX_SANDBOX_ID:$CLIENT_PAYX_SANDBOX_SECRET`, grant_type=client_credentials; then POST https://api.test-pay-cross.com/payment-sessions with the bearer token, header `PayCross-Version: 2026-06-16`, and the session payload from `payment_testing_go/templates/paycross/approved.json` step 1 — capture `session_token` from the response). Then submit WITHOUT `ip_address` and poll. `body-without-ip.json`:
+
+```json
+{"session":"<session_token>","payment_method":"card",
+ "card":{"cardholder_name":"TEST DRIVE","cvv":"123","expire_month":"12","expire_year":"2030","pan":"4111111111170000"},
+ "browser_info":{"accept_header":"text/html","color_depth":24,"java_enabled":false,"javascript_enabled":true,
+  "language":"en-US","screen_height":852,"screen_width":393,"timezone_offset":-180,"user_agent":"Mozilla/5.0"},
+ "field_groups":{}}
+```
+
 
 ```bash
 # mint per ground rules, then:
@@ -191,7 +200,9 @@ ssh mac 'cd ~/work/publish-prep/payment-ios-sdk && grep -rn "^public \|^ *public
 - [ ] **Step 5: CocoaPods proof:** `pod lib lint PayCross.podspec --include-podspecs=PayCrossCore.podspec`.
 - [ ] **Step 6: Commit, push, PR** titled "Restrict PayCrossCore's public surface to the merchant API" — body carries the keep-list and the Android 0.2.0 ABI-leak precedent. CI (`swift test` on Linux + podspec lint) must be green. **[HUMAN]** merges.
 
----### Task 6: Remove ipify (after Task 3 step 7 verified)
+---
+
+### Task 6: Remove ipify (after Task 3 step 7 verified)
 
 **Files (branch `fix/remove-ipify`):**
 - Delete: `Sources/PayCrossCore/Util/IPAddressProvider.swift`
@@ -243,7 +254,7 @@ ssh mac 'cd ~/work/publish-prep/payment-ios-sdk && grep -rn "^public \|^ *public
 
 - [ ] **Step 1:** All Task 1–8 PRs merged, `main` CI green, other session's 3DS work merged **[HUMAN confirms both]**.
 - [ ] **Step 2:** On the Mac: rebuild the Flutter example against `main` via `:path` override; sim rig: mint → sheet → prefill → pay → server-side `status: success`. Screenshot the success state.
-- [ ] **Step 3:** Record the RC commit SHA in the PR-#6 thread. This SHA is what gets squashed and tagged.
+- [ ] **Step 3:** Record the RC commit SHA as a comment on payment-ios-sdk PR #6 (the spec/plan docs PR), which serves as the cut-over tracking thread. This SHA is what gets squashed and tagged.
 
 ---
 
@@ -259,7 +270,7 @@ COMMIT=$(git commit-tree "$(git rev-parse HEAD^{tree})" -m "PayCross iOS SDK 0.1
 git branch public-main "$COMMIT"
 ```
 
-- [ ] **Step 4:** `gitleaks detect --source . --no-git` over the worktree; expected: no leaks.
+- [ ] **Step 4:** `gitleaks detect --source . --no-git` over the worktree (run wherever gitleaks is available; if absent in WSL: `go install github.com/gitleaks/gitleaks/v8@latest`, or `brew install gitleaks` on the Mac); expected: no leaks.
 - [ ] **Step 5 [HUMAN approves]:** `git push origin +public-main:main` (force-replace). CI must go green on the new main.
 - [ ] **Step 6 [HUMAN]:** Repo Settings: visibility → Public; Issues on; enable Private vulnerability reporting; re-check branch protection.
 - [ ] **Step 7 [HUMAN]:** `git tag v0.1.0 <squash-commit> && git push origin v0.1.0`.
