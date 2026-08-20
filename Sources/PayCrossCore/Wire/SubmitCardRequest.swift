@@ -4,23 +4,23 @@ import Foundation
 ///
 /// The model lives in Core so it can be asserted on Linux; the *collection* of
 /// these values is platform-bound and lives in the iOS target.
-public struct BrowserInfo: Codable, Sendable, Hashable {
-    public let userAgent: String
-    public let ipAddress: String
-    public let screenWidth: Int
-    public let screenHeight: Int
-    public let colorDepth: Int
+package struct BrowserInfo: Codable, Sendable, Hashable {
+    package let userAgent: String
+    package let ipAddress: String
+    package let screenWidth: Int
+    package let screenHeight: Int
+    package let colorDepth: Int
     /// Minutes **west** of UTC, with DST applied — the JavaScript
     /// `Date.getTimezoneOffset()` convention that 3DS expects. A device at UTC+2
     /// reports -120, not +120.
-    public let timezoneOffset: Int
+    package let timezoneOffset: Int
     /// BCP-47 language tag, e.g. "en-GB".
-    public let language: String
-    public let acceptHeader: String
-    public let javaEnabled: Bool
-    public let javascriptEnabled: Bool
+    package let language: String
+    package let acceptHeader: String
+    package let javaEnabled: Bool
+    package let javascriptEnabled: Bool
 
-    public static let defaultAcceptHeader =
+    package static let defaultAcceptHeader =
         "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
 
     enum CodingKeys: String, CodingKey {
@@ -36,7 +36,7 @@ public struct BrowserInfo: Codable, Sendable, Hashable {
         case language
     }
 
-    public init(
+    package init(
         userAgent: String,
         ipAddress: String,
         screenWidth: Int,
@@ -61,7 +61,7 @@ public struct BrowserInfo: Codable, Sendable, Hashable {
     }
 
     /// Minutes west of UTC for `timeZone` at `date`, matching the Kotlin.
-    public static func timezoneOffsetMinutes(
+    package static func timezoneOffsetMinutes(
         timeZone: TimeZone = .current,
         at date: Date = Date()
     ) -> Int {
@@ -74,7 +74,7 @@ public struct BrowserInfo: Codable, Sendable, Hashable {
     /// home region produces "en-US-u-rg-lvzzzz", which fails validation and
     /// kills the payment server-side after submit already returned 200. Keep
     /// the meaningful prefix (language, script, region) and drop the rest.
-    public static func clampedLanguageTag(_ tag: String) -> String {
+    package static func clampedLanguageTag(_ tag: String) -> String {
         let maxLength = 10
         var subtags = tag.split(separator: "-").map(String.init)
         // A single-character subtag ("u", "x") starts an extension or
@@ -96,14 +96,14 @@ public struct BrowserInfo: Codable, Sendable, Hashable {
 }
 
 /// Card details for submission. New card or saved card; never both.
-public struct CardData: Codable, Sendable, Hashable {
-    public let savedUUID: String?
-    public let cardholderName: String?
-    public let pan: String?
-    public let expireYear: String?
-    public let expireMonth: String?
-    public let cvv: String
-    public let save: Bool?
+package struct CardData: Codable, Sendable, Hashable {
+    package let savedUUID: String?
+    package let cardholderName: String?
+    package let pan: String?
+    package let expireYear: String?
+    package let expireMonth: String?
+    package let cvv: String
+    package let save: Bool?
 
     enum CodingKeys: String, CodingKey {
         case savedUUID = "saved_uuid"
@@ -114,7 +114,7 @@ public struct CardData: Codable, Sendable, Hashable {
     }
 
     /// A newly entered card.
-    public static func newCard(
+    package static func newCard(
         cardholderName: String,
         pan: String,
         expireMonth: String,
@@ -134,7 +134,7 @@ public struct CardData: Codable, Sendable, Hashable {
     }
 
     /// A previously saved card, re-confirmed with its CVV.
-    public static func savedCard(uuid: String, cvv: String) -> CardData {
+    package static func savedCard(uuid: String, cvv: String) -> CardData {
         CardData(
             savedUUID: uuid,
             cardholderName: nil,
@@ -149,21 +149,21 @@ public struct CardData: Codable, Sendable, Hashable {
 
 /// Redacted so a PAN cannot reach a log through string interpolation.
 extension CardData: CustomStringConvertible, CustomDebugStringConvertible {
-    public var description: String {
+    package var description: String {
         let tail = (pan?.count ?? 0) >= 4 ? String(pan!.suffix(4)) : ""
         let subject = savedUUID.map { "saved:\($0)" } ?? "****\(tail)"
         return "CardData(\(subject), cvv: •••)"
     }
 
-    public var debugDescription: String { description }
+    package var debugDescription: String { description }
 }
 
-public struct SubmitCardRequest: Codable, Sendable {
-    public let session: String
-    public let paymentMethod: String
-    public let card: CardData?
-    public let browserInfo: BrowserInfo
-    public let fieldGroups: [String: [String: String]]?
+package struct SubmitCardRequest: Codable, Sendable {
+    package let session: String
+    package let paymentMethod: String
+    package let card: CardData?
+    package let browserInfo: BrowserInfo
+    package let fieldGroups: [String: [String: String]]?
 
     enum CodingKeys: String, CodingKey {
         case paymentMethod = "payment_method"
@@ -172,7 +172,7 @@ public struct SubmitCardRequest: Codable, Sendable {
         case session, card
     }
 
-    public init(
+    package init(
         session: String,
         card: CardData,
         browserInfo: BrowserInfo,
@@ -187,9 +187,9 @@ public struct SubmitCardRequest: Codable, Sendable {
 }
 
 extension SubmitCardRequest: CustomStringConvertible, CustomDebugStringConvertible {
-    public var description: String {
+    package var description: String {
         "SubmitCardRequest(method: \(paymentMethod), card: \(card?.description ?? "nil"))"
     }
 
-    public var debugDescription: String { description }
+    package var debugDescription: String { description }
 }

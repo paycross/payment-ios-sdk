@@ -4,14 +4,14 @@ import Foundation
 ///
 /// Mirrors `CardType` in the Android SDK, including its CVV lengths and the
 /// detection order (first match wins, `unknown` last).
-public enum CardBrand: String, Sendable, Hashable, CaseIterable {
+package enum CardBrand: String, Sendable, Hashable, CaseIterable {
     case visa
     case mastercard
     case amex
     case discover
     case unknown
 
-    public var displayName: String {
+    package var displayName: String {
         switch self {
         case .visa: "Visa"
         case .mastercard: "Mastercard"
@@ -21,12 +21,12 @@ public enum CardBrand: String, Sendable, Hashable, CaseIterable {
         }
     }
 
-    public var cvvLength: Int {
+    package var cvvLength: Int {
         self == .amex ? 4 : 3
     }
 
     /// The maximum PAN length this brand accepts, used to bound input.
-    public var maxPANLength: Int {
+    package var maxPANLength: Int {
         self == .amex ? 15 : 19
     }
 
@@ -35,7 +35,7 @@ public enum CardBrand: String, Sendable, Hashable, CaseIterable {
     /// Android matches on prefix regexes with `containsMatchIn`, which is anchored
     /// by the leading `^` in every pattern; these are the same prefixes expressed
     /// as literal comparisons so no regex engine is needed.
-    public static func detect(_ pan: String) -> CardBrand {
+    package static func detect(_ pan: String) -> CardBrand {
         let digits = pan.filter(\.isNumber)
         guard let first = digits.first else { return .unknown }
 

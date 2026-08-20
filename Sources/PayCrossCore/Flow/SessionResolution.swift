@@ -1,7 +1,7 @@
 import Foundation
 
 /// What to do once the session has been fetched.
-public enum SessionResolution: Sendable, Equatable {
+package enum SessionResolution: Sendable, Equatable {
     /// Show the card form. The session is open and there is nothing in flight.
     case showForm(SessionData?)
     /// A transaction already exists — poll it rather than creating another.
@@ -19,7 +19,7 @@ public enum SessionResolution: Sendable, Equatable {
 /// no signal that the two submissions are related.
 ///
 /// Mirrors `PaymentViewModel.initialize` (`PaymentViewModel.kt:135-155`).
-public enum SessionResolver {
+package enum SessionResolver {
 
     /// - Parameters:
     ///   - response: the fetched session, or nil when the fetch failed.
@@ -27,7 +27,7 @@ public enum SessionResolver {
     ///     session completed without naming a transaction.
     ///   - localTransactionID: a transaction this client already started, which
     ///     takes precedence over the server's `latest_transaction_id`.
-    public static func resolve(
+    package static func resolve(
         _ response: SessionResponse?,
         claims: SessionClaims,
         localTransactionID: String? = nil

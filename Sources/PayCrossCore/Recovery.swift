@@ -27,7 +27,7 @@ public enum Recovery: Sendable, Hashable {
     }
 
     /// Whether this SDK version understood the server's value.
-    public var isRecognized: Bool {
+    package var isRecognized: Bool {
         if case .unrecognized = self { return false }
         return true
     }
@@ -36,7 +36,7 @@ public enum Recovery: Sendable, Hashable {
     ///
     /// Absent values default to `.retry`; unrecognised values fail closed, matching
     /// `Recovery.fromString` in the Android SDK and the checkout page's policy.
-    public init(apiValue: String?) {
+    package init(apiValue: String?) {
         switch apiValue?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
         case nil, "": self = .retry
         case "retry": self = .retry

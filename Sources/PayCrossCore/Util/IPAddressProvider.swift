@@ -14,23 +14,23 @@ import FoundationNetworking
 ///
 /// Mirrors `IpAddressProvider.kt`: one lookup, cached, with a loopback fallback
 /// so a submission never blocks on a network that is already failing.
-public actor IPAddressProvider {
+package actor IPAddressProvider {
 
-    public static let fallback = "127.0.0.1"
+    package static let fallback = "127.0.0.1"
     static let lookupURL = URL(string: "https://api.ipify.org?format=json")!
 
     private let transport: any HTTPTransport
     private let timeout: TimeInterval
     private var cached: String?
 
-    public init(transport: any HTTPTransport, timeout: TimeInterval = 5) {
+    package init(transport: any HTTPTransport, timeout: TimeInterval = 5) {
         self.transport = transport
         self.timeout = timeout
     }
 
     /// The public IP, or the loopback fallback. Never throws and never blocks
     /// longer than `timeout`.
-    public func current() async -> String {
+    package func current() async -> String {
         if let cached { return cached }
         let resolved = await lookup() ?? Self.fallback
         cached = resolved
@@ -39,7 +39,7 @@ public actor IPAddressProvider {
 
     /// Resolves ahead of time so the submit path does not pay for the lookup.
     /// Android warms this in `initialize` for the same reason.
-    public func warm() async {
+    package func warm() async {
         _ = await current()
     }
 
@@ -58,7 +58,7 @@ public actor IPAddressProvider {
     }
 }
 
-public extension BrowserInfo {
+package extension BrowserInfo {
     /// The four fields the backend validates as non-blank.
     ///
     /// Asserted from both the wire-encoding tests and the device-assembly tests,

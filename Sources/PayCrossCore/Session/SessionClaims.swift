@@ -4,31 +4,31 @@ import Foundation
 ///
 /// The signature is **not** verified here — it is verified server-side. This
 /// decodes the payload only, to learn the session id and the amount to display.
-public struct SessionClaims: Sendable, Hashable {
-    public let sessionID: String
-    public let merchantID: String
-    public let customerID: String
-    public let brandingID: String?
-    public let amount: Amount
+package struct SessionClaims: Sendable, Hashable {
+    package let sessionID: String
+    package let merchantID: String
+    package let customerID: String
+    package let brandingID: String?
+    package let amount: Amount
     /// Token expiry, epoch seconds.
-    public let expiresAt: Int64?
+    package let expiresAt: Int64?
 
-    public func isExpired(now: Date = Date()) -> Bool {
+    package func isExpired(now: Date = Date()) -> Bool {
         guard let expiresAt else { return false }
         return Int64(now.timeIntervalSince1970) >= expiresAt
     }
 }
 
-public enum SessionTokenError: Error, Sendable, Equatable {
+package enum SessionTokenError: Error, Sendable, Equatable {
     case empty
     case malformed(String)
     case missingField(String)
 }
 
 /// Decodes a PayCross session JWT payload.
-public enum SessionTokenDecoder {
+package enum SessionTokenDecoder {
 
-    public static func decode(_ token: String) throws -> SessionClaims {
+    package static func decode(_ token: String) throws -> SessionClaims {
         guard !token.isEmpty else { throw SessionTokenError.empty }
 
         let parts = token.split(separator: ".", omittingEmptySubsequences: false)

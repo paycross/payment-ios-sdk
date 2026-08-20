@@ -1,16 +1,16 @@
 import Foundation
 
 /// Whether a server-driven field is shown, and how it behaves when it is.
-public struct FieldState: Sendable, Equatable {
-    public let isVisible: Bool
-    public let isRequired: Bool
-    public let isReadOnly: Bool
+package struct FieldState: Sendable, Equatable {
+    package let isVisible: Bool
+    package let isRequired: Bool
+    package let isReadOnly: Bool
 }
 
-public struct FieldGroupError: Sendable, Equatable {
-    public let groupKey: String
-    public let fieldName: String
-    public let message: String
+package struct FieldGroupError: Sendable, Equatable {
+    package let groupKey: String
+    package let fieldName: String
+    package let message: String
 }
 
 /// The checkout page's field-group semantics.
@@ -19,7 +19,7 @@ public struct FieldGroupError: Sendable, Equatable {
 /// only visible fields are validated or submitted. Pure, so all of it is asserted
 /// on Linux — which matters, because these rules are server-driven and a mistake
 /// shows up as a field that silently never appears.
-public enum FieldGroupLogic {
+package enum FieldGroupLogic {
 
     /// Display keywords the server can send.
     enum Display {
@@ -28,7 +28,7 @@ public enum FieldGroupLogic {
         static let readonly = "readonly"
     }
 
-    public static func fieldState(
+    package static func fieldState(
         for field: FieldDefinition,
         groupValues: [String: String]
     ) -> FieldState {
@@ -55,7 +55,7 @@ public enum FieldGroupLogic {
     }
 
     /// Server-supplied starting values, keyed by group. Empty groups are dropped.
-    public static func initialValues(_ groups: [FieldGroup]) -> [String: [String: String]] {
+    package static func initialValues(_ groups: [FieldGroup]) -> [String: [String: String]] {
         var out: [String: [String: String]] = [:]
         for group in groups {
             var values: [String: String] = [:]
@@ -73,7 +73,7 @@ public enum FieldGroupLogic {
     ///
     /// Ordered deterministically — group order then field order, as the server
     /// sent them — so the first error shown to a shopper is stable.
-    public static func validate(
+    package static func validate(
         groups: [FieldGroup],
         values: [String: [String: String]]
     ) -> [FieldGroupError] {
@@ -115,7 +115,7 @@ public enum FieldGroupLogic {
 
     /// What goes on the wire under `field_groups`: visible fields with non-blank
     /// values, empty groups dropped.
-    public static func submissionValues(
+    package static func submissionValues(
         groups: [FieldGroup],
         values: [String: [String: String]]
     ) -> [String: [String: String]] {
