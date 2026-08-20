@@ -108,7 +108,7 @@ ssh mac 'export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer PATH=/o
 
 ### Task 3: Backend — submit-card derives `ip_address` (separate repo, own gate)
 
-**Files (repo `paycross/payment-submit-card`, fresh WSL clone `/tmp/claude-1000/-home-silvo/ee22b658-fa12-436d-bfbe-3890362167b2/scratchpad/fix-submit-card`):**
+**Files (repo `paycross/lambda-payment-card-handler` (GitHub name; the local sibling dir and go.mod module say payment-submit-card), fresh WSL clone `/tmp/claude-1000/-home-silvo/ee22b658-fa12-436d-bfbe-3890362167b2/scratchpad/fix-submit-card`):**
 - Modify: `internal/handler/validation.go` (or wherever `browser_info.ip_address` is required — locate first)
 - Modify: `internal/handler/handler.go` (request-context plumbing if not already available)
 - Test: matching `*_test.go` beside the modified files
@@ -116,7 +116,7 @@ ssh mac 'export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer PATH=/o
 - [ ] **Step 1: Clone and locate the validation**
 
 ```bash
-git clone https://github.com/paycross/payment-submit-card /tmp/claude-1000/-home-silvo/ee22b658-fa12-436d-bfbe-3890362167b2/scratchpad/fix-submit-card
+git clone https://github.com/paycross/lambda-payment-card-handler /tmp/claude-1000/-home-silvo/ee22b658-fa12-436d-bfbe-3890362167b2/scratchpad/fix-submit-card
 grep -rn "ip_address" /tmp/claude-1000/-home-silvo/ee22b658-fa12-436d-bfbe-3890362167b2/scratchpad/fix-submit-card/internal
 ```
 Read the hits. The known behavior: a blank `browser_info.ip_address` is rejected with "missing browser_info.ip_address".
