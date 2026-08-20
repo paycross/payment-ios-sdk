@@ -2,8 +2,24 @@
 
 Native iOS SDK for PayCross payments, mirroring [`payment-android-sdk`](https://github.com/paycross/payment-android-sdk).
 
-**Status: alpha, incomplete.** `PayCrossCore` is implemented and tested. The UI
-layer is not yet written.
+## Installation
+
+### CocoaPods
+
+```ruby
+pod 'PayCross', '~> 0.1'
+```
+
+### Swift Package Manager
+
+```swift
+.package(url: "https://github.com/paycross/payment-ios-sdk.git", from: "0.1.0")
+```
+
+Add `PayCross` as a dependency of your app target. `PayCrossCore` comes along
+transitively; depend on it directly only if you need its platform-agnostic
+types (`Amount`, `PaymentResult`, `Recovery`, `PayCrossEnvironment`) without
+the UI layer.
 
 ## Why the package is split in two
 
@@ -36,7 +52,7 @@ Requires Swift 6.0+. On Linux, install a toolchain from swift.org — no Xcode n
 ```swift
 PayCrossAPI.configure(environment: .sandbox)
 
-let sheet = PaymentSheet(sessionToken: token)   // not yet implemented
+let sheet = PaymentSheet(sessionToken: token)
 let result = await sheet.present(from: viewController)
 
 switch result {

@@ -271,7 +271,7 @@ final class PaymentSheetModel: ObservableObject {
     }
 }
 
-/// Placeholder until the WebKit 3DS layer lands. Reports failure rather than
+/// A fail-closed fallback used when no presenter is attached. Reports failure rather than
 /// silently succeeding, so a 3DS session cannot appear to pass without one.
 private struct ThreeDSPresenterStub: ThreeDSPresenting {
     func present(_ step: ThreeDSStep) async -> ThreeDSOutcome { .failed }
@@ -280,9 +280,9 @@ private struct ThreeDSPresenterStub: ThreeDSPresenting {
 
 /// Collects the device characteristics 3DS v2 requires.
 ///
-/// Every field here except `ip_address` is validated non-blank by the backend
-/// (see `testBrowserInfoEncodesSnakeCase`), so this is assembled from real
-/// values rather than placeholders. `ip_address` itself is omitted: the
+/// Every field here except `ip_address` is validated non-blank by
+/// `validateBrowserInfo` in the submit-card service, so this is assembled from
+/// real values rather than placeholders. `ip_address` itself is omitted: the
 /// submit-card Lambda derives it from the request when absent.
 @MainActor
 enum DeviceInfo {

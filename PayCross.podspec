@@ -7,7 +7,7 @@ Pod::Spec.new do |s|
     polling, presented from a view controller and resolving to a single result.
   DESC
   s.homepage         = 'https://github.com/paycross/payment-ios-sdk'
-  s.license          = { :type => 'Proprietary', :text => 'Copyright PayCross. All rights reserved.' }
+  s.license          = { :type => 'MIT', :file => 'LICENSE' }
   s.author           = 'PayCross'
 
   s.source           = {
