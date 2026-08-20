@@ -70,6 +70,30 @@ happy path needs no `catch` and the compiler still checks the recovery branch.
   Apple Developer Program and PassKit authorization cannot be exercised on a
   simulator.
 
+## App Store privacy labels
+
+Both pods ship a `PrivacyInfo.xcprivacy` manifest (Apple has required this
+since spring 2024; without one, merchants get an App Store Connect warning
+or outright rejection on submission). For a merchant filling out their own
+app's privacy label, here is what the SDK actually does:
+
+- **Collects, for app functionality, linked to the identity of the payer:**
+  card data (number, expiry, CVC), cardholder name, and — only when the
+  session config surfaces those fields — email address and phone number.
+  This data is entered in `PayCross`'s UI and transmitted by `PayCrossCore`
+  to the PayCross backend to process the payment; it is not used for
+  advertising or shared with data brokers.
+- **Tracking: no.** `NSPrivacyTracking` is `false` in both manifests, and
+  neither pod contacts any tracking domain.
+- **IP address is not collected client-side.** The SDK does not read or
+  transmit the device's IP address; the backend derives it server-side from
+  the connection (Cloudflare connecting-IP header, falling back to source
+  IP). Merchants do not need to declare IP collection on the SDK's behalf.
+
+Merchants should reflect card data, name, email and phone (as applicable to
+their session configuration) in their own App Store privacy label as data
+"used to track you: No" / "linked to you: Yes" / "app functionality."
+
 ## Known documentation defects in the Android repo
 
 Found while porting; the Kotlin is correct and the docs are not:
