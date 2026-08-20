@@ -15,11 +15,13 @@ let package = Package(
     targets: [
         .target(
             name: "PayCrossCore",
+            resources: [.process("Resources")],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .target(
             name: "PayCross",
             dependencies: ["PayCrossCore"],
+            resources: [.process("Resources")],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .testTarget(

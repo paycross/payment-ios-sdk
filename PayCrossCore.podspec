@@ -29,4 +29,9 @@ Pod::Spec.new do |s|
   s.pod_target_xcconfig = { 'SWIFT_VERSION' => '6.0', 'OTHER_SWIFT_FLAGS' => '-package-name PayCross' }
 
   s.source_files = 'Sources/PayCrossCore/**/*.swift'
+
+  # Apple requires SDKs to ship a privacy manifest; CocoaPods/Apple guidance is
+  # to place it in a resource bundle named after the pod so the built app gets
+  # a PayCrossCorePrivacy.bundle/PrivacyInfo.xcprivacy Apple's tooling expects.
+  s.resource_bundles = { 'PayCrossCorePrivacy' => ['Sources/PayCrossCore/Resources/PrivacyInfo.xcprivacy'] }
 end
