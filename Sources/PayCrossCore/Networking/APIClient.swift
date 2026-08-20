@@ -102,6 +102,14 @@ public struct PayCrossAPIClient: Sendable {
         request.httpMethod = method
         request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        // A live test drive saw the second status poll after submit come back
+        // `cache_hit=true` from URLSession's URLCache, which could freeze
+        // polling on a stale value. Every call this client makes is a payments
+        // API request; none of them is cacheable, so none may be cache-served.
+        // `.reloadIgnoringLocalAndRemoteCacheData` also puts a Cache-Control:
+        // no-cache header on the wire, so an intermediary proxy cannot serve a
+        // stale response either.
+        request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
         return request
     }
 
@@ -136,7 +144,23 @@ public struct PayCrossAPIClient: Sendable {
 public struct URLSessionTransport: HTTPTransport {
     private let session: URLSession
 
-    public init(session: URLSession = .shared) {
+    /// A session with no cache, on disk or in memory. `.shared`'s cache is
+    /// where the field-observed `cache_hit=true` responses were coming from:
+    /// `makeRequest`'s `cachePolicy` only stops this client from *reading*
+    /// URLCache, but `.shared` would still *write* every session/status/submit
+    /// response body into it. Payments data must never be persisted there --
+    /// the same reason the 3DS webview uses `.nonPersistent()` for the ACS
+    /// session's data store.
+    ///
+    /// Built inline rather than as a named static property: a default
+    /// argument's expression must be at least as accessible as the
+    /// initializer it belongs to, and this is an implementation detail that
+    /// has no business being `public` API.
+    public init(session: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.urlCache = nil
+        return URLSession(configuration: configuration)
+    }()) {
         self.session = session
     }
 

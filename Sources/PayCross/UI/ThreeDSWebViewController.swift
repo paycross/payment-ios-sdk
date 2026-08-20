@@ -101,10 +101,17 @@ extension ThreeDSWebViewController: WKNavigationDelegate {
     /// certificate fails the load rather than being waved through. Android has to
     /// say this explicitly by calling handler.cancel(); on iOS it is the default,
     /// and the danger would be overriding it.
+    ///
+    /// `completionHandler` must be `@MainActor` to exactly match WebKit's
+    /// imported requirement (its header marks the block `WK_SWIFT_UI_ACTOR`).
+    /// Without it this override only *nearly* matched the protocol requirement
+    /// and silently never ran — per WKNavigationDelegate's own doc comment, an
+    /// unimplemented method makes every challenge reject the protection space
+    /// instead of falling through to `.performDefaultHandling`.
     func webView(
         _ webView: WKWebView,
         didReceive challenge: URLAuthenticationChallenge,
-        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+        completionHandler: @escaping @MainActor (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
     ) {
         completionHandler(.performDefaultHandling, nil)
     }
