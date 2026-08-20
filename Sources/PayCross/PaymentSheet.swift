@@ -120,6 +120,10 @@ final class PaymentSheetModel: ObservableObject {
     private let sessionToken: String
     private let configuration: Configuration
     private var continuation: CheckedContinuation<PaymentResult, Never>?
+    /// Retained so cancelling stops the poll loop. Android gets this for free -
+    /// finishing the Activity tears down the viewModelScope - but a bare Task
+    /// here would keep polling for the full deadline after the sheet is gone.
+    private var paymentTask: Task<Void, Never>?
     /// Set once the host controller exists, since the presenter needs somewhere
     /// to attach its web view.
     var threeDSPresenter: (any ThreeDSPresenting)?
@@ -210,7 +214,14 @@ final class PaymentSheetModel: ObservableObject {
         }
     }
 
+    /// Abandons the flow at the shopper's request.
+    ///
+    /// The server keeps its own record, so a payment cancelled mid-authorization
+    /// may still complete; the merchant reconciles that server-side. Android
+    /// behaves the same way. What matters is that the shopper is never trapped.
     func cancel() {
+        paymentTask?.cancel()
+        paymentTask = nil
         finish(.cancelled)
     }
 
@@ -226,9 +237,10 @@ final class PaymentSheetModel: ObservableObject {
         // Clears the CVV from form state the moment it is handed off (Req 3.3.1).
         CardFormReducer.reduce(state: &form, event: .paySubmitted)
 
-        Task { [weak self] in
+        paymentTask = Task { [weak self] in
             guard let self else { return }
             let outcome = await self.runFlow(with: card)
+            guard !Task.isCancelled else { return }
             switch outcome {
             case .finished(let result):
                 self.finish(result)
@@ -336,6 +348,7 @@ enum DeviceInfo {
 
 struct PaymentSheetView: View {
     @ObservedObject var model: PaymentSheetModel
+    @State private var showCancelConfirmation = false
 
     var body: some View {
         NavigationStack {
@@ -362,9 +375,21 @@ struct PaymentSheetView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", action: model.cancel)
-                        .disabled(model.isLoading)
+                    // Never disabled. Authorization runs for up to the full poll
+                    // deadline, the sheet is isModalInPresentation so it cannot be
+                    // swiped away, and there is no back gesture - gating this on
+                    // isLoading left a shopper whose ACS never returns with no way
+                    // out at all. Android's back handler is likewise unconditional.
+                    Button("Cancel") { showCancelConfirmation = true }
                 }
+            }
+            // Same two-step as Android, so a stray tap cannot abandon a payment
+            // that is already in flight.
+            .alert("Cancel Payment?", isPresented: $showCancelConfirmation) {
+                Button("Yes, Cancel", role: .destructive, action: model.cancel)
+                Button("Continue Payment", role: .cancel) {}
+            } message: {
+                Text("Are you sure you want to cancel this payment?")
             }
         }
     }
