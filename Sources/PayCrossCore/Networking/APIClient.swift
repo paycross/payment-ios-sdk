@@ -8,11 +8,11 @@ import FoundationNetworking
 ///
 /// A protocol rather than a bare `URLSession` so the whole client is asserted on
 /// Linux against a stub, with no server and no `URLProtocol` subclassing.
-public protocol HTTPTransport: Sendable {
+package protocol HTTPTransport: Sendable {
     func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse)
 }
 
-public enum PayCrossError: Error, Sendable, Equatable {
+package enum PayCrossError: Error, Sendable, Equatable {
     /// The SDK was used before `configure` was called, or with an unusable environment.
     case notConfigured
     /// Transport failure — no response, or the connection dropped.
@@ -25,7 +25,7 @@ public enum PayCrossError: Error, Sendable, Equatable {
     case decoding(String)
 
     /// The server's own explanation, when it sent one.
-    public var serverMessage: String? {
+    package var serverMessage: String? {
         if case .http(_, let body) = self { return body }
         return nil
     }
@@ -34,20 +34,20 @@ public enum PayCrossError: Error, Sendable, Equatable {
     ///
     /// Only server-side rejections are retried; a transport failure or a timeout
     /// is not, because the request may well have been received.
-    public var isRetryableRejection: Bool {
+    package var isRetryableRejection: Bool {
         if case .http(let status, _) = self { return status == 409 }
         return false
     }
 }
 
 /// Client for the PayCross public checkout API.
-public struct PayCrossAPIClient: Sendable {
+package struct PayCrossAPIClient: Sendable {
     private let baseURL: URL
     private let transport: HTTPTransport
     private let userAgent: String
     private let makeIdempotencyKey: @Sendable () -> String
 
-    public init(
+    package init(
         baseURL: URL,
         transport: HTTPTransport,
         userAgent: String,
@@ -60,7 +60,7 @@ public struct PayCrossAPIClient: Sendable {
     }
 
     /// `GET session/{sessionID}` — session status, latest transaction and checkout data.
-    public func session(id: String, sessionToken: String) async throws -> SessionResponse {
+    package func session(id: String, sessionToken: String) async throws -> SessionResponse {
         var request = makeRequest(path: ["session", id], method: "GET")
         request.setValue("Bearer \(sessionToken)", forHTTPHeaderField: "Authorization")
         return try await perform(request)
@@ -70,7 +70,7 @@ public struct PayCrossAPIClient: Sendable {
     ///
     /// The idempotency key is generated once per *logical* submission and reused
     /// across retry-after loops, so a retry cannot create a second transaction.
-    public func submitCard(
+    package func submitCard(
         _ body: SubmitCardRequest,
         idempotencyKey: String
     ) async throws -> SubmitCardResponse {
@@ -86,11 +86,11 @@ public struct PayCrossAPIClient: Sendable {
     }
 
     /// `GET status/{transactionID}`
-    public func status(transactionID: String) async throws -> StatusResponse {
+    package func status(transactionID: String) async throws -> StatusResponse {
         try await perform(makeRequest(path: ["status", transactionID], method: "GET"))
     }
 
-    public func newIdempotencyKey() -> String { makeIdempotencyKey() }
+    package func newIdempotencyKey() -> String { makeIdempotencyKey() }
 
     // MARK: - Plumbing
 
@@ -141,7 +141,7 @@ public struct PayCrossAPIClient: Sendable {
 }
 
 /// `URLSession`-backed transport.
-public struct URLSessionTransport: HTTPTransport {
+package struct URLSessionTransport: HTTPTransport {
     private let session: URLSession
 
     /// A session with no cache, on disk or in memory. `.shared`'s cache is
@@ -156,7 +156,7 @@ public struct URLSessionTransport: HTTPTransport {
     /// argument's expression must be at least as accessible as the
     /// initializer it belongs to, and this is an implementation detail that
     /// has no business being `public` API.
-    public init(session: URLSession = {
+    package init(session: URLSession = {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.urlCache = nil
         return URLSession(configuration: configuration)
@@ -164,7 +164,7 @@ public struct URLSessionTransport: HTTPTransport {
         self.session = session
     }
 
-    public func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+    package func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else {
             throw PayCrossError.transport("response was not HTTP")

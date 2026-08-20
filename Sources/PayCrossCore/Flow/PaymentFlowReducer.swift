@@ -5,41 +5,41 @@ import Foundation
 /// Read from the Kotlin, not from the docs: `docs/DESIGN.md` still describes an
 /// abandoned exponential backoff (1s→5s over 60 attempts) and `docs/API.md` says
 /// "every 3 seconds". Neither matches what ships.
-public enum FlowLimits {
+package enum FlowLimits {
     /// `MAX_SUBMIT_ATTEMPTS` — retry-after loop cap.
-    public static let maxSubmitAttempts = 5
+    package static let maxSubmitAttempts = 5
     /// `POLL_INTERVAL_MS`
-    public static let pollInterval: Duration = .milliseconds(2000)
+    package static let pollInterval: Duration = .milliseconds(2000)
     /// `POLL_DEADLINE_MS` — 8 minutes.
-    public static let pollDeadline: Duration = .seconds(480)
+    package static let pollDeadline: Duration = .seconds(480)
 }
 
 /// What the flow is doing right now.
-public struct PaymentFlowState: Sendable, Equatable {
-    public var transactionID: String?
-    public var isPolling: Bool = false
+package struct PaymentFlowState: Sendable, Equatable {
+    package var transactionID: String?
+    package var isPolling: Bool = false
     /// Inline error shown on the re-armed form after a retryable decline.
-    public var inlineError: String?
+    package var inlineError: String?
     /// The 3DS step currently being presented, if any.
-    public var pendingThreeDS: ThreeDSStep?
+    package var pendingThreeDS: ThreeDSStep?
     /// Dedupe keys for 3DS actions already presented in this session.
-    public var handledThreeDSKeys: Set<String> = []
-    public var result: PaymentResult?
+    package var handledThreeDSKeys: Set<String> = []
+    package var result: PaymentResult?
     /// Claims are the fallback for amount/currency when the status response omits them.
-    public var claims: SessionClaims?
+    package var claims: SessionClaims?
 
-    public init(claims: SessionClaims? = nil) {
+    package init(claims: SessionClaims? = nil) {
         self.claims = claims
     }
 }
 
-public struct ThreeDSStep: Sendable, Equatable {
-    public let action: ThreeDSAction
-    public let isChallenge: Bool
+package struct ThreeDSStep: Sendable, Equatable {
+    package let action: ThreeDSAction
+    package let isChallenge: Bool
 }
 
 /// Things that happen to the flow.
-public enum PaymentFlowEvent: Sendable, Equatable {
+package enum PaymentFlowEvent: Sendable, Equatable {
     case statusReceived(StatusResponse)
     case threeDSCompleted
     case pollDeadlineReached
@@ -51,7 +51,7 @@ public enum PaymentFlowEvent: Sendable, Equatable {
 /// the poll loop without producing a result, because Android's `handleStatus`
 /// returns `true` (terminal for the loop) while only setting an inline error.
 /// Collapsing these two would leave a dead transaction being polled for 8 minutes.
-public enum PaymentFlowEffect: Sendable, Equatable {
+package enum PaymentFlowEffect: Sendable, Equatable {
     case stopPolling
     case present3DS(ThreeDSStep)
     case dismiss3DS
@@ -63,9 +63,9 @@ public enum PaymentFlowEffect: Sendable, Equatable {
 /// Everything the Kotlin `PaymentViewModel` does in response to a status response
 /// lives here, synchronously and without a network or a UI, so it is asserted in
 /// microseconds on Linux.
-public enum PaymentFlowReducer {
+package enum PaymentFlowReducer {
 
-    public static func reduce(
+    package static func reduce(
         state: inout PaymentFlowState,
         event: PaymentFlowEvent
     ) -> [PaymentFlowEffect] {

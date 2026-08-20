@@ -5,11 +5,11 @@ import Foundation
 /// Note this is a different shape from the *merchant* API's session resource that
 /// the demo harness polls. The SDK sees the checkout view of a session; the
 /// merchant backend sees its own. Conflating them was a bug in an earlier pass.
-public struct SessionResponse: Codable, Sendable, Hashable {
-    public let sessionID: String
-    public let status: String?
-    public let latestTransactionID: String?
-    public let data: SessionData?
+package struct SessionResponse: Codable, Sendable, Hashable {
+    package let sessionID: String
+    package let status: String?
+    package let latestTransactionID: String?
+    package let data: SessionData?
 
     enum CodingKeys: String, CodingKey {
         case sessionID = "session_id"
@@ -17,7 +17,7 @@ public struct SessionResponse: Codable, Sendable, Hashable {
         case status, data
     }
 
-    public init(
+    package init(
         sessionID: String,
         status: String? = nil,
         latestTransactionID: String? = nil,
@@ -31,14 +31,14 @@ public struct SessionResponse: Codable, Sendable, Hashable {
 }
 
 /// Everything the checkout page needs to render, decided server-side.
-public struct SessionData: Codable, Sendable, Hashable {
-    public let locale: String?
-    public let returnURL: String?
-    public let successURL: String?
-    public let fieldGroups: [FieldGroup]?
-    public let merchantCountry: String?
-    public let saveCardConfig: SaveCardConfig?
-    public let savedCards: [WireSavedCard]?
+package struct SessionData: Codable, Sendable, Hashable {
+    package let locale: String?
+    package let returnURL: String?
+    package let successURL: String?
+    package let fieldGroups: [FieldGroup]?
+    package let merchantCountry: String?
+    package let saveCardConfig: SaveCardConfig?
+    package let savedCards: [WireSavedCard]?
 
     enum CodingKeys: String, CodingKey {
         case returnURL = "return_url"
@@ -51,9 +51,9 @@ public struct SessionData: Codable, Sendable, Hashable {
     }
 
     /// The save-card checkbox appears only when the server configured it.
-    public var allowsSavingCard: Bool { saveCardConfig != nil }
+    package var allowsSavingCard: Bool { saveCardConfig != nil }
 
-    public init(
+    package init(
         locale: String? = nil,
         returnURL: String? = nil,
         successURL: String? = nil,
@@ -72,23 +72,23 @@ public struct SessionData: Codable, Sendable, Hashable {
     }
 }
 
-public struct SaveCardConfig: Codable, Sendable, Hashable {
-    public let usage: String?
+package struct SaveCardConfig: Codable, Sendable, Hashable {
+    package let usage: String?
 
-    public init(usage: String? = nil) { self.usage = usage }
+    package init(usage: String? = nil) { self.usage = usage }
 }
 
 /// A saved card as the server sends it.
 ///
 /// Distinct from the presentation-layer `SavedCard`: this is the wire shape, and
 /// mapping between them is where the brand string becomes a `CardBrand`.
-public struct WireSavedCard: Codable, Sendable, Hashable {
-    public let uuid: String
-    public let maskedPAN: String
-    public let cardBrand: String?
-    public let expireMonth: String
-    public let expireYear: String
-    public let cardholderName: String
+package struct WireSavedCard: Codable, Sendable, Hashable {
+    package let uuid: String
+    package let maskedPAN: String
+    package let cardBrand: String?
+    package let expireMonth: String
+    package let expireYear: String
+    package let cardholderName: String
 
     enum CodingKeys: String, CodingKey {
         case maskedPAN = "masked_pan"
@@ -99,7 +99,7 @@ public struct WireSavedCard: Codable, Sendable, Hashable {
         case uuid
     }
 
-    public init(
+    package init(
         uuid: String,
         maskedPAN: String,
         cardBrand: String? = nil,
@@ -119,7 +119,7 @@ public struct WireSavedCard: Codable, Sendable, Hashable {
     ///
     /// An unrecognised or absent brand becomes `.unknown`, which validates its
     /// CVV at three digits — the same fallback Android takes for saved cards.
-    public var presentable: SavedCard {
+    package var presentable: SavedCard {
         SavedCard(
             id: uuid,
             brand: cardBrand.map(Self.brand(from:)) ?? .unknown,
@@ -141,31 +141,31 @@ public struct WireSavedCard: Codable, Sendable, Hashable {
 
 // MARK: - Server-driven fields
 
-public struct FieldGroup: Codable, Sendable, Hashable {
-    public let key: String
-    public let label: String?
-    public let fields: [FieldDefinition]?
+package struct FieldGroup: Codable, Sendable, Hashable {
+    package let key: String
+    package let label: String?
+    package let fields: [FieldDefinition]?
 
-    public init(key: String, label: String? = nil, fields: [FieldDefinition]? = nil) {
+    package init(key: String, label: String? = nil, fields: [FieldDefinition]? = nil) {
         self.key = key
         self.label = label
         self.fields = fields
     }
 }
 
-public struct FieldDefinition: Codable, Sendable, Hashable {
-    public let name: String
-    public let type: String?
-    public let label: String?
-    public let placeholder: String?
-    public let required: Bool?
-    public let readonly: Bool?
-    public let value: String?
-    public let condition: FieldCondition?
-    public let options: [FieldOption]?
-    public let validation: FieldValidation?
+package struct FieldDefinition: Codable, Sendable, Hashable {
+    package let name: String
+    package let type: String?
+    package let label: String?
+    package let placeholder: String?
+    package let required: Bool?
+    package let readonly: Bool?
+    package let value: String?
+    package let condition: FieldCondition?
+    package let options: [FieldOption]?
+    package let validation: FieldValidation?
 
-    public init(
+    package init(
         name: String,
         type: String? = nil,
         label: String? = nil,
@@ -191,11 +191,11 @@ public struct FieldDefinition: Codable, Sendable, Hashable {
 }
 
 /// Shows or hides a field based on another field's value.
-public struct FieldCondition: Codable, Sendable, Hashable {
-    public let whenField: String
-    public let whenIn: [String]?
-    public let display: String?
-    public let `default`: String?
+package struct FieldCondition: Codable, Sendable, Hashable {
+    package let whenField: String
+    package let whenIn: [String]?
+    package let display: String?
+    package let `default`: String?
 
     enum CodingKeys: String, CodingKey {
         case whenField = "when"
@@ -203,7 +203,7 @@ public struct FieldCondition: Codable, Sendable, Hashable {
         case display, `default`
     }
 
-    public init(
+    package init(
         whenField: String,
         whenIn: [String]? = nil,
         display: String? = nil,
@@ -216,27 +216,27 @@ public struct FieldCondition: Codable, Sendable, Hashable {
     }
 }
 
-public struct FieldOption: Codable, Sendable, Hashable {
-    public let value: String
-    public let label: String?
+package struct FieldOption: Codable, Sendable, Hashable {
+    package let value: String
+    package let label: String?
 
-    public init(value: String, label: String? = nil) {
+    package init(value: String, label: String? = nil) {
         self.value = value
         self.label = label
     }
 }
 
-public struct FieldValidation: Codable, Sendable, Hashable {
-    public let pattern: String?
-    public let maxLength: Int?
-    public let messages: [String: String]?
+package struct FieldValidation: Codable, Sendable, Hashable {
+    package let pattern: String?
+    package let maxLength: Int?
+    package let messages: [String: String]?
 
     enum CodingKeys: String, CodingKey {
         case maxLength = "max_length"
         case pattern, messages
     }
 
-    public init(
+    package init(
         pattern: String? = nil,
         maxLength: Int? = nil,
         messages: [String: String]? = nil
@@ -247,8 +247,8 @@ public struct FieldValidation: Codable, Sendable, Hashable {
     }
 }
 
-public enum SessionLifecycle {
-    public static let open = "open"
-    public static let completed = "completed"
-    public static let expired = "expired"
+package enum SessionLifecycle {
+    package static let open = "open"
+    package static let completed = "completed"
+    package static let expired = "expired"
 }

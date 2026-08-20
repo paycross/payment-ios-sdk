@@ -96,14 +96,14 @@ package struct BrowserInfo: Codable, Sendable, Hashable {
 }
 
 /// Card details for submission. New card or saved card; never both.
-public struct CardData: Codable, Sendable, Hashable {
-    public let savedUUID: String?
-    public let cardholderName: String?
-    public let pan: String?
-    public let expireYear: String?
-    public let expireMonth: String?
-    public let cvv: String
-    public let save: Bool?
+package struct CardData: Codable, Sendable, Hashable {
+    package let savedUUID: String?
+    package let cardholderName: String?
+    package let pan: String?
+    package let expireYear: String?
+    package let expireMonth: String?
+    package let cvv: String
+    package let save: Bool?
 
     enum CodingKeys: String, CodingKey {
         case savedUUID = "saved_uuid"
@@ -114,7 +114,7 @@ public struct CardData: Codable, Sendable, Hashable {
     }
 
     /// A newly entered card.
-    public static func newCard(
+    package static func newCard(
         cardholderName: String,
         pan: String,
         expireMonth: String,
@@ -134,7 +134,7 @@ public struct CardData: Codable, Sendable, Hashable {
     }
 
     /// A previously saved card, re-confirmed with its CVV.
-    public static func savedCard(uuid: String, cvv: String) -> CardData {
+    package static func savedCard(uuid: String, cvv: String) -> CardData {
         CardData(
             savedUUID: uuid,
             cardholderName: nil,
@@ -149,22 +149,21 @@ public struct CardData: Codable, Sendable, Hashable {
 
 /// Redacted so a PAN cannot reach a log through string interpolation.
 extension CardData: CustomStringConvertible, CustomDebugStringConvertible {
-    public var description: String {
+    package var description: String {
         let tail = (pan?.count ?? 0) >= 4 ? String(pan!.suffix(4)) : ""
         let subject = savedUUID.map { "saved:\($0)" } ?? "****\(tail)"
         return "CardData(\(subject), cvv: •••)"
     }
 
-    public var debugDescription: String { description }
+    package var debugDescription: String { description }
 }
 
-public struct SubmitCardRequest: Codable, Sendable {
-    public let session: String
-    public let paymentMethod: String
-    public let card: CardData?
-    // Follows BrowserInfo's access level, now `package`.
+package struct SubmitCardRequest: Codable, Sendable {
+    package let session: String
+    package let paymentMethod: String
+    package let card: CardData?
     package let browserInfo: BrowserInfo
-    public let fieldGroups: [String: [String: String]]?
+    package let fieldGroups: [String: [String: String]]?
 
     enum CodingKeys: String, CodingKey {
         case paymentMethod = "payment_method"
@@ -173,7 +172,6 @@ public struct SubmitCardRequest: Codable, Sendable {
         case session, card
     }
 
-    // Capped at `package` by the browserInfo parameter, same as above.
     package init(
         session: String,
         card: CardData,
@@ -189,9 +187,9 @@ public struct SubmitCardRequest: Codable, Sendable {
 }
 
 extension SubmitCardRequest: CustomStringConvertible, CustomDebugStringConvertible {
-    public var description: String {
+    package var description: String {
         "SubmitCardRequest(method: \(paymentMethod), card: \(card?.description ?? "nil"))"
     }
 
-    public var debugDescription: String { description }
+    package var debugDescription: String { description }
 }

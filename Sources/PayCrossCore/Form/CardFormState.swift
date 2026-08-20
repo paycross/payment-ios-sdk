@@ -1,13 +1,13 @@
 import Foundation
 
 /// A card the shopper has previously saved.
-public struct SavedCard: Sendable, Hashable, Identifiable {
-    public let id: String
-    public let brand: CardBrand
-    public let last4: String
-    public let expiryLabel: String
+package struct SavedCard: Sendable, Hashable, Identifiable {
+    package let id: String
+    package let brand: CardBrand
+    package let last4: String
+    package let expiryLabel: String
 
-    public init(id: String, brand: CardBrand, last4: String, expiryLabel: String) {
+    package init(id: String, brand: CardBrand, last4: String, expiryLabel: String) {
         self.id = id
         self.brand = brand
         self.last4 = last4
@@ -19,11 +19,11 @@ public struct SavedCard: Sendable, Hashable, Identifiable {
 ///
 /// Modelled as a sum type rather than `selectedCardID: String?` alongside a
 /// `isNewCard: Bool`, which makes "saved card selected but id is nil" unrepresentable.
-public enum CardEntrySource: Sendable, Hashable {
+package enum CardEntrySource: Sendable, Hashable {
     case newCard
     case saved(SavedCard)
 
-    public var isNewCard: Bool {
+    package var isNewCard: Bool {
         if case .newCard = self { return true }
         return false
     }
@@ -33,26 +33,26 @@ public enum CardEntrySource: Sendable, Hashable {
 ///
 /// Digits only — no formatting characters are ever stored, so the value that goes
 /// on the wire needs no cleaning step. Formatting is a display concern.
-public struct CardFormState: Sendable, Equatable {
-    public var source: CardEntrySource = .newCard
-    public private(set) var panDigits = ""
+package struct CardFormState: Sendable, Equatable {
+    package var source: CardEntrySource = .newCard
+    package private(set) var panDigits = ""
     /// MMYY, exactly as Android stores it.
-    public private(set) var expiryDigits = ""
-    public private(set) var cvvDigits = ""
-    public var cardholderName = ""
-    public var saveCard = false
+    package private(set) var expiryDigits = ""
+    package private(set) var cvvDigits = ""
+    package var cardholderName = ""
+    package var saveCard = false
     /// Set after a decline; cleared as soon as the shopper edits anything.
-    public var inlineError: String?
+    package var inlineError: String?
 
-    public static let maxExpiryDigits = 4
+    package static let maxExpiryDigits = 4
 
-    public init(source: CardEntrySource = .newCard) {
+    package init(source: CardEntrySource = .newCard) {
         self.source = source
     }
 
     // MARK: - Derived
 
-    public var brand: CardBrand {
+    package var brand: CardBrand {
         switch source {
         case .newCard: CardBrand.detect(panDigits)
         case .saved(let card): card.brand
@@ -61,55 +61,55 @@ public struct CardFormState: Sendable, Equatable {
 
     /// A saved card's CVV is validated at 3 digits, matching Android's use of
     /// `CardType.UNKNOWN` on that path.
-    public var cvvBrand: CardBrand {
+    package var cvvBrand: CardBrand {
         source.isNewCard ? brand : .unknown
     }
 
-    public var expiryMonth: String {
+    package var expiryMonth: String {
         String(expiryDigits.prefix(2))
     }
 
     /// Android stores YY and prefixes "20" when submitting.
-    public var expiryYear: String {
+    package var expiryYear: String {
         expiryDigits.count > 2 ? "20" + expiryDigits.dropFirst(2) : ""
     }
 
     // MARK: - Display formatting
 
-    public var formattedPAN: String {
+    package var formattedPAN: String {
         CardEntryFormatter.groupPAN(panDigits)
     }
 
-    public var formattedExpiry: String {
+    package var formattedExpiry: String {
         CardEntryFormatter.slashExpiry(expiryDigits)
     }
 
     // MARK: - Validation
 
-    public func isPANValid() -> Bool {
+    package func isPANValid() -> Bool {
         !source.isNewCard || CardValidator.isValidPAN(panDigits)
     }
 
-    public func isExpiryValid(now: Date = Date()) -> Bool {
+    package func isExpiryValid(now: Date = Date()) -> Bool {
         guard source.isNewCard else { return true }
         guard expiryDigits.count == Self.maxExpiryDigits else { return false }
         return CardValidator.isValidExpiry(month: expiryMonth, year: expiryYear, now: now)
     }
 
-    public func isCVVValid() -> Bool {
+    package func isCVVValid() -> Bool {
         CardValidator.isValidCVV(cvvDigits, brand: cvvBrand)
     }
 
-    public func isNameValid() -> Bool {
+    package func isNameValid() -> Bool {
         !source.isNewCard || CardValidator.isValidCardholderName(cardholderName)
     }
 
-    public func canSubmit(now: Date = Date()) -> Bool {
+    package func canSubmit(now: Date = Date()) -> Bool {
         isPANValid() && isExpiryValid(now: now) && isCVVValid() && isNameValid()
     }
 
     /// The wire payload for this form. Nil when the form is not submittable.
-    public func cardData(now: Date = Date()) -> CardData? {
+    package func cardData(now: Date = Date()) -> CardData? {
         guard canSubmit(now: now) else { return nil }
         switch source {
         case .newCard:
@@ -128,7 +128,7 @@ public struct CardFormState: Sendable, Equatable {
 }
 
 /// Events the form reacts to.
-public enum CardFormEvent: Sendable, Equatable {
+package enum CardFormEvent: Sendable, Equatable {
     case panChanged(String)
     case expiryChanged(String)
     case cvvChanged(String)
@@ -139,9 +139,9 @@ public enum CardFormEvent: Sendable, Equatable {
     case declined(message: String)
 }
 
-public enum CardFormReducer {
+package enum CardFormReducer {
 
-    public static func reduce(state: inout CardFormState, event: CardFormEvent) {
+    package static func reduce(state: inout CardFormState, event: CardFormEvent) {
         switch event {
         case .panChanged(let raw):
             state.clearError()
@@ -203,11 +203,11 @@ private extension CardFormState {
 }
 
 /// Display formatting for card entry fields.
-public enum CardEntryFormatter {
+package enum CardEntryFormatter {
 
     /// Groups a PAN in fours. Amex is 4-6-5 in the wild, but Android groups
     /// everything in fours and this mirrors it.
-    public static func groupPAN(_ digits: String) -> String {
+    package static func groupPAN(_ digits: String) -> String {
         stride(from: 0, to: digits.count, by: 4).map { offset in
             let start = digits.index(digits.startIndex, offsetBy: offset)
             let end = digits.index(start, offsetBy: min(4, digits.count - offset))
@@ -216,7 +216,7 @@ public enum CardEntryFormatter {
     }
 
     /// MMYY becomes MM/YY once past the month.
-    public static func slashExpiry(_ digits: String) -> String {
+    package static func slashExpiry(_ digits: String) -> String {
         guard digits.count > 2 else { return digits }
         return digits.prefix(2) + "/" + digits.dropFirst(2)
     }

@@ -6,9 +6,9 @@ import Foundation
 /// whole type is asserted on Linux — the expiry check takes its "now" as a
 /// parameter rather than reading the system clock, which is the only deviation
 /// from the Kotlin and exists so the year-boundary cases are testable.
-public enum CardValidator {
+package enum CardValidator {
 
-    public static func isValidPAN(_ pan: String) -> Bool {
+    package static func isValidPAN(_ pan: String) -> Bool {
         let cleaned = pan.filter { !$0.isWhitespace }
         guard cleaned.count >= 13, cleaned.count <= 19 else { return false }
         guard cleaned.allSatisfy(\.isNumber) else { return false }
@@ -20,7 +20,7 @@ public enum CardValidator {
     ///   - year: two or four digits. Two-digit years resolve to 2000+year.
     ///   - now: the reference date. Defaults to the current date.
     ///   - calendar: defaults to the current calendar.
-    public static func isValidExpiry(
+    package static func isValidExpiry(
         month: String,
         year: String,
         now: Date = Date(),
@@ -41,12 +41,12 @@ public enum CardValidator {
         return true
     }
 
-    public static func isValidCVV(_ cvv: String, brand: CardBrand) -> Bool {
+    package static func isValidCVV(_ cvv: String, brand: CardBrand) -> Bool {
         guard cvv.allSatisfy(\.isNumber) else { return false }
         return cvv.count == brand.cvvLength
     }
 
-    public static func isValidCardholderName(_ name: String) -> Bool {
+    package static func isValidCardholderName(_ name: String) -> Bool {
         !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 

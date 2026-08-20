@@ -5,40 +5,40 @@ import Foundation
 /// The runner lives in Core, so the thing that actually shows a web view is a
 /// protocol. That is what lets the whole payment sequence — submit, retry-after,
 /// poll, 3DS, terminal — run under `swift test` on Linux.
-public protocol ThreeDSPresenting: Sendable {
+package protocol ThreeDSPresenting: Sendable {
     func present(_ step: ThreeDSStep) async -> ThreeDSOutcome
     func dismiss() async
 }
 
-public enum ThreeDSOutcome: Sendable, Equatable {
+package enum ThreeDSOutcome: Sendable, Equatable {
     case completed
     case failed
 }
 
 /// Time, injected. The real one sleeps; the test one advances a counter, so an
 /// 8-minute deadline is asserted in microseconds.
-public protocol FlowScheduler: Sendable {
+package protocol FlowScheduler: Sendable {
     func sleep(for duration: Duration) async throws
     /// Monotonic time consumed since this scheduler was created.
     func elapsed() async -> Duration
 }
 
-public actor ContinuousScheduler: FlowScheduler {
+package actor ContinuousScheduler: FlowScheduler {
     private let start = ContinuousClock().now
 
-    public init() {}
+    package init() {}
 
-    public func sleep(for duration: Duration) async throws {
+    package func sleep(for duration: Duration) async throws {
         try await ContinuousClock().sleep(for: duration)
     }
 
-    public func elapsed() async -> Duration {
+    package func elapsed() async -> Duration {
         ContinuousClock().now - start
     }
 }
 
 /// How a run ended.
-public enum FlowOutcome: Sendable, Equatable {
+package enum FlowOutcome: Sendable, Equatable {
     /// The payment reached a terminal state.
     case finished(PaymentResult)
     /// The form should be re-armed with this message, and the user may try again.
@@ -49,7 +49,7 @@ public enum FlowOutcome: Sendable, Equatable {
 ///
 /// Sequencing only — every decision about *what a status means* belongs to
 /// `PaymentFlowReducer`, which is a pure function.
-public actor PaymentFlowRunner {
+package actor PaymentFlowRunner {
     private let client: PayCrossAPIClient
     private let presenter: any ThreeDSPresenting
     private let scheduler: any FlowScheduler
@@ -57,9 +57,9 @@ public actor PaymentFlowRunner {
     private var presentationTask: Task<Void, Never>?
     /// The server's last rejection text, for diagnostics. Never shown to a
     /// shopper -- it can name internal fields.
-    public private(set) var lastServerDiagnostic: String?
+    package private(set) var lastServerDiagnostic: String?
 
-    public init(
+    package init(
         client: PayCrossAPIClient,
         presenter: any ThreeDSPresenting,
         scheduler: any FlowScheduler = ContinuousScheduler(),
@@ -71,20 +71,20 @@ public actor PaymentFlowRunner {
         self.state = PaymentFlowState(claims: claims)
     }
 
-    public func currentState() -> PaymentFlowState { state }
+    package func currentState() -> PaymentFlowState { state }
 
     /// Polls an existing transaction to its terminal state without submitting.
     ///
     /// Used when the session already has one in flight - the shopper backgrounded
     /// the app mid-3DS, or the sheet was re-presented. Submitting again would
     /// create a second transaction against the same session.
-    public func resume(transactionID: String) async -> FlowOutcome {
+    package func resume(transactionID: String) async -> FlowOutcome {
         state.transactionID = transactionID
         return await poll(transactionID: transactionID)
     }
 
     /// Submits a card and runs the flow to a terminal state.
-    public func run(_ request: SubmitCardRequest) async -> FlowOutcome {
+    package func run(_ request: SubmitCardRequest) async -> FlowOutcome {
         switch await submitWithRetry(request) {
         case .failure(let message):
             return .reArmForm(message: message)

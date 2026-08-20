@@ -5,10 +5,10 @@ import Foundation
 /// Deliberately in Core: deciding when a navigation means "the challenge is
 /// finished" is the part that goes wrong, and it is pure string work, so it is
 /// asserted on Linux rather than needing a simulator and a live ACS.
-public enum ThreeDSNavigation {
+package enum ThreeDSNavigation {
 
     /// A navigation back to one of our hosts signals completion.
-    public static let returnHostSuffixes = ["pay-cross.com", "test-pay-cross.com"]
+    package static let returnHostSuffixes = ["pay-cross.com", "test-pay-cross.com"]
 
     /// EMV 3DS requires exact form field names, but providers emit variants
     /// (Nuvei sends `cReq`). Normalised the same way the checkout page does.
@@ -19,7 +19,7 @@ public enum ThreeDSNavigation {
     ]
 
     /// Whether `url` is a navigation back to a PayCross host.
-    public static func isReturnURL(_ url: String) -> Bool {
+    package static func isReturnURL(_ url: String) -> Bool {
         guard let host = URLComponents(string: url)?.host?.lowercased(), !host.isEmpty else {
             return false
         }
@@ -31,7 +31,7 @@ public enum ThreeDSNavigation {
     /// The action URL itself is excluded: for the sandbox provider the simulated
     /// ACS is hosted on our own domain, so without this the step would complete
     /// on its own initial load and the shopper would never see the challenge.
-    public static func isCompletionURL(_ url: String, actionURL: String) -> Bool {
+    package static func isCompletionURL(_ url: String, actionURL: String) -> Bool {
         let normalise = { (value: String) in
             String(value.reversed().drop(while: { $0 == "/" }).reversed())
         }
@@ -42,7 +42,7 @@ public enum ThreeDSNavigation {
     ///
     /// Empty values are dropped, matching Android — an ACS rejects a `creq` that
     /// is present but blank differently from one that is absent.
-    public static func encodeFormBody(_ data: [String: String]?) -> String {
+    package static func encodeFormBody(_ data: [String: String]?) -> String {
         guard let data, !data.isEmpty else { return "" }
 
         return data

@@ -4,37 +4,37 @@ import Foundation
 ///
 /// Declared here once and referenced everywhere else — the design had this type
 /// specified in two sections with different members.
-public struct ThreeDSAction: Codable, Sendable, Hashable {
-    public let url: String
-    public let method: String
-    public let data: [String: String]?
+package struct ThreeDSAction: Codable, Sendable, Hashable {
+    package let url: String
+    package let method: String
+    package let data: [String: String]?
 
-    public init(url: String, method: String, data: [String: String]? = nil) {
+    package init(url: String, method: String, data: [String: String]? = nil) {
         self.url = url
         self.method = method
         self.data = data
     }
 
     /// True when the action must be submitted as a form POST rather than a GET.
-    public var isPost: Bool {
+    package var isPost: Bool {
         method.uppercased() == "POST"
     }
 }
 
-public struct StatusResponse: Codable, Sendable, Hashable {
-    public let transactionID: String
-    public let status: String
-    public let amount: Int64?
-    public let currency: String?
-    public let action: ThreeDSAction?
-    public let recovery: String?
+package struct StatusResponse: Codable, Sendable, Hashable {
+    package let transactionID: String
+    package let status: String
+    package let amount: Int64?
+    package let currency: String?
+    package let action: ThreeDSAction?
+    package let recovery: String?
 
     enum CodingKeys: String, CodingKey {
         case transactionID = "transaction_id"
         case status, amount, currency, action, recovery
     }
 
-    public init(
+    package init(
         transactionID: String,
         status: String,
         amount: Int64? = nil,
@@ -51,12 +51,12 @@ public struct StatusResponse: Codable, Sendable, Hashable {
     }
 }
 
-public struct SubmitCardResponse: Codable, Sendable, Hashable {
-    public let success: Bool?
-    public let transactionID: String?
-    public let cached: Bool?
-    public let error: String?
-    public let retryAfter: Int?
+package struct SubmitCardResponse: Codable, Sendable, Hashable {
+    package let success: Bool?
+    package let transactionID: String?
+    package let cached: Bool?
+    package let error: String?
+    package let retryAfter: Int?
 
     enum CodingKeys: String, CodingKey {
         case transactionID = "transaction_id"
@@ -64,7 +64,7 @@ public struct SubmitCardResponse: Codable, Sendable, Hashable {
         case success, cached, error
     }
 
-    public init(
+    package init(
         success: Bool? = nil,
         transactionID: String? = nil,
         cached: Bool? = nil,
@@ -83,7 +83,7 @@ public struct SubmitCardResponse: Codable, Sendable, Hashable {
 ///
 /// Anything not listed here is ignored and polling continues, matching the
 /// Kotlin `else -> return false`.
-public enum TransactionStatus: String, Sendable {
+package enum TransactionStatus: String, Sendable {
     case success
     case authorized
     case failed
