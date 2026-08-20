@@ -127,22 +127,37 @@ extension ThreeDSWebViewController: WKNavigationDelegate {
 final class WebKitThreeDSPresenter: ThreeDSPresenting {
 
     private weak var host: UIViewController?
-    private var current: ThreeDSWebViewController?
+    /// The step currently on screen, with the continuation waiting on it.
+    ///
+    /// Held together so teardown can never happen without resuming. An earlier
+    /// version kept only the controller, so `dismiss()` deallocated the closure
+    /// holding the continuation without resuming it — a leaked continuation on
+    /// *every* 3DS payment, which also left the runner and its API client
+    /// retained forever because `presentationTask` never completed.
+    private var active: (
+        controller: ThreeDSWebViewController,
+        continuation: CheckedContinuation<ThreeDSOutcome, Never>
+    )?
 
     init(host: UIViewController) {
         self.host = host
     }
 
     func present(_ step: ThreeDSStep) async -> ThreeDSOutcome {
-        await withCheckedContinuation { continuation in
+        // A fingerprint is normally followed by a challenge. Resolve and tear
+        // down the previous step first, or its web view stays in the hierarchy
+        // for the life of the sheet and its continuation is orphaned.
+        resolve(.failed)
+
+        return await withCheckedContinuation { continuation in
             guard let host else {
                 return continuation.resume(returning: .failed)
             }
 
-            let controller = ThreeDSWebViewController(action: step.action) { outcome in
-                continuation.resume(returning: outcome)
+            let controller = ThreeDSWebViewController(action: step.action) { [weak self] outcome in
+                self?.resolve(outcome)
             }
-            self.current = controller
+            active = (controller, continuation)
 
             host.addChild(controller)
             controller.view.frame = host.view.bounds
@@ -158,11 +173,23 @@ final class WebKitThreeDSPresenter: ThreeDSPresenting {
     }
 
     func dismiss() async {
-        guard let controller = current else { return }
+        resolve(.failed)
+    }
+
+    /// Tears the step down and resumes whoever is waiting, exactly once.
+    ///
+    /// Clearing `active` before resuming makes a second call a no-op, so the
+    /// controller's own completion and a reducer-driven `dismiss()` racing each
+    /// other cannot double-resume.
+    private func resolve(_ outcome: ThreeDSOutcome) {
+        guard let (controller, continuation) = active else { return }
+        active = nil
+
         controller.willMove(toParent: nil)
         controller.view.removeFromSuperview()
         controller.removeFromParent()
-        current = nil
+
+        continuation.resume(returning: outcome)
     }
 }
 #endif
