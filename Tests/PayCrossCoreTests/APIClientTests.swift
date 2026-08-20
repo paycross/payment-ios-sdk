@@ -223,7 +223,11 @@ final class APIClientTests: XCTestCase {
         // Non-EMPTY, not merely non-nil: the backend trims and rejects blanks,
         // and "" is present-but-invalid. Asserting presence is what allowed an
         // SDK whose ip_address was always "" to pass this test.
-        for key in ["user_agent", "ip_address", "language", "accept_header"] {
+        //
+        // ip_address is not in this list: the server derives it when the client
+        // omits it, so it is no longer a client-required field. See the
+        // ip_address-specific tests below.
+        for key in ["user_agent", "language", "accept_header"] {
             let value = json[key] as? String
             XCTAssertNotNil(value, "\(key) missing")
             XCTAssertFalse(
@@ -236,6 +240,34 @@ final class APIClientTests: XCTestCase {
         XCTAssertEqual(json["java_enabled"] as? Bool, false)
         XCTAssertEqual(json["javascript_enabled"] as? Bool, true)
         XCTAssertEqual(json["color_depth"] as? Int, 24)
+    }
+
+    /// The server derives `ip_address` from the request (Cloudflare header ->
+    /// source IP) when the client omits it. Sending the key as `null` would
+    /// still trip the backend's blank check, so a nil `ipAddress` must produce
+    /// no key at all -- not `"ip_address": null`.
+    func testBrowserInfoOmitsIPAddressKeyWhenNil() throws {
+        let info = BrowserInfo(
+            userAgent: "test-agent", screenWidth: 390, screenHeight: 844,
+            timezoneOffset: -120, language: "en-GB"
+        )
+        XCTAssertNil(info.ipAddress)
+
+        let data = try JSONEncoder().encode(info)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertFalse(json.keys.contains("ip_address"), "ip_address must be absent, not null")
+    }
+
+    /// A client-supplied value still wins over the server's derivation.
+    func testBrowserInfoEncodesIPAddressWhenPresent() throws {
+        let info = BrowserInfo(
+            userAgent: "test-agent", ipAddress: "192.0.2.1", screenWidth: 390,
+            screenHeight: 844, timezoneOffset: -120, language: "en-GB"
+        )
+
+        let data = try JSONEncoder().encode(info)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(json["ip_address"] as? String, "192.0.2.1")
     }
 
     // MARK: - Redaction

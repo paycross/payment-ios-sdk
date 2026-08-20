@@ -123,7 +123,6 @@ final class PaymentSheetModel: ObservableObject {
     /// Set once the host controller exists, since the presenter needs somewhere
     /// to attach its web view.
     var threeDSPresenter: (any ThreeDSPresenting)?
-    private lazy var ipProvider = IPAddressProvider(transport: URLSessionTransport())
 
     init(
         sessionToken: String,
@@ -165,10 +164,9 @@ final class PaymentSheetModel: ObservableObject {
     /// second time, and the new idempotency key gives the backend nothing to
     /// relate the two submissions by.
     func load() async {
-        // Warmed off the critical path so submit does not pay for the lookup.
-        async let ip: Void = ipProvider.warm()
-        async let ua: Void = DeviceInfo.warmUserAgent()
-        _ = await (ip, ua)
+        // Warmed off the critical path so submit does not pay for the WKWebView
+        // round trip.
+        await DeviceInfo.warmUserAgent()
 
         let response = try? await makeClient()
             .session(id: claims.sessionID, sessionToken: sessionToken)
@@ -257,7 +255,7 @@ final class PaymentSheetModel: ObservableObject {
         let request = SubmitCardRequest(
             session: sessionToken,
             card: card,
-            browserInfo: DeviceInfo.browserInfo(ipAddress: await ipProvider.current()),
+            browserInfo: DeviceInfo.browserInfo(),
             // Only visible, non-blank values go on the wire; a hidden field's
             // stale value must not be submitted.
             fieldGroups: FieldGroupLogic.submissionValues(
@@ -282,9 +280,10 @@ private struct ThreeDSPresenterStub: ThreeDSPresenting {
 
 /// Collects the device characteristics 3DS v2 requires.
 ///
-/// Every field here is validated non-blank by the backend, so this is assembled
-/// from real values rather than placeholders and asserted by
-/// `BrowserInfo.isSubmittable`.
+/// Every field here except `ip_address` is validated non-blank by the backend
+/// (see `testBrowserInfoEncodesSnakeCase`), so this is assembled from real
+/// values rather than placeholders. `ip_address` itself is omitted: the
+/// submit-card Lambda derives it from the request when absent.
 @MainActor
 enum DeviceInfo {
 
@@ -301,12 +300,11 @@ enum DeviceInfo {
         cachedUserAgent = try? await webView.evaluateJavaScript("navigator.userAgent") as? String
     }
 
-    static func browserInfo(ipAddress: String) -> BrowserInfo {
+    static func browserInfo() -> BrowserInfo {
         let bounds = screenBounds()
         let scale = UITraitCollection.current.displayScale
         return BrowserInfo(
             userAgent: cachedUserAgent ?? defaultUserAgent,
-            ipAddress: ipAddress,
             // Pixels, not points: 3DS specifies browserScreenWidth in pixels and
             // Android sends displayMetrics.widthPixels.
             screenWidth: Int(bounds.width * scale),
