@@ -65,6 +65,21 @@ private actor VirtualScheduler: FlowScheduler {
     func elapsed() async -> Duration { consumed }
 }
 
+/// Advances virtual time like `VirtualScheduler`, but observes cancellation the
+/// way `ContinuousClock.sleep` does. Without this a cancelled run is untestable:
+/// a scheduler that always returns instantly cannot distinguish a loop that
+/// stopped from one that is spinning.
+private actor CancellableScheduler: FlowScheduler {
+    private var consumed: Duration = .zero
+
+    func sleep(for duration: Duration) async throws {
+        try Task.checkCancellation()
+        consumed += duration
+    }
+
+    func elapsed() async -> Duration { consumed }
+}
+
 private actor RecordingPresenter: ThreeDSPresenting {
     private let outcome: ThreeDSOutcome
     private(set) var presented: [ThreeDSStep] = []
@@ -99,7 +114,7 @@ final class PaymentFlowRunnerTests: XCTestCase {
 
     private func makeRunner(
         transport: ScriptedTransport,
-        scheduler: VirtualScheduler,
+        scheduler: any FlowScheduler,
         presenter: any ThreeDSPresenting
     ) -> PaymentFlowRunner {
         PaymentFlowRunner(
@@ -439,5 +454,47 @@ final class PaymentFlowRunnerTests: XCTestCase {
         for _ in 0..<100 { await Task.yield() }
         let dismissals = await presenter.dismissals
         XCTAssertEqual(dismissals, 1, "an answered 3DS step must be torn down when it resolves")
+    }
+
+    /// The shopper taps Cancel while the poll loop is running.
+    ///
+    /// Pins two things the sheet depends on: the run resolves as `.cancelled`
+    /// rather than hanging until the deadline, and polling actually stops. The
+    /// second matters because a cancelled sleep returns *immediately* — swallowing
+    /// it would leave the loop hammering the status endpoint at full speed for the
+    /// remaining eight minutes, behind a sheet the shopper has already dismissed.
+    func testCancellingStopsPollingAndTearsDown3DS() async {
+        let transport = ScriptedTransport(
+            submit: [.init(json: #"{"success":true,"transaction_id":"t1"}"#)],
+            status: [.init(json: #"{"transaction_id":"t1","status":"pending"}"#)]
+        )
+        let presenter = RecordingPresenter()
+        let runner = makeRunner(
+            transport: transport, scheduler: CancellableScheduler(), presenter: presenter
+        )
+
+        // Bound outside the closure: `sampleRequest` is a computed property, so
+        // referencing it inside would capture `self` and trip Swift 6's sending check.
+        let request = sampleRequest
+        let task = Task { await runner.run(request) }
+
+        // Let the loop get going, so cancellation lands mid-poll rather than
+        // before the first iteration.
+        while await transport.statusCount < 2 { await Task.yield() }
+        task.cancel()
+
+        let outcome = await task.value
+        XCTAssertEqual(outcome, .finished(.cancelled))
+
+        let atCancellation = await transport.statusCount
+        for _ in 0..<100 { await Task.yield() }
+        let afterwards = await transport.statusCount
+        XCTAssertEqual(
+            atCancellation, afterwards,
+            "polling must stop on cancellation, not spin out the remaining deadline"
+        )
+
+        let dismissals = await presenter.dismissals
+        XCTAssertEqual(dismissals, 1, "a 3DS step still on screen must be torn down")
     }
 }

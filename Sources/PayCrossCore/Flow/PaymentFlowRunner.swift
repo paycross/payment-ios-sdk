@@ -88,6 +88,8 @@ package actor PaymentFlowRunner {
         switch await submitWithRetry(request) {
         case .failure(let message):
             return .reArmForm(message: message)
+        case .cancelled:
+            return await stopped()
         case .success(let transactionID):
             state.transactionID = transactionID
             return await poll(transactionID: transactionID)
@@ -99,6 +101,7 @@ package actor PaymentFlowRunner {
     private enum SubmitResult {
         case success(String)
         case failure(String)
+        case cancelled
     }
 
     /// One idempotency key for the whole loop, so a retry cannot authorize twice.
@@ -106,6 +109,8 @@ package actor PaymentFlowRunner {
         let idempotencyKey = client.newIdempotencyKey()
 
         for _ in 0..<FlowLimits.maxSubmitAttempts {
+            if Task.isCancelled { return .cancelled }
+
             let response: SubmitCardResponse
             do {
                 response = try await client.submitCard(request, idempotencyKey: idempotencyKey)
@@ -134,7 +139,14 @@ package actor PaymentFlowRunner {
                 return .failure(response.error ?? "Payment submission failed")
             }
 
-            try? await scheduler.sleep(for: .seconds(retryAfter))
+            // retry_after is server-controlled and uncapped, so this is the longest
+            // the flow ever sits still. Cancellation has to be observed here or a
+            // dismissed sheet keeps a submit loop alive behind it.
+            do {
+                try await scheduler.sleep(for: .seconds(retryAfter))
+            } catch {
+                return .cancelled
+            }
         }
 
         return .failure("Payment submission failed")
@@ -153,6 +165,8 @@ package actor PaymentFlowRunner {
         let start = await scheduler.elapsed()
 
         while await scheduler.elapsed() - start < FlowLimits.pollDeadline {
+            if Task.isCancelled { return await stopped() }
+
             do {
                 let status = try await client.status(transactionID: transactionID)
                 let effects = PaymentFlowReducer.reduce(
@@ -167,11 +181,31 @@ package actor PaymentFlowRunner {
                 // Both are transient; keep going until the deadline.
             }
 
-            try? await scheduler.sleep(for: FlowLimits.pollInterval)
+            // Not `try?`: a cancelled sleep returns immediately, so swallowing the
+            // error would spin the rest of the deadline as a busy loop hammering
+            // the status endpoint.
+            do {
+                try await scheduler.sleep(for: FlowLimits.pollInterval)
+            } catch {
+                return await stopped()
+            }
         }
 
         let effects = PaymentFlowReducer.reduce(state: &state, event: .pollDeadlineReached)
         return await apply(effects) ?? .finished(.failed(transactionID: transactionID, recovery: .retry))
+    }
+
+    /// Winds the run down when the caller cancels.
+    ///
+    /// Any 3DS step still on screen is torn down: leaving it up would keep a web
+    /// view over a sheet that is being dismissed, and its presenter is holding a
+    /// continuation that nothing else will resume.
+    private func stopped() async -> FlowOutcome {
+        state.isPolling = false
+        presentationTask?.cancel()
+        presentationTask = nil
+        await presenter.dismiss()
+        return .finished(.cancelled)
     }
 
     /// Called when a presented 3DS step resolves.
