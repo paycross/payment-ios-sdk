@@ -8,7 +8,7 @@ Pod::Spec.new do |s|
     tests on Linux; the UI layer lives in the PayCross pod.
   DESC
   s.homepage         = 'https://github.com/paycross/payment-ios-sdk'
-  s.license          = { :type => 'Proprietary', :text => 'Copyright PayCross. All rights reserved.' }
+  s.license          = { :type => 'MIT', :file => 'LICENSE' }
   s.author           = 'PayCross'
 
   s.source           = {

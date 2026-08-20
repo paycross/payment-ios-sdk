@@ -7,7 +7,7 @@ public enum PayCrossEnvironment: Sendable, Hashable {
     /// Points the SDK at an arbitrary host. Intended for local backend work.
     ///
     /// This case carries the PAN, the CVV and the session JWT to whatever host it
-    /// names, so `isUsable` rejects anything that is not https.
+    /// names, so the SDK rejects any custom host that is not https.
     case custom(baseURL: URL)
 
     package var baseURL: URL {
