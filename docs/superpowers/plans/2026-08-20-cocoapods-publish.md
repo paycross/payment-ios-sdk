@@ -39,19 +39,21 @@ cd /tmp/claude-1000/-home-silvo/ee22b658-fa12-436d-bfbe-3890362167b2/scratchpad/
 git ls-files -z | tar -czf - --null -T - | ssh mac 'rm -rf ~/work/publish-prep/payment-ios-sdk && mkdir -p ~/work/publish-prep/payment-ios-sdk && tar -xzf - -C ~/work/publish-prep/payment-ios-sdk'
 ```
 
-- [ ] **Step 2: Baseline swift test**
+- [ ] **Step 2: Baseline tests against an iOS simulator** (NOT `swift test`: the package declares only iOS platforms, so a macOS host build fails on availability — CI tests Core on Linux instead)
 
 ```bash
-ssh mac 'export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer; cd ~/work/publish-prep/payment-ios-sdk && swift test 2>&1 | tail -5'
+ssh mac 'export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer; cd ~/work/publish-prep/payment-ios-sdk && xcodebuild -list 2>/dev/null | sed -n "/Schemes:/,//p"'
+# then, with the package scheme it prints (expected "PayCross-Package"):
+ssh mac 'export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer; cd ~/work/publish-prep/payment-ios-sdk && xcodebuild -scheme PayCross-Package -destination "platform=iOS Simulator,name=iPhone 17" test 2>&1 | tail -5'
 ```
-Expected: `Test Suite ... passed` (all PayCrossCoreTests green).
+Expected: `** TEST SUCCEEDED **`.
 
 - [ ] **Step 3: Baseline pod lib lint**
 
 ```bash
-ssh mac 'export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer PATH=/opt/homebrew/bin:$PATH; cd ~/work/publish-prep/payment-ios-sdk && pod lib lint PayCrossCore.podspec --silent && echo CORE-OK && pod lib lint PayCross.podspec --include-podspecs=PayCrossCore.podspec --silent && echo PAYCROSS-OK'
+ssh mac 'export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer PATH=/opt/homebrew/bin:$PATH; cd ~/work/publish-prep/payment-ios-sdk && pod lib lint PayCrossCore.podspec --allow-warnings --silent && echo CORE-OK && pod lib lint PayCross.podspec --include-podspecs=PayCrossCore.podspec --allow-warnings --silent && echo PAYCROSS-OK'
 ```
-Expected: `CORE-OK` and `PAYCROSS-OK`. If baseline lint fails, STOP and report — later tasks assume a linting baseline.
+Expected: `CORE-OK` and `PAYCROSS-OK`. `--allow-warnings` matches today's podspec.yml CI; one known warning exists (`PaymentFlowRunner.swift:207` — no async operations in an `await` expression) and is fixed in Task 4, after which lint runs strict. If lint fails even WITH `--allow-warnings`, STOP and report.
 
 ---
 
@@ -176,7 +178,7 @@ Expected: `success` (PAN 4111111111170000). A `failed`/`retry` tombstone means t
 
 ---
 
-### Task 4: Status polls bypass URLCache
+### Task 4: Status polls bypass URLCache + strict-lint ratchet
 
 **Files (branch `fix/uncached-status-polls` off `main` in the iOS clones):**
 - Modify: `Sources/PayCrossCore/Networking/APIClient.swift` (`makeRequest` / `status`)
@@ -186,7 +188,9 @@ Expected: `success` (PAN 4111111111170000). A `failed`/`retry` tombstone means t
 - [ ] **Step 2: Run on the Mac, verify FAIL** (`swift test --filter <TestName>`).
 - [ ] **Step 3: Implement** — in `makeRequest`, set `request.cachePolicy = .reloadIgnoringLocalCacheData` for the status path (or all API calls — none of this client's requests should ever be cache-served; prefer all, with a comment: live 2026-08-20 polls were observed served from URLCache).
 - [ ] **Step 4: Full `swift test` green.**
-- [ ] **Step 5: Commit, push, PR** titled "Status polls must never be served from URLCache". **[HUMAN]** merges.
+- [ ] **Step 5: Fix the pre-existing lint warning** — `Sources/PayCrossCore/Flow/PaymentFlowRunner.swift:207`: `no 'async' operations occur within 'await' expression`. Inspect the call; either the callee is genuinely synchronous (drop the `await`) or it should be async (fix the protocol). Do not silence with attributes.
+- [ ] **Step 6: Strict lint proves the ratchet** — on the Mac, `pod lib lint` both specs WITHOUT `--allow-warnings`; both must pass. Then remove `--allow-warnings` from both lint invocations in `.github/workflows/podspec.yml` so warnings can never accumulate again (trunk push at Task 11 is warning-strict).
+- [ ] **Step 7: Commit, push, PR** titled "Uncached status polls; warning-clean pods" (three concerns, one small hygiene PR — say so in the body). **[HUMAN]** merges.
 
 ---
 
