@@ -495,6 +495,9 @@ final class PaymentFlowRunnerTests: XCTestCase {
         )
 
         let dismissals = await presenter.dismissals
-        XCTAssertEqual(dismissals, 1, "a 3DS step still on screen must be torn down")
+        XCTAssertEqual(
+            dismissals, 1,
+            "stopped() must call dismiss() unconditionally - it cannot know whether a step is on screen"
+        )
     }
 }

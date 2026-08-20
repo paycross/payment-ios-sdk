@@ -143,6 +143,15 @@ final class WebKitThreeDSPresenter: ThreeDSPresenting {
         self.host = host
     }
 
+    /// Unreachable under current wiring — the sheet model retains the presenter
+    /// for the life of the sheet, and every teardown path goes through
+    /// `resolve(_:)`. Defense-in-depth for a refactor that changes retention:
+    /// if a deallocated presenter still held a step, its continuation would
+    /// otherwise be dropped without resuming and the runner would await forever.
+    deinit {
+        active?.continuation.resume(returning: .failed)
+    }
+
     func present(_ step: ThreeDSStep) async -> ThreeDSOutcome {
         // A fingerprint is normally followed by a challenge. Resolve and tear
         // down the previous step first, or its web view stays in the hierarchy

@@ -244,7 +244,10 @@ package actor PaymentFlowRunner {
                     // A superseded or abandoned step must not act on its late
                     // outcome: its teardown already happened when it was
                     // cancelled, and applying `.threeDSCompleted` here would
-                    // dismiss whatever step replaced it.
+                    // dismiss whatever step replaced it. The guard is race-free
+                    // only because this closure inherits the runner's actor
+                    // isolation via the captured self; breaking that inheritance
+                    // reopens a narrow supersede window.
                     guard !Task.isCancelled else { return }
                     await self.threeDSResolved(outcome)
                 }
