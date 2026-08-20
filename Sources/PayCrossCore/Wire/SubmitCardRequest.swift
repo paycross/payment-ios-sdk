@@ -6,7 +6,13 @@ import Foundation
 /// these values is platform-bound and lives in the iOS target.
 package struct BrowserInfo: Codable, Sendable, Hashable {
     package let userAgent: String
-    package let ipAddress: String
+    /// The submit-card Lambda derives this from the request (the Cloudflare
+    /// connecting-IP header, falling back to the source IP) whenever the client
+    /// sends none, so the SDK no longer resolves the shopper's public IP itself
+    /// -- there is no third-party lookup here. A client-supplied value still
+    /// wins: `nil` must encode as an absent key, not `"ip_address": null`, or
+    /// the server has nothing to fall back to.
+    package let ipAddress: String?
     package let screenWidth: Int
     package let screenHeight: Int
     package let colorDepth: Int
@@ -38,7 +44,7 @@ package struct BrowserInfo: Codable, Sendable, Hashable {
 
     package init(
         userAgent: String,
-        ipAddress: String,
+        ipAddress: String? = nil,
         screenWidth: Int,
         screenHeight: Int,
         colorDepth: Int = 24,
