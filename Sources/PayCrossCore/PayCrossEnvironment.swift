@@ -10,7 +10,7 @@ public enum PayCrossEnvironment: Sendable, Hashable {
     /// names, so `isUsable` rejects anything that is not https.
     case custom(baseURL: URL)
 
-    public var baseURL: URL {
+    package var baseURL: URL {
         switch self {
         case .sandbox:
             // swiftlint:disable:next force_unwrapping
@@ -25,12 +25,12 @@ public enum PayCrossEnvironment: Sendable, Hashable {
 
     /// Card-form prefill is ignored in production, matching `effectiveTestPrefill()`
     /// in the Android SDK.
-    public var allowsTestCardPrefill: Bool {
+    package var allowsTestCardPrefill: Bool {
         self != .production
     }
 
     /// Rejects a `custom` environment that would send card data over cleartext.
-    public var isUsable: Bool {
+    package var isUsable: Bool {
         baseURL.scheme?.lowercased() == "https"
     }
 }

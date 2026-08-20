@@ -155,7 +155,7 @@ package struct URLSessionTransport: HTTPTransport {
     /// Built inline rather than as a named static property: a default
     /// argument's expression must be at least as accessible as the
     /// initializer it belongs to, and this is an implementation detail that
-    /// has no business being `public` API.
+    /// has no business being API surface.
     package init(session: URLSession = {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.urlCache = nil

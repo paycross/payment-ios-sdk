@@ -58,7 +58,6 @@ package actor IPAddressProvider {
     }
 }
 
-// Matches BrowserInfo's access level, now `package`.
 package extension BrowserInfo {
     /// The four fields the backend validates as non-blank.
     ///
