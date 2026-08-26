@@ -59,7 +59,9 @@ public final class PaymentSheet {
         let host = PaymentHostController(model: model)
         // The shopper must not be able to swipe the sheet away mid-authorization.
         host.isModalInPresentation = true
-        model.threeDSPresenter = WebKitThreeDSPresenter(host: host)
+        model.threeDSPresenter = WebKitThreeDSPresenter(host: host) { [weak model] in
+            model?.isConfirmingCancel = true
+        }
         presenter.present(host, animated: true)
 
         let result = await model.awaitResult()
@@ -102,6 +104,10 @@ final class PaymentSheetModel: ObservableObject {
     @Published private(set) var sessionData: SessionData?
     @Published var fieldValues: [String: [String: String]] = [:]
     @Published private(set) var fieldErrors: [FieldGroupError] = []
+    /// Drives the "Cancel Payment?" confirmation. On the model rather than in the
+    /// view because a 3DS challenge covers the toolbar, so the request also
+    /// arrives from the challenge's own bar.
+    @Published var isConfirmingCancel = false
 
     let claims: SessionClaims
 
@@ -348,7 +354,6 @@ enum DeviceInfo {
 
 struct PaymentSheetView: View {
     @ObservedObject var model: PaymentSheetModel
-    @State private var showCancelConfirmation = false
 
     var body: some View {
         NavigationStack {
@@ -380,12 +385,12 @@ struct PaymentSheetView: View {
                     // swiped away, and there is no back gesture - gating this on
                     // isLoading left a shopper whose ACS never returns with no way
                     // out at all. Android's back handler is likewise unconditional.
-                    Button("Cancel") { showCancelConfirmation = true }
+                    Button("Cancel") { model.isConfirmingCancel = true }
                 }
             }
             // Same two-step as Android, so a stray tap cannot abandon a payment
             // that is already in flight.
-            .alert("Cancel Payment?", isPresented: $showCancelConfirmation) {
+            .alert("Cancel Payment?", isPresented: $model.isConfirmingCancel) {
                 Button("Yes, Cancel", role: .destructive, action: model.cancel)
                 Button("Continue Payment", role: .cancel) {}
             } message: {

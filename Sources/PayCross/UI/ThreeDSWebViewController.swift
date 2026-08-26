@@ -13,11 +13,23 @@ final class ThreeDSWebViewController: UIViewController {
 
     private let action: ThreeDSAction
     private let onFinish: (ThreeDSOutcome) -> Void
+    /// Set for a challenge only. A challenge is added over the whole payment
+    /// sheet, toolbar included, so it has to carry the way out itself.
+    private let onCancel: (() -> Void)?
     private var hasFinished = false
     private var webView: WKWebView!
 
-    init(action: ThreeDSAction, onFinish: @escaping (ThreeDSOutcome) -> Void) {
+    /// A challenge is the only step the shopper sees, and the only one that
+    /// needs chrome of its own.
+    private var isChallenge: Bool { onCancel != nil }
+
+    init(
+        action: ThreeDSAction,
+        onCancel: (() -> Void)? = nil,
+        onFinish: @escaping (ThreeDSOutcome) -> Void
+    ) {
         self.action = action
+        self.onCancel = onCancel
         self.onFinish = onFinish
         super.init(nibName: nil, bundle: nil)
     }
@@ -36,11 +48,66 @@ final class ThreeDSWebViewController: UIViewController {
         configuration.websiteDataStore = .nonPersistent()
 
         webView = WKWebView(frame: view.bounds, configuration: configuration)
-        webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         webView.navigationDelegate = self
         view.addSubview(webView)
 
+        if isChallenge {
+            // Opaque, or the sheet it covers shows through above the bar.
+            view.backgroundColor = .systemBackground
+            // Confines VoiceOver to the challenge. Without it the card form
+            // underneath is still read out, and can still be operated.
+            view.accessibilityViewIsModal = true
+            installCancelBar()
+        } else {
+            // Fingerprint: full bleed, and sent to the back by the presenter.
+            webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        }
+
         load()
+    }
+
+    /// Gives the challenge a Cancel of its own, *above* the ACS page rather than
+    /// floating over it, so nothing the issuer draws is obscured.
+    private func installCancelBar() {
+        let bar = UINavigationBar()
+        // A standalone bar is transparent by default, which would let the ACS
+        // page scroll up behind the button.
+        let appearance = UINavigationBarAppearance()
+        appearance.configureWithOpaqueBackground()
+        bar.standardAppearance = appearance
+        bar.scrollEdgeAppearance = appearance
+        bar.compactAppearance = appearance
+
+        let cancel = UIBarButtonItem(
+            title: "Cancel", style: .plain, target: self, action: #selector(cancelTapped)
+        )
+        cancel.accessibilityIdentifier = "threeDSCancel"
+        // Titled like the sheet it stands in for, so answering the bank still
+        // looks like the same payment rather than a screen of its own.
+        let item = UINavigationItem(title: "Payment")
+        item.leftBarButtonItem = cancel
+        bar.items = [item]
+
+        bar.translatesAutoresizingMaskIntoConstraints = false
+        webView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(bar)
+
+        NSLayoutConstraint.activate([
+            bar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            bar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            bar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+
+            webView.topAnchor.constraint(equalTo: bar.bottomAnchor),
+            webView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            webView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            webView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
+    }
+
+    /// Target/action rather than a `UIAction`: `UIActionHandler` is `@Sendable`,
+    /// and the sheet's cancel closure is main-actor isolated, not sendable.
+    @objc private func cancelTapped() {
+        onCancel?()
     }
 
     private func load() {
@@ -127,6 +194,13 @@ extension ThreeDSWebViewController: WKNavigationDelegate {
 final class WebKitThreeDSPresenter: ThreeDSPresenting {
 
     private weak var host: UIViewController?
+    /// Runs the sheet's own two-step cancel confirmation.
+    ///
+    /// A challenge is added at `host.view.bounds`, so it paints over the sheet's
+    /// toolbar and the only Cancel the shopper has. The request therefore has to
+    /// be able to come from the challenge's own bar, and it goes to the same
+    /// confirmation rather than abandoning the payment on one tap.
+    private let onCancelRequested: () -> Void
     /// The step currently on screen, with the continuation waiting on it.
     ///
     /// Held together so teardown can never happen without resuming. An earlier
@@ -139,8 +213,9 @@ final class WebKitThreeDSPresenter: ThreeDSPresenting {
         continuation: CheckedContinuation<ThreeDSOutcome, Never>
     )?
 
-    init(host: UIViewController) {
+    init(host: UIViewController, onCancelRequested: @escaping () -> Void) {
         self.host = host
+        self.onCancelRequested = onCancelRequested
     }
 
     /// Unreachable under current wiring — the sheet model retains the presenter
@@ -163,7 +238,10 @@ final class WebKitThreeDSPresenter: ThreeDSPresenting {
                 return continuation.resume(returning: .failed)
             }
 
-            let controller = ThreeDSWebViewController(action: step.action) { [weak self] outcome in
+            let controller = ThreeDSWebViewController(
+                action: step.action,
+                onCancel: step.isChallenge ? onCancelRequested : nil
+            ) { [weak self] outcome in
                 self?.resolve(outcome)
             }
             active = (controller, continuation)
@@ -195,6 +273,8 @@ final class WebKitThreeDSPresenter: ThreeDSPresenting {
         active = nil
 
         controller.willMove(toParent: nil)
+        // The cancel bar is part of the controller's own view, so it can never
+        // outlive the step it belongs to.
         controller.view.removeFromSuperview()
         controller.removeFromParent()
 
