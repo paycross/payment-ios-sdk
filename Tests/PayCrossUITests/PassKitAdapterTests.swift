@@ -196,6 +196,99 @@ final class PassKitAdapterTests: XCTestCase {
         )
     }
 
+    // MARK: - The token, as PassKit hands it over
+
+    /// The last function in this file that a device was the only thing
+    /// executing.
+    ///
+    /// Deleting the `paymentMethod` key from what `tokenJSON` emits left all
+    /// fifty tests green, because the authorised-path test walks a fixture the
+    /// fake authorizer supplies rather than anything this function produced.
+    /// The edge lifts three fields out of that object: `network` becomes the
+    /// card brand the vault seals into the wallet credential and the provider
+    /// forwards to the gateway, `displayName` becomes the masked digits, and
+    /// `type` becomes the funding type the back office shows. Losing it
+    /// degrades all three at once with no error anywhere.
+    func testTheTokenCarriesEveryFieldTheEdgeReads() throws {
+        let json = try XCTUnwrap(
+            PassKitWalletAuthorizer.tokenJSON(StubPaymentToken()),
+            "a well-formed token must convert"
+        )
+        let object = try encoded(json)
+
+        let paymentData = try XCTUnwrap(object["paymentData"] as? [String: Any], "paymentData is the field the edge looks for first")
+        let header = try XCTUnwrap(paymentData["header"] as? [String: Any])
+        XCTAssertEqual(paymentData["version"] as? String, "EC_v1")
+        XCTAssertEqual(paymentData["signature"] as? String, "MEUCIQD-signature-bytes")
+        XCTAssertEqual(paymentData["data"] as? String, "4rMLBQ-encrypted-payload")
+        XCTAssertEqual(header["publicKeyHash"] as? String, "LbsUwAT6w1JV9tFXocU813TCHks+LSuFF0R/eBkrWnQ=")
+        XCTAssertEqual(header["ephemeralPublicKey"] as? String, "MFkwEw-ephemeral-key")
+        XCTAssertEqual(header["transactionId"] as? String, "31323334353637383930")
+
+        let method = try XCTUnwrap(object["paymentMethod"] as? [String: Any], "the edge lifts the brand, the masked digits and the funding type out of paymentMethod")
+        XCTAssertEqual(method["network"] as? String, PKPaymentNetwork.visa.rawValue)
+        XCTAssertEqual(method["displayName"] as? String, "Visa 1234")
+        XCTAssertEqual(method["type"] as? String, "credit")
+
+        XCTAssertEqual(object["transactionIdentifier"] as? String, "31323334353637383930")
+        XCTAssertEqual(
+            Set(object.keys), ["paymentData", "paymentMethod", "transactionIdentifier"],
+            "the body must be exactly what the web checkout posts"
+        )
+    }
+
+    /// `paymentData` is nested at the top level and not re-modelled on the way
+    /// through, so a field Apple adds tomorrow survives. Asserted by putting an
+    /// unknown key in the fixture and reading it back out.
+    func testAnUnknownFieldInsideTheTokenSurvives() throws {
+        let json = try XCTUnwrap(PassKitWalletAuthorizer.tokenJSON(StubPaymentToken()))
+        let paymentData = try XCTUnwrap(try encoded(json)["paymentData"] as? [String: Any])
+
+        XCTAssertEqual(
+            paymentData["somethingAppleAddedLater"] as? String, "kept",
+            "the token is carried through, not modelled; a dropped unknown field is a decryption failure with no field to point at"
+        )
+    }
+
+    /// The funding type the back office shows, mapped by symbol.
+    func testTheFundingTypeIsNamedRatherThanNumbered() throws {
+        for (type, expected) in [
+            (PKPaymentMethodType.credit, "credit"),
+            (.debit, "debit"),
+            (.prepaid, "prepaid"),
+            (.store, "store")
+        ] {
+            let token = StubPaymentToken(method: StubPaymentMethod(type: type))
+            let json = try XCTUnwrap(PassKitWalletAuthorizer.tokenJSON(token))
+            let method = try XCTUnwrap(try encoded(json)["paymentMethod"] as? [String: Any])
+
+            XCTAssertEqual(method["type"] as? String, expected)
+        }
+    }
+
+    /// A card with neither name nor network still produces a body. The two are
+    /// optional on `PKPaymentMethod`, and emitting `null` for them would be a
+    /// different thing at the edge from omitting them.
+    func testAnAnonymousCardOmitsTheFieldsItHasNothingFor() throws {
+        let token = StubPaymentToken(
+            method: StubPaymentMethod(type: .debit, displayName: nil, network: nil)
+        )
+        let method = try XCTUnwrap(
+            try encoded(try XCTUnwrap(PassKitWalletAuthorizer.tokenJSON(token)))["paymentMethod"]
+                as? [String: Any]
+        )
+
+        XCTAssertEqual(Set(method.keys), ["type"])
+    }
+
+    /// Bytes that are not JSON cannot be forwarded, and the adapter reports
+    /// that rather than sending an empty body the vault would reject.
+    func testATokenThatIsNotJSONConvertsToNothing() {
+        let token = StubPaymentToken(paymentData: Data("not json at all".utf8))
+
+        XCTAssertNil(PassKitWalletAuthorizer.tokenJSON(token))
+    }
+
     // MARK: - Helpers
 
     /// Joins the waiting task, but only when it actually resumed.
@@ -210,6 +303,14 @@ final class PassKitAdapterTests: XCTestCase {
         _ = await waiter.value
     }
 
+    /// Encodes a `JSONValue` and reads it back as a dictionary, so every
+    /// assertion above is against the JSON that goes on the wire rather than
+    /// against the enum the SDK happens to hold.
+    private func encoded(_ value: JSONValue) throws -> [String: Any] {
+        let data = try JSONEncoder().encode(value)
+        return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    }
+
     private func waitUntil(
         timeout: TimeInterval = 3,
         _ condition: () async -> Bool
@@ -221,6 +322,70 @@ final class PassKitAdapterTests: XCTestCase {
         }
         return await condition()
     }
+}
+
+/// A `PKPaymentToken` with the fields PassKit would have filled in.
+///
+/// Subclassed rather than constructed: PassKit hands these out and has no
+/// public initialiser that fills them, so the only alternative to a subclass is
+/// leaving the conversion executed by nothing but a real device. Both classes
+/// are Objective-C and every property here is readonly and overridable.
+private final class StubPaymentToken: PKPaymentToken {
+    private let stubData: Data
+    private let stubMethod: PKPaymentMethod
+    private let stubTransactionIdentifier: String
+
+    init(
+        paymentData: Data = Data(StubPaymentToken.paymentDataJSON.utf8),
+        method: PKPaymentMethod = StubPaymentMethod(),
+        transactionIdentifier: String = "31323334353637383930"
+    ) {
+        self.stubData = paymentData
+        self.stubMethod = method
+        self.stubTransactionIdentifier = transactionIdentifier
+        super.init()
+    }
+
+    override var paymentData: Data { stubData }
+    override var paymentMethod: PKPaymentMethod { stubMethod }
+    override var transactionIdentifier: String { stubTransactionIdentifier }
+
+    /// Carries an unknown key on purpose: the passthrough exists so a field
+    /// Apple adds without telling anyone still reaches the vault.
+    static let paymentDataJSON = #"""
+    {
+      "version": "EC_v1",
+      "data": "4rMLBQ-encrypted-payload",
+      "signature": "MEUCIQD-signature-bytes",
+      "somethingAppleAddedLater": "kept",
+      "header": {
+        "ephemeralPublicKey": "MFkwEw-ephemeral-key",
+        "publicKeyHash": "LbsUwAT6w1JV9tFXocU813TCHks+LSuFF0R/eBkrWnQ=",
+        "transactionId": "31323334353637383930"
+      }
+    }
+    """#
+}
+
+private final class StubPaymentMethod: PKPaymentMethod {
+    private let stubType: PKPaymentMethodType
+    private let stubDisplayName: String?
+    private let stubNetwork: PKPaymentNetwork?
+
+    init(
+        type: PKPaymentMethodType = .credit,
+        displayName: String? = "Visa 1234",
+        network: PKPaymentNetwork? = .visa
+    ) {
+        self.stubType = type
+        self.stubDisplayName = displayName
+        self.stubNetwork = network
+        super.init()
+    }
+
+    override var type: PKPaymentMethodType { stubType }
+    override var displayName: String? { stubDisplayName }
+    override var network: PKPaymentNetwork? { stubNetwork }
 }
 
 @MainActor

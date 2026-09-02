@@ -128,12 +128,26 @@ final class PassKitWalletAuthorizer: NSObject, WalletAuthorizing {
     /// Installs the continuation the delegate resumes, and does nothing else.
     ///
     /// Split out of `authorize` to be reachable from a test. A simulator has no
-    /// Apple Pay entitlement, so `present()` there always answers false and
-    /// `authorize` returns before it reaches this line -- which would leave the
-    /// resume discipline, the one thing in this file that can hang a payment,
-    /// executed by nothing but a real device.
+    /// Apple Pay entitlement, and `present()` there neither succeeds nor
+    /// returns -- measured at a three-second timeout, twice -- so a test that
+    /// drove `authorize` end to end would hang rather than reach this line,
+    /// leaving the resume discipline, the one thing in this file that can hang
+    /// a payment, executed by nothing but a real device. Anything testing this
+    /// path must bound its own wait.
+    ///
+    /// It repeats `authorize`'s guard rather than trusting it. The guard exists
+    /// to stop a second caller overwriting the first's continuation and leaving
+    /// it waiting forever, and this is the method that installs one, so leaving
+    /// the check upstream would make the seam the one route back to the leak.
+    /// It also closes a window `authorize` alone cannot: two callers can both
+    /// pass the guard there and then suspend on `present()` before either
+    /// arrives here.
     func awaitDelegateOutcome() async -> WalletAuthorizationOutcome {
-        await withCheckedContinuation { continuation in
+        guard continuation == nil else {
+            return .failed("An Apple Pay sheet is already open.")
+        }
+
+        return await withCheckedContinuation { continuation in
             self.continuation = continuation
         }
     }
@@ -191,7 +205,15 @@ final class PassKitWalletAuthorizer: NSObject, WalletAuthorizing {
     /// the provider forwards to the gateway, `displayName` becomes the masked
     /// digits, and `type` becomes the funding type the back office shows. Only
     /// `transactionIdentifier` is carried for fidelity alone.
-    private static func tokenJSON(_ token: PKPaymentToken) -> JSONValue? {
+    /// Internal rather than private so a test can hand it a token.
+    ///
+    /// `PKPaymentToken` and `PKPaymentMethod` are Objective-C classes whose
+    /// relevant properties are readonly and overridable, so a test-local
+    /// subclass supplies one without a sheet. Worth the visibility: dropping
+    /// `paymentMethod` from what this emits costs the card brand the vault
+    /// seals into the wallet credential, the masked digits and the funding
+    /// type, all at once, and nothing anywhere reports it.
+    static func tokenJSON(_ token: PKPaymentToken) -> JSONValue? {
         guard let paymentData = try? JSONDecoder().decode(JSONValue.self, from: token.paymentData) else {
             return nil
         }
