@@ -16,7 +16,7 @@ package protocol WalletAuthorizing: Sendable {
 /// A cancellation is not a failure and must not surface as one: the shopper
 /// dismissed a sheet and is still looking at the card form, so there is
 /// nothing to report and nothing to recover from.
-package enum WalletAuthorizationOutcome: Sendable {
+package enum WalletAuthorizationOutcome: Sendable, Equatable {
     case authorized(JSONValue)
     case cancelled
     case failed(String)

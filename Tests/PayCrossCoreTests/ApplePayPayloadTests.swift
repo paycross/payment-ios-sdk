@@ -388,6 +388,21 @@ final class ApplePayPayloadTests: XCTestCase {
 
     // MARK: - Through a fake authorizer
 
+    /// `ThreeDSOutcome` is `Sendable, Equatable` and this type is said to
+    /// mirror it. Task 03's adapter tests assert on outcomes, where
+    /// `XCTAssertEqual(outcome, .cancelled)` reads better than the `guard case`
+    /// dance the end-to-end test below has to write. Comparing payloads and not
+    /// only cases is the part worth pinning: both payloads are already
+    /// `Equatable`, so the synthesised conformance is the useful one.
+    func testOutcomesCompareByCaseAndByPayload() throws {
+        let token = try decodedToken()
+
+        XCTAssertEqual(WalletAuthorizationOutcome.cancelled, .cancelled)
+        XCTAssertEqual(WalletAuthorizationOutcome.authorized(token), .authorized(token))
+        XCTAssertNotEqual(WalletAuthorizationOutcome.cancelled, .failed("declined"))
+        XCTAssertNotEqual(WalletAuthorizationOutcome.failed("a"), .failed("b"))
+    }
+
     /// The whole Core-side path in one test: a spec goes to an authorizer, an
     /// authorised token comes back, and it becomes a submit body. Nothing in
     /// this file mocks the payload builder, so this is the assertion that
