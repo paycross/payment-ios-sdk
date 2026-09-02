@@ -68,9 +68,14 @@ final class WalletGateTests: XCTestCase {
 
     // MARK: - Eligibility, all eight rows
 
-    private func offers(gate: Bool, identifier: String?, canPay: Bool) -> Bool {
+    private func offers(
+        gate: Bool,
+        identifier: String?,
+        canPay: Bool,
+        walletsPresent: Bool = true
+    ) -> Bool {
         WalletGate.offersApplePay(
-            data: data(applePay: gate),
+            data: data(applePay: gate, walletsPresent: walletsPresent),
             merchantIdentifier: identifier,
             deviceCanPay: canPay
         )
@@ -109,5 +114,28 @@ final class WalletGateTests: XCTestCase {
 
     func testNotEligibleWhenNothingHolds() {
         XCTAssertFalse(offers(gate: false, identifier: nil, canPay: false))
+    }
+
+    /// Whitespace is not a configured identifier either. It is what a text
+    /// field yields when a merchant clears it by hand, and it fails worse than
+    /// nil: it is truthy enough to reach the submit body, where it cannot match
+    /// the signed session claim and the shopper gets a bare 400.
+    func testNotEligibleWithAWhitespaceOnlyIdentifier() {
+        XCTAssertFalse(offers(gate: true, identifier: "   ", canPay: true))
+        XCTAssertFalse(offers(gate: true, identifier: "\n", canPay: true))
+    }
+
+    /// The eight rows above all run against a `wallets` block that exists,
+    /// while every session minted before the backend shipped the block takes
+    /// the absent path. This composes the two: no block, everything else held.
+    func testEligibleWhenTheWalletBlockIsAbsentEntirely() {
+        XCTAssertTrue(
+            offers(
+                gate: true,
+                identifier: "merchant.pay-cross.com",
+                canPay: true,
+                walletsPresent: false
+            )
+        )
     }
 }

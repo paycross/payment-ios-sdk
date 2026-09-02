@@ -23,17 +23,21 @@ package enum WalletGate {
     /// The whole eligibility question: the session allows it, the integration
     /// configured an identifier, and the device has a card it can pay with.
     ///
-    /// An empty identifier counts as unconfigured. It is what an unset build
-    /// constant produces, and the failure it causes downstream is the worst
-    /// one available -- the submit body omits `merchant_identifier`, the edge
-    /// reads the payment as a web token, the vault derives the wrong key, and
-    /// the shopper sees a generic decline.
+    /// A blank identifier counts as unconfigured. Empty is what an unset build
+    /// constant produces and whitespace is what a hand-cleared text field
+    /// leaves behind, and the failure they cause downstream is the worst one
+    /// available -- the submit body omits `merchant_identifier` or carries one
+    /// the signed session claim cannot match, the edge reads the payment as a
+    /// web token, the vault derives the wrong key, and the shopper sees a
+    /// generic decline.
     package static func offersApplePay(
         data: SessionData?,
         merchantIdentifier: String?,
         deviceCanPay: Bool
     ) -> Bool {
-        guard let merchantIdentifier, !merchantIdentifier.isEmpty else { return false }
+        guard let merchantIdentifier,
+              !merchantIdentifier.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return false }
 
         return allowsApplePay(data) && deviceCanPay
     }
