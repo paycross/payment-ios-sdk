@@ -148,10 +148,18 @@ final class PassKitAdapterTests: XCTestCase {
         let waiter = Task { @MainActor in box.value = await authorizer.awaitDelegateOutcome() }
         _ = await waitUntil { authorizer.isAwaitingOutcome }
 
-        let second = await authorizer.authorize(spec())
+        // Bounded, because the regression this catches is precisely a second
+        // authorize that goes on to `present()` -- which on a simulator with no
+        // entitlement neither succeeds nor returns. Awaiting it directly would
+        // hang the run instead of failing the test.
+        let secondBox = OutcomeBox()
+        let attempt = Task { @MainActor in secondBox.value = await authorizer.authorize(spec()) }
+        let answered = await waitUntil { secondBox.value != nil }
 
-        XCTAssertEqual(second, .failed("An Apple Pay sheet is already open."))
+        XCTAssertTrue(answered, "a second sheet must be refused at once, not opened")
+        XCTAssertEqual(secondBox.value, .failed("An Apple Pay sheet is already open."))
         XCTAssertTrue(authorizer.isAwaitingOutcome, "the first caller must still be waiting")
+        await settle(attempt, resumed: answered)
 
         authorizer.paymentAuthorizationControllerDidFinish(stubController())
         let resumed = await waitUntil { box.value != nil }
