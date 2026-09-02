@@ -35,7 +35,10 @@ package struct ApplePayRequestSpec: Sendable, Hashable {
     package let supportedNetworks: [ApplePayNetwork]
     package let capabilities: [ApplePayCapability]
 
-    package var currencyCode: String { amount.currencyCode }
+    /// Uppercased, because PassKit wants ISO 4217 in its conventional case and
+    /// the session is not guaranteed to send it that way. `Amounts` defends
+    /// against the lowercase spelling at every one of its own call sites.
+    package var currencyCode: String { amount.currencyCode.uppercased() }
 
     /// What Apple's sheet quotes to the shopper, exact.
     ///
@@ -53,8 +56,10 @@ package struct ApplePayRequestSpec: Sendable, Hashable {
             merchantIdentifier: merchantIdentifier,
             // Apple refuses a request with no country and the session is
             // allowed not to name one. US is a default, not an inference
-            // about the shopper.
-            countryCode: data?.merchantCountry ?? "US",
+            // about the shopper. Uppercased for the same reason as the
+            // currency: PassKit wants ISO 3166-1 alpha-2 as it is conventionally
+            // written.
+            countryCode: (data?.merchantCountry ?? "US").uppercased(),
             amount: claims.amount,
             // The merchant's own name is on Apple's sheet already, from the
             // Merchant ID Apple has on file; the SDK has no name of its own

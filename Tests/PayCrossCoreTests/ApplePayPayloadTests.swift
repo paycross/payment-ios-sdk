@@ -339,11 +339,26 @@ final class ApplePayPayloadTests: XCTestCase {
         XCTAssertEqual(spec(hasData: false).countryCode, "US")
     }
 
+    /// PassKit wants ISO 3166-1 alpha-2 in its conventional case, and the
+    /// session is not guaranteed to send it that way. Every other consumer in
+    /// this repo already defends against the lowercase spelling.
+    func testALowercaseCountryIsUppercased() {
+        XCTAssertEqual(spec(merchantCountry: "gb").countryCode, "GB")
+    }
+
     func testTheAmountAndCurrencyComeFromTheClaims() {
         let built = spec(minorUnits: 100, currency: "EUR")
 
         XCTAssertEqual(built.currencyCode, "EUR")
         XCTAssertEqual(built.amount.minorUnits, 100)
+    }
+
+    /// ISO 4217, same argument as the country. `Amounts` already uppercases at
+    /// three call sites, so within this one struct `amountMajorUnits` survived
+    /// a lowercase currency while `currencyCode` handed it to PassKit as it
+    /// arrived. A sheet that fails to present fails at the moment of payment.
+    func testALowercaseCurrencyIsUppercased() {
+        XCTAssertEqual(spec(currency: "gbp").currencyCode, "GBP")
     }
 
     func testTheMajorUnitAmountIsExactForATwoDecimalCurrency() {
