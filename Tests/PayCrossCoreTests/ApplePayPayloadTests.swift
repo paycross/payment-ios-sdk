@@ -238,4 +238,125 @@ final class ApplePayPayloadTests: XCTestCase {
         XCTAssertFalse(encoded.keys.contains("wallet_token"))
         XCTAssertTrue(encoded.keys.contains("card"))
     }
+
+    // MARK: - The request spec
+
+    private func claims(minorUnits: Int64 = 1234, currency: String = "GBP") -> SessionClaims {
+        SessionClaims(
+            sessionID: "sess_1",
+            merchantID: "merchant-uuid",
+            customerID: "customer-uuid",
+            brandingID: nil,
+            amount: Amount(minorUnits: minorUnits, currencyCode: currency),
+            expiresAt: nil
+        )
+    }
+
+    private func spec(
+        merchantCountry: String? = "GB",
+        hasData: Bool = true,
+        minorUnits: Int64 = 1234,
+        currency: String = "GBP"
+    ) -> ApplePayRequestSpec {
+        ApplePayRequestSpec.make(
+            claims: claims(minorUnits: minorUnits, currency: currency),
+            data: hasData ? SessionData(merchantCountry: merchantCountry) : nil,
+            merchantIdentifier: "merchant.pay-cross.com"
+        )
+    }
+
+    func testTheCountryComesFromTheSession() {
+        XCTAssertEqual(spec().countryCode, "GB")
+    }
+
+    /// Apple refuses a request with no country, and the session is allowed not
+    /// to name one. US is the fallback the design fixed; it is a default, not
+    /// a guess about the shopper.
+    func testTheCountryFallsBackWhenTheSessionNamesNone() {
+        XCTAssertEqual(spec(merchantCountry: nil).countryCode, "US")
+    }
+
+    func testTheCountryFallsBackWhenThereIsNoSessionDataAtAll() {
+        XCTAssertEqual(spec(hasData: false).countryCode, "US")
+    }
+
+    func testTheAmountAndCurrencyComeFromTheClaims() {
+        let built = spec(minorUnits: 100, currency: "EUR")
+
+        XCTAssertEqual(built.currencyCode, "EUR")
+        XCTAssertEqual(built.amount.minorUnits, 100)
+    }
+
+    func testTheMajorUnitAmountIsExactForATwoDecimalCurrency() {
+        XCTAssertEqual(spec(minorUnits: 1234, currency: "GBP").amountMajorUnits, Decimal(string: "12.34"))
+    }
+
+    /// A zero-decimal currency divides by one, not by a hundred. Sending
+    /// Apple 12.34 for ¥1234 would quote the shopper the wrong price on the
+    /// sheet, which is the one number they read before authorising.
+    func testTheMajorUnitAmountIsExactForAZeroDecimalCurrency() {
+        XCTAssertEqual(spec(minorUnits: 1234, currency: "JPY").amountMajorUnits, Decimal(1234))
+    }
+
+    func testTheNetworksAndCapabilitiesAreTheAgreedLists() {
+        let built = spec()
+
+        XCTAssertEqual(built.supportedNetworks, [.visa, .mastercard, .amex, .discover, .jcb])
+        XCTAssertEqual(built.capabilities, [.threeDSecure, .credit, .debit])
+    }
+
+    func testTheMerchantIdentifierAndLabelAreCarried() {
+        let built = spec()
+
+        XCTAssertEqual(built.merchantIdentifier, "merchant.pay-cross.com")
+        XCTAssertEqual(built.summaryItemLabel, "Total")
+    }
+
+    // MARK: - Through a fake authorizer
+
+    /// The whole Core-side path in one test: a spec goes to an authorizer, an
+    /// authorised token comes back, and it becomes a submit body. Nothing in
+    /// this file mocks the payload builder, so this is the assertion that
+    /// would fail if the pieces stopped fitting together.
+    func testAnAuthorizedTokenBecomesASubmitBody() async throws {
+        // An actor rather than a class with `@unchecked Sendable`: the
+        // protocol is Sendable and the fake holds mutable state, and an
+        // actor satisfies both without an escape hatch that would also
+        // silence a real race in the shipping adapter.
+        actor FakeAuthorizer: WalletAuthorizing {
+            private(set) var received: ApplePayRequestSpec?
+            private let token: JSONValue
+            init(token: JSONValue) { self.token = token }
+            func authorize(_ spec: ApplePayRequestSpec) async -> WalletAuthorizationOutcome {
+                received = spec
+                return .authorized(token)
+            }
+        }
+
+        let authorizer = FakeAuthorizer(token: try decodedToken())
+        let outcome = await authorizer.authorize(spec())
+
+        let received = await authorizer.received
+        XCTAssertEqual(received?.merchantIdentifier, "merchant.pay-cross.com")
+        guard case .authorized(let token) = outcome else {
+            return XCTFail("expected an authorized outcome, got \(outcome)")
+        }
+
+        let request = SubmitCardRequest(
+            session: "session.jwt.here",
+            walletToken: try XCTUnwrap(
+                WalletToken.applePay(data: token, merchantIdentifier: "merchant.pay-cross.com")
+            ),
+            browserInfo: BrowserInfo(
+                userAgent: "ua",
+                screenWidth: 1170,
+                screenHeight: 2532,
+                timezoneOffset: 0,
+                language: "en"
+            )
+        )
+        let wallet = try XCTUnwrap(try encodedObject(request)["wallet_token"] as? [String: Any])
+
+        XCTAssertEqual(wallet["merchant_identifier"] as? String, "merchant.pay-cross.com")
+    }
 }
