@@ -80,6 +80,18 @@ final class ApplePayPayloadTests: XCTestCase {
         XCTAssertFalse(encoded.contains("e+"), encoded)
     }
 
+    /// The `Int64` branch, pinned. The test above does not reach it: Foundation
+    /// encodes a whole `Double` without an exponent, so routing every number
+    /// through `Double` still satisfies it. Above 2^53 a `Double` runs out of
+    /// mantissa and the value silently changes, which is the failure a long
+    /// numeric identifier in Apple's token would actually suffer.
+    func testAnIntegerTooLargeForADoubleKeepsEveryDigit() throws {
+        let value = try JSONDecoder().decode(JSONValue.self, from: Data(#"{"n": 9007199254740993}"#.utf8))
+        let encoded = try XCTUnwrap(String(data: try JSONEncoder().encode(value), encoding: .utf8))
+
+        XCTAssertTrue(encoded.contains("9007199254740993"), encoded)
+    }
+
     func testADecimalSurvives() throws {
         let value = try JSONDecoder().decode(JSONValue.self, from: Data(#"{"n": 1.5}"#.utf8))
         let encoded = try encodedObject(value)
