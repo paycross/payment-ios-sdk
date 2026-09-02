@@ -19,9 +19,14 @@ public enum PayCrossAPI {
     /// Configures the SDK. Call once, before presenting a payment sheet.
     public static func configure(
         environment: PayCrossEnvironment,
-        testCardPrefill: TestCardPrefill? = nil
+        testCardPrefill: TestCardPrefill? = nil,
+        applePayMerchantIdentifier: String? = nil
     ) {
-        state.set(Configuration(environment: environment, testCardPrefill: testCardPrefill))
+        state.set(Configuration(
+            environment: environment,
+            testCardPrefill: testCardPrefill,
+            applePayMerchantIdentifier: applePayMerchantIdentifier
+        ))
     }
 
     static var configuration: Configuration? {
@@ -33,6 +38,16 @@ public enum PayCrossAPI {
 public struct Configuration: Sendable {
     public let environment: PayCrossEnvironment
     public let testCardPrefill: TestCardPrefill?
+
+    /// The merchant's own Apple merchant identifier, e.g. `merchant.example.com`.
+    ///
+    /// Nil means no Apple Pay button, ever, and that is the correct default:
+    /// Apple's key derivation hashes this string into every payment token's
+    /// key, so a payment made without it cannot be decrypted by anybody. The
+    /// same string has to appear in three places -- here, in the app's Apple Pay
+    /// entitlement, and on the merchant record in the PayCross back office --
+    /// and the edge refuses a payment where the first and the last disagree.
+    public let applePayMerchantIdentifier: String?
 
     /// Prefill is ignored in production, matching `effectiveTestPrefill()` on Android.
     public var effectiveTestCardPrefill: TestCardPrefill? {
