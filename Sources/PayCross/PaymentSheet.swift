@@ -123,6 +123,46 @@ final class PaymentSheetModel: ObservableObject {
         sessionData?.fieldGroups ?? []
     }
 
+    /// Whether to offer the button, decided by Core and asked three questions:
+    /// does the session allow the wallet, did the integration configure an
+    /// identifier, and does this device have a card.
+    ///
+    /// Plus a fourth this layer answers for itself: has the session loaded at
+    /// all. Core's gate is deliberately permissive about a nil snapshot -- an
+    /// absent `wallets` block is "the server had no opinion" and every session
+    /// minted before the backend shipped the block reads that way -- but a
+    /// snapshot that never arrived is a different thing from one that says
+    /// nothing. `load()` swallows a transport failure and a 5xx alike, so
+    /// `sessionData` is nil after both, and the request spec needs the
+    /// session's own currency and amount. A button that opens onto nothing, or
+    /// onto a sheet quoting the wrong money, is worse than no button. The rule
+    /// lives here rather than in Core because this is where the render is
+    /// decided; Core's semantics are unchanged.
+    var showsApplePayButton: Bool {
+        guard sessionData != nil else { return false }
+
+        return WalletGate.offersApplePay(
+            data: sessionData,
+            merchantIdentifier: applePayMerchantIdentifier,
+            deviceCanPay: deviceCanPay()
+        )
+    }
+
+    /// The configured identifier, trimmed, or nil when nothing usable is set.
+    ///
+    /// Trimmed here because this is the point where the string stops being a
+    /// gate input and becomes payload. `WalletGate.offersApplePay` trims before
+    /// answering and `WalletToken.applePay` trims before building the body, so
+    /// an untrimmed value reaching `PKPaymentRequest` would put an identifier
+    /// Apple cannot match beside a submit body carrying the right one: the
+    /// sheet never opens and the shopper is told only that Apple Pay could not
+    /// be presented.
+    private var applePayMerchantIdentifier: String? {
+        guard let configured = configuration.applePayMerchantIdentifier else { return nil }
+        let trimmed = configured.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
     private let sessionToken: String
     private let configuration: Configuration
     private var continuation: CheckedContinuation<PaymentResult, Never>?
@@ -133,15 +173,44 @@ final class PaymentSheetModel: ObservableObject {
     /// Set once the host controller exists, since the presenter needs somewhere
     /// to attach its web view.
     var threeDSPresenter: (any ThreeDSPresenting)?
+    private let walletAuthorizer: (any WalletAuthorizing)?
+
+    /// What the API client sends over.
+    ///
+    /// Injected for the same reason `PaymentFlowRunner` takes one in Core: the
+    /// authorised half of the wallet branch -- the submit body, the poll, a
+    /// decline -- is otherwise reachable only by opening a real socket to the
+    /// checkout API, so the one path that carries a payment token would have
+    /// been first executed on a shopper's device.
+    private let transport: any HTTPTransport
+
+    /// Injected so the visibility rule is testable. On the CI simulator the
+    /// real one is always false -- a fresh device has an empty Wallet -- so a
+    /// model that called PassKit directly would answer "no button" to every
+    /// test, and every negative case would pass for the same irrelevant
+    /// reason while no positive case could exist at all.
+    private let deviceCanPay: @Sendable () -> Bool
 
     init(
         sessionToken: String,
         claims: SessionClaims,
-        configuration: Configuration
+        configuration: Configuration,
+        walletAuthorizer: (any WalletAuthorizing)? = PassKitWalletAuthorizer(),
+        deviceCanPay: @escaping @Sendable () -> Bool = {
+            PassKitWalletAuthorizer.canMakePayments(networks: ApplePayNetwork.allCases)
+        },
+        sessionData: SessionData? = nil,
+        isPreparing: Bool = true,
+        transport: any HTTPTransport = URLSessionTransport()
     ) {
         self.sessionToken = sessionToken
         self.claims = claims
         self.configuration = configuration
+        self.walletAuthorizer = walletAuthorizer
+        self.deviceCanPay = deviceCanPay
+        self.sessionData = sessionData
+        self.isPreparing = isPreparing
+        self.transport = transport
 
         var initial = CardFormState(source: .newCard)
         // Prefill is a test convenience and is nil in production by construction.
@@ -163,7 +232,7 @@ final class PaymentSheetModel: ObservableObject {
     private func makeClient() -> PayCrossAPIClient {
         PayCrossAPIClient(
             baseURL: configuration.environment.baseURL,
-            transport: URLSessionTransport(),
+            transport: transport,
             userAgent: "PayCrossSDK-iOS/\(PayCrossAPI.version)"
         )
     }
@@ -257,6 +326,88 @@ final class PaymentSheetModel: ObservableObject {
         }
     }
 
+    /// The wallet's own entry point: `pay()` without the card, plus the sheet.
+    ///
+    /// Deliberately a sibling rather than a branch inside `pay()`. Two short
+    /// methods sharing a tail read better than one guard with a mode in it, and
+    /// the card path must not gain a way to be wrong.
+    func payWithApplePay() {
+        // The same re-entry guard as pay(), without `form.cardData()`: a wallet
+        // payment has no card data and would return at that line forever.
+        guard !isLoading else { return }
+
+        // Above the validation, so a sheet that could never have opened does
+        // not first decorate the form with field errors and then do nothing.
+        // Unreachable through the button, which is only offered when the
+        // identifier is set.
+        guard let merchantIdentifier = applePayMerchantIdentifier,
+              let authorizer = walletAuthorizer
+        else { return }
+
+        // Before the sheet, not after. Core validates field groups server-side
+        // ahead of the wallet branch, so a payment that fails them after Face ID
+        // has spent the shopper's authorisation on a rejection they could have
+        // been shown first.
+        fieldErrors = FieldGroupLogic.validate(groups: fieldGroups, values: fieldValues)
+        guard fieldErrors.isEmpty else { return }
+
+        let spec = ApplePayRequestSpec.make(
+            claims: claims,
+            data: sessionData,
+            merchantIdentifier: merchantIdentifier
+        )
+
+        isLoading = true
+
+        paymentTask = Task { [weak self] in
+            guard let self else { return }
+            let outcome = await authorizer.authorize(spec)
+            guard !Task.isCancelled else { return }
+
+            switch outcome {
+            case .cancelled:
+                // The shopper dismissed a sheet. They are still looking at the
+                // card form and there is nothing to report.
+                self.isLoading = false
+
+            case .failed(let message):
+                self.isLoading = false
+                CardFormReducer.reduce(state: &self.form, event: .declined(message: message))
+
+            case .authorized(let token):
+                await self.submitWallet(token, merchantIdentifier: merchantIdentifier)
+            }
+        }
+    }
+
+    private func submitWallet(_ token: JSONValue, merchantIdentifier: String) async {
+        // Unreachable through the button, which is only offered for a non-blank
+        // identifier, and fail-closed rather than force-unwrapped: the builder
+        // returns nil exactly when the identifier could not be sent, and a body
+        // without `merchant_identifier` reads at the edge as a web token and
+        // derives the wrong key.
+        guard let walletToken = WalletToken.applePay(
+            data: token, merchantIdentifier: merchantIdentifier
+        ) else {
+            isLoading = false
+            CardFormReducer.reduce(
+                state: &form,
+                event: .declined(message: "Apple Pay is not configured for this merchant.")
+            )
+            return
+        }
+
+        let outcome = await runFlow(with: walletToken)
+        guard !Task.isCancelled else { return }
+        switch outcome {
+        case .finished(let result):
+            finish(result)
+        case .reArmForm(let message):
+            isLoading = false
+            CardFormReducer.reduce(state: &form, event: .declined(message: message))
+        }
+    }
+
     private func makeRunner() -> PaymentFlowRunner {
         PaymentFlowRunner(
             client: makeClient(),
@@ -276,6 +427,22 @@ final class PaymentSheetModel: ObservableObject {
             browserInfo: DeviceInfo.browserInfo(),
             // Only visible, non-blank values go on the wire; a hidden field's
             // stale value must not be submitted.
+            fieldGroups: FieldGroupLogic.submissionValues(
+                groups: fieldGroups, values: fieldValues
+            ).nilIfEmpty
+        )
+        return await runner.run(request)
+    }
+
+    /// The card path's twin, and identical after the request is built: submit,
+    /// retry-after, poll, terminal. `SubmitCardRequest` has no initialiser that
+    /// takes both a card and a wallet token, so the two cannot be confused.
+    private func runFlow(with walletToken: WalletToken) async -> FlowOutcome {
+        let runner = makeRunner()
+        let request = SubmitCardRequest(
+            session: sessionToken,
+            walletToken: walletToken,
+            browserInfo: DeviceInfo.browserInfo(),
             fieldGroups: FieldGroupLogic.submissionValues(
                 groups: fieldGroups, values: fieldValues
             ).nilIfEmpty
@@ -371,7 +538,9 @@ struct PaymentSheetView: View {
                         fieldGroups: model.fieldGroups,
                         fieldValues: $model.fieldValues,
                         fieldErrors: model.fieldErrors,
-                        onPay: model.pay
+                        onPay: model.pay,
+                        showsApplePayButton: model.showsApplePayButton,
+                        onApplePay: { model.payWithApplePay() }
                     )
                 }
             }

@@ -164,15 +164,68 @@ extension CardData: CustomStringConvertible, CustomDebugStringConvertible {
     package var debugDescription: String { description }
 }
 
+/// A wallet payment's token, as the submit endpoint takes it.
+///
+/// `merchantIdentifier` is not optional, and that is the point. Apple's key
+/// derivation hashes the merchant's own Apple merchant identifier into every
+/// token's key, and the edge reads an absent field as "this is a web token" --
+/// so an omitted identifier is not refused anywhere. It makes the vault derive
+/// the environment default key, fail to open the envelope, and answer a 400
+/// that reads exactly like a decline. A non-optional field cannot be omitted by
+/// the encoder, which is the only guarantee available here.
+///
+/// The value itself is a presence flag once it reaches the edge: it is compared
+/// against the signed session token's `apple_merchant_id` claim and then
+/// discarded, and the claim's copy is what reaches the vault. Nothing this SDK
+/// sends can steer key derivation.
+package struct WalletToken: Codable, Sendable {
+    package let type: String
+    package let data: JSONValue
+    package let merchantIdentifier: String
+
+    enum CodingKeys: String, CodingKey {
+        case merchantIdentifier = "merchant_identifier"
+        case type, data
+    }
+
+    /// The only way to build an Apple Pay token. It trims the identifier and
+    /// refuses one that is empty once trimmed.
+    ///
+    /// Trimming, rather than passing the caller's string through, because
+    /// `WalletGate.offersApplePay` trims before it offers the button. Anything
+    /// this guard treats differently from that one is a padded identifier that
+    /// gets as far as Face ID and then loses: the edge compares the body
+    /// against the signed session claim byte for byte. A merchant reads this
+    /// value out of a plist, an environment variable or a copied console
+    /// field, so padding is how it actually arrives.
+    ///
+    /// Nil rather than a `precondition`: the caller has already asked the
+    /// gate, so reaching here with a blank identifier is a bug -- and crashing
+    /// a merchant's app is a worse answer to that bug than not offering the
+    /// button.
+    package static func applePay(data: JSONValue, merchantIdentifier: String) -> WalletToken? {
+        let identifier = merchantIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !identifier.isEmpty else { return nil }
+
+        return WalletToken(
+            type: "apple_pay",
+            data: data,
+            merchantIdentifier: identifier
+        )
+    }
+}
+
 package struct SubmitCardRequest: Codable, Sendable {
     package let session: String
     package let paymentMethod: String
     package let card: CardData?
+    package let walletToken: WalletToken?
     package let browserInfo: BrowserInfo
     package let fieldGroups: [String: [String: String]]?
 
     enum CodingKeys: String, CodingKey {
         case paymentMethod = "payment_method"
+        case walletToken = "wallet_token"
         case browserInfo = "browser_info"
         case fieldGroups = "field_groups"
         case session, card
@@ -187,6 +240,24 @@ package struct SubmitCardRequest: Codable, Sendable {
         self.session = session
         self.paymentMethod = "card"
         self.card = card
+        self.walletToken = nil
+        self.browserInfo = browserInfo
+        self.fieldGroups = fieldGroups
+    }
+
+    /// A wallet payment. The payment method is taken from the token rather
+    /// than passed separately, because the edge refuses a body where the two
+    /// disagree and two arguments would be two chances to make them.
+    package init(
+        session: String,
+        walletToken: WalletToken,
+        browserInfo: BrowserInfo,
+        fieldGroups: [String: [String: String]]? = nil
+    ) {
+        self.session = session
+        self.paymentMethod = walletToken.type
+        self.card = nil
+        self.walletToken = walletToken
         self.browserInfo = browserInfo
         self.fieldGroups = fieldGroups
     }

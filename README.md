@@ -50,7 +50,10 @@ Requires Swift 6.0+. On Linux, install a toolchain from swift.org — no Xcode n
 ## Public API sketch
 
 ```swift
-PayCrossAPI.configure(environment: .sandbox)
+PayCrossAPI.configure(
+    environment: .sandbox,
+    applePayMerchantIdentifier: "merchant.example.com"
+)
 
 let sheet = PaymentSheet(sessionToken: token)
 let result = await sheet.present(from: viewController)
@@ -81,10 +84,48 @@ happy path needs no `catch` and the compiler still checks the recovery branch.
 - **`CardValidator.isValidExpiry` takes its `now` as a parameter** rather than
   reading the clock, so year-boundary cases are testable.
 - **`CardBrand.maxPANLength`** is 15 for Amex; Android bounds every PAN at 19.
-- **Apple Pay is deferred past v1**, despite the backend supporting it
-  (`payment_method: "apple_pay"`), because a merchant ID is gated behind the
-  Apple Developer Program and PassKit authorization cannot be exercised on a
-  simulator.
+
+## Apple Pay
+
+### What the SDK does
+
+When the session allows the wallet, an Apple merchant identifier is configured
+and the device has a card it can pay with, the payment sheet renders Apple's own
+`PKPaymentButton` above the card form. Tapping it presents Apple's sheet,
+authorizes, and submits the resulting payment token to PayCross as
+`payment_method: "apple_pay"`, resolving to the same `PaymentResult` as a card
+payment. The host app adds no view, makes no call, and implements no delegate.
+
+If any of the three conditions is unmet there is simply no button and the card
+form behaves exactly as it did before. In particular, `canMakePayments(usingNetworks:)`
+is false on a simulator with an empty Wallet, so the button does not appear
+there; Apple Pay can only be exercised on a real device with a provisioned card.
+
+### What the merchant does
+
+Six steps, and skipping them leaves the card form only — nothing breaks.
+
+1. Ask PayCross to enable Apple Pay for your merchant account.
+2. Download PayCross's Apple Pay certificate request (`.csr`) from the back
+   office. It is the same file for every merchant in that environment.
+3. In your own Apple Developer team, create a Merchant ID, upload that
+   certificate request, and let Apple issue the payment-processing certificate.
+4. Tell PayCross the Merchant ID, in the back office's Apple merchant identifier
+   field. PayCross cannot derive it, and the vault cannot decrypt a payment
+   token without it.
+5. In Xcode, add the Apple Pay capability to the app id and tick that Merchant
+   ID. This is what puts the identifier into the app's
+   `com.apple.developer.in-app-payments` entitlement.
+6. Pass the same string to `configure`, as `applePayMerchantIdentifier`.
+
+### The one failure worth naming
+
+The identifier passed to `configure` and the identifier on the merchant record
+must be the same string. Apple hashes it into the key that encrypts every
+payment token, so when the two disagree nothing downstream can decrypt what the
+device produced. PayCross refuses such a payment at the edge and returns a
+sentence saying so, which the sheet shows inline. When the SDK has no identifier
+at all there is no button, and no payment to refuse.
 
 ## App Store privacy labels
 
@@ -98,7 +139,11 @@ app's privacy label, here is what the SDK actually does:
   session config surfaces those fields — email address and phone number.
   This data is entered in `PayCross`'s UI and transmitted by `PayCrossCore`
   to the PayCross backend to process the payment; it is not used for
-  advertising or shared with data brokers.
+  advertising or shared with data brokers. An Apple Pay payment is still
+  payment data for labelling purposes, but no card number is ever entered or
+  seen: the SDK forwards Apple's encrypted payment token unread, and what the
+  backend decrypts from it is a device account number — a number Apple issues
+  for that card on that device — rather than the shopper's own card number.
 - **Tracking: no.** `NSPrivacyTracking` is `false` in both manifests, and
   neither pod contacts any tracking domain.
 - **IP address is not collected client-side.** The SDK does not read or

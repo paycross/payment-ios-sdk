@@ -18,6 +18,8 @@ struct CardFormView: View {
     @Binding var fieldValues: [String: [String: String]]
     let fieldErrors: [FieldGroupError]
     let onPay: () -> Void
+    var showsApplePayButton: Bool = false
+    var onApplePay: () -> Void = {}
 
     private var canPay: Bool { state.canSubmit() && !isLoading }
 
@@ -26,6 +28,24 @@ struct CardFormView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     AmountHeader(amount: amount)
+
+                    if showsApplePayButton {
+                        ApplePayButtonView(action: onApplePay, isEnabled: !isLoading)
+                            .frame(height: 48)
+                            .accessibilityIdentifier("applePayButton")
+
+                        // A separator rather than nothing: without it the card
+                        // fields read as part of the Apple Pay button, and a
+                        // shopper who has already decided reads "or" faster
+                        // than they read a gap.
+                        HStack {
+                            VStack { Divider() }
+                            Text("or pay with card")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                            VStack { Divider() }
+                        }
+                    }
 
                     if !savedCards.isEmpty {
                         SavedCardPicker(
