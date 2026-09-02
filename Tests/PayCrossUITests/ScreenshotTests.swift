@@ -119,7 +119,8 @@ final class ScreenshotTests: XCTestCase {
         savedCards: [SavedCard] = [],
         isLoading: Bool = false,
         fieldGroups: [FieldGroup] = [],
-        fieldErrors: [FieldGroupError] = []
+        fieldErrors: [FieldGroupError] = [],
+        showsApplePayButton: Bool = false
     ) -> some View {
         StatefulPreviewWrapper([String: [String: String]]()) { values in
         StatefulPreviewWrapper(state) { binding in
@@ -132,7 +133,9 @@ final class ScreenshotTests: XCTestCase {
                 fieldGroups: fieldGroups,
                 fieldValues: values,
                 fieldErrors: fieldErrors,
-                onPay: {}
+                onPay: {},
+                showsApplePayButton: showsApplePayButton,
+                onApplePay: {}
             )
         }
         }
@@ -225,6 +228,16 @@ final class ScreenshotTests: XCTestCase {
                     message: "Postcode is required"
                 )]
             )
+        }
+    }
+
+    /// The wallet branch as the shopper meets it: Apple's own button above the
+    /// card fields, with the separator that keeps the two from reading as one
+    /// control. Every capture above it passes the parameter's default of false,
+    /// so none of them changes.
+    func testFormWithApplePayButton() throws {
+        try capture("09-apple-pay") {
+            form(CardFormState(), showsApplePayButton: true)
         }
     }
 

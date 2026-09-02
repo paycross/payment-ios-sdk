@@ -24,7 +24,15 @@ struct ApplePayButtonView: UIViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator(action: action) }
 
-    final class Coordinator {
+    /// `NSObject`, not a bare Swift class.
+    ///
+    /// `addTarget(_:action:for:)` is Objective-C target-action, and UIKit hands
+    /// the registered targets back through `allTargets`, whose elements bridge
+    /// as `NSObject`. A Swift-native coordinator registers without complaint
+    /// and then traps the moment anything reads that set -- which the
+    /// presentation test does, to prove a tap has somewhere to go. Inheriting
+    /// from `NSObject` is what this API has always expected of a target.
+    final class Coordinator: NSObject {
         var action: () -> Void
         init(action: @escaping () -> Void) { self.action = action }
         @objc func tapped() { action() }
