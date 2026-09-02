@@ -452,4 +452,24 @@ final class ApplePayPayloadTests: XCTestCase {
 
         XCTAssertEqual(wallet["merchant_identifier"] as? String, "merchant.pay-cross.com")
     }
+
+    /// Two lists of card networks have to agree, and nothing else makes them.
+    ///
+    /// The iOS sheet asks PassKit whether the device can pay any of
+    /// `ApplePayNetwork.allCases`, while the request it then builds carries the
+    /// list this spec hardcodes. They are identical today. Add a sixth case to
+    /// the enum and the device check starts answering yes for a card the sheet
+    /// will not accept: the button appears and opens onto "no cards", with
+    /// nothing anywhere to explain it.
+    ///
+    /// Asserted here rather than fixed by having `make` read `allCases`,
+    /// because which schemes a merchant is offered is a deliberate list and
+    /// should stay one. This makes adding to it a decision rather than an
+    /// accident.
+    func testTheSpecOffersEveryNetworkTheDeviceCheckAsksAbout() {
+        XCTAssertEqual(
+            Set(spec().supportedNetworks), Set(ApplePayNetwork.allCases),
+            "the eligibility check and the payment request must ask about the same schemes"
+        )
+    }
 }

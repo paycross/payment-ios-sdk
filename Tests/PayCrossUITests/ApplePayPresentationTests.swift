@@ -612,36 +612,6 @@ private actor FakeWalletAuthorizer: WalletAuthorizing {
     }
 }
 
-/// Answers canned replies and records what it was asked to send.
-///
-/// The same shape as the stub `APIClientTests` uses in Core, so both targets
-/// fake the transport the same way.
-private actor StubTransport: HTTPTransport {
-    struct Reply {
-        var status: Int = 200
-        var body: Data = Data("{}".utf8)
-    }
-
-    private var replies: [Reply]
-    private(set) var sent: [URLRequest] = []
-
-    init(replies: [Reply]) { self.replies = replies }
-
-    init(status: Int = 200, json: String = "{}") {
-        self.replies = [Reply(status: status, body: Data(json.utf8))]
-    }
-
-    func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
-        sent.append(request)
-        let reply = replies.isEmpty ? Reply() : replies.removeFirst()
-        let response = HTTPURLResponse(
-            url: request.url ?? URL(fileURLWithPath: "/"),
-            statusCode: reply.status, httpVersion: nil, headerFields: nil
-        )
-        return (reply.body, response ?? HTTPURLResponse())
-    }
-}
-
 /// Boxed so an escaping closure and the assertions read the same value.
 @MainActor
 private final class Counter {
