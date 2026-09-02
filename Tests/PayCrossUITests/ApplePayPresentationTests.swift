@@ -327,14 +327,215 @@ final class ApplePayPresentationTests: XCTestCase {
         XCTAssertFalse(model.isLoading, "a payment that never started must not leave the form locked")
     }
 
+    // MARK: - The join between the model and the sheet
+
+    /// The whole feature's on-switch.
+    ///
+    /// `PaymentSheetView` passing `model.showsApplePayButton` into
+    /// `CardFormView` is one line, and before this test it had no cover at all:
+    /// hardcoding it to `false` -- what a merge conflict resolution produces --
+    /// left every other test in this file green while Apple Pay simply never
+    /// appeared. The model's rule and the form's rendering were each pinned;
+    /// the wire between them was not.
+    ///
+    /// Driven through a stub transport rather than an injected snapshot, so the
+    /// session arrives the way it really does and the button appears in
+    /// response to it.
+    func testTheSheetShowsTheButtonWhenTheLoadedSessionAllowsIt() async throws {
+        let (window, model) = hostSheet(merchantIdentifier: "merchant.pay-cross.com")
+
+        let loaded = await waitUntil { model.sessionData != nil }
+        XCTAssertTrue(loaded, "the stub session never reached the model")
+        XCTAssertTrue(model.showsApplePayButton, "the model must want the button for this to prove anything")
+
+        let appeared = await waitUntil { self.firstSubview(PKPaymentButton.self, in: window) != nil }
+        XCTAssertTrue(appeared, "the sheet must pass the model's answer into the form")
+    }
+
+    /// The negative half, and it waits for the same session to land first, so
+    /// it cannot pass merely by looking too early.
+    func testTheSheetHidesTheButtonWhenNoIdentifierIsConfigured() async throws {
+        let (window, model) = hostSheet(merchantIdentifier: nil)
+
+        let loaded = await waitUntil { model.sessionData != nil }
+        XCTAssertTrue(loaded, "the stub session never reached the model")
+        XCTAssertFalse(model.showsApplePayButton)
+
+        window.layoutIfNeeded()
+        // Watched for a second rather than sampled once, so this cannot pass by
+        // looking before SwiftUI has committed the update the session triggered.
+        let appeared = await waitUntil(timeout: 1) {
+            self.firstSubview(PKPaymentButton.self, in: window) != nil
+        }
+        XCTAssertFalse(appeared, "no identifier means the sheet must never offer the button")
+    }
+
+    // MARK: - The authorised path
+
+    /// The one path that carries a payment token, end to end.
+    ///
+    /// Everything from the authorised outcome to the bytes on the wire was
+    /// untested: the `.authorized` branch, `WalletToken.applePay`, the wallet
+    /// `SubmitCardRequest`, and the runner tail. Core pins those builders in
+    /// isolation on Linux; nothing pinned that this model reaches them.
+    func testAnAuthorizedTokenReachesTheSubmitBodyVerbatim() async throws {
+        let token = try JSONDecoder().decode(JSONValue.self, from: Data(Self.appleTokenJSON.utf8))
+        let transport = StubTransport(replies: [
+            .init(body: Data(#"{"success":true,"transaction_id":"txn_1"}"#.utf8)),
+            .init(body: Data(#"{"transaction_id":"txn_1","status":"success"}"#.utf8))
+        ])
+        let model = makeModel(
+            sessionData: SessionData(merchantCountry: "GB", wallets: WalletsAvailability(applePay: true)),
+            merchantIdentifier: "merchant.pay-cross.com",
+            deviceCanPay: true,
+            authorizer: FakeWalletAuthorizer(outcome: .authorized(token)),
+            transport: transport
+        )
+
+        let delivered = ResultBox()
+        let waiter = Task { @MainActor in delivered.value = await model.awaitResult() }
+        model.payWithApplePay()
+
+        let finished = await waitUntil { delivered.value != nil }
+        XCTAssertTrue(finished, "the authorised payment never reached a terminal state")
+        XCTAssertEqual(
+            delivered.value,
+            .succeeded(
+                transactionID: "txn_1", status: "success",
+                amount: Amount(minorUnits: 2599, currencyCode: "EUR")
+            ),
+            "an Apple Pay payment completes through the same callback as a card payment"
+        )
+
+        let sent = await transport.sent
+        let submitted = try XCTUnwrap(sent.first?.httpBody, "nothing was submitted")
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: submitted) as? [String: Any])
+
+        XCTAssertEqual(body["payment_method"] as? String, "apple_pay")
+        XCTAssertNil(body["card"], "a wallet body must never also carry a card")
+
+        let wallet = try XCTUnwrap(body["wallet_token"] as? [String: Any])
+        XCTAssertEqual(wallet["type"] as? String, "apple_pay")
+        // Read off the encoded JSON, not the struct. An omitted
+        // merchant_identifier is not a validation error at the edge: it reads
+        // as a web token, the vault falls back to the environment default and
+        // derives the wrong key, and the shopper gets a generic 400.
+        XCTAssertTrue(wallet.keys.contains("merchant_identifier"))
+        let identifier = try XCTUnwrap(wallet["merchant_identifier"] as? String)
+        XCTAssertEqual(identifier, "merchant.pay-cross.com")
+        XCTAssertFalse(identifier.isEmpty)
+
+        // Verbatim, walked by named key path rather than compared to itself.
+        let data = try XCTUnwrap(wallet["data"] as? [String: Any])
+        let paymentData = try XCTUnwrap(data["paymentData"] as? [String: Any])
+        let header = try XCTUnwrap(paymentData["header"] as? [String: Any])
+        XCTAssertEqual(paymentData["version"] as? String, "EC_v1")
+        XCTAssertEqual(paymentData["signature"] as? String, "MEUCIQD-signature-bytes")
+        XCTAssertEqual(paymentData["data"] as? String, "4rMLBQ-encrypted-payload")
+        XCTAssertEqual(header["publicKeyHash"] as? String, "LbsUwAT6w1JV9tFXocU813TCHks+LSuFF0R/eBkrWnQ=")
+        XCTAssertEqual(header["transactionId"] as? String, "31323334353637383930")
+        XCTAssertEqual(header["ephemeralPublicKey"] as? String, "MFkwEw-ephemeral-key")
+        let method = try XCTUnwrap(data["paymentMethod"] as? [String: Any])
+        XCTAssertEqual(method["network"] as? String, "Visa")
+        XCTAssertEqual(method["type"] as? String, "credit")
+        XCTAssertEqual(method["displayName"] as? String, "Visa 1234")
+        XCTAssertEqual(data["transactionIdentifier"] as? String, "31323334353637383930")
+
+        _ = await waiter.value
+    }
+
+    /// A rejected wallet token lands exactly where a rejected card lands.
+    func testABackendRejectionSurfacesLikeACardDecline() async throws {
+        let token = try JSONDecoder().decode(JSONValue.self, from: Data(Self.appleTokenJSON.utf8))
+        let transport = StubTransport(replies: [
+            .init(status: 400, body: Data(#"{"error":"merchant identifier mismatch"}"#.utf8))
+        ])
+        let model = makeModel(
+            sessionData: SessionData(wallets: WalletsAvailability(applePay: true)),
+            merchantIdentifier: "merchant.pay-cross.com",
+            deviceCanPay: true,
+            authorizer: FakeWalletAuthorizer(outcome: .authorized(token)),
+            transport: transport
+        )
+
+        let delivered = ResultBox()
+        let waiter = Task { @MainActor in delivered.value = await model.awaitResult() }
+        model.payWithApplePay()
+
+        let rearmed = await waitUntil { model.form.inlineError != nil }
+        XCTAssertTrue(rearmed, "a rejected wallet payment must re-arm the form the way a card decline does")
+        XCTAssertFalse(model.isLoading, "the shopper must be able to try again")
+        XCTAssertNil(delivered.value, "a re-armed form is not a terminal result")
+
+        model.cancel()
+        _ = await waiter.value
+    }
+
     // MARK: - Helpers
+
+    /// An Apple Pay token body, in the shape the web checkout posts.
+    private static let appleTokenJSON = #"""
+    {
+      "paymentData": {
+        "version": "EC_v1",
+        "data": "4rMLBQ-encrypted-payload",
+        "signature": "MEUCIQD-signature-bytes",
+        "header": {
+          "ephemeralPublicKey": "MFkwEw-ephemeral-key",
+          "publicKeyHash": "LbsUwAT6w1JV9tFXocU813TCHks+LSuFF0R/eBkrWnQ=",
+          "transactionId": "31323334353637383930"
+        }
+      },
+      "paymentMethod": {
+        "displayName": "Visa 1234",
+        "network": "Visa",
+        "type": "credit"
+      },
+      "transactionIdentifier": "31323334353637383930"
+    }
+    """#
+
+    /// The session the sheet's own `load()` fetches, allowing the wallet.
+    private static let openSessionJSON = #"""
+    {"session_id":"sess_1","status":"open",
+     "data":{"merchant_country":"GB","wallets":{"apple_pay":true}}}
+    """#
+
+    private func hostSheet(merchantIdentifier: String?) -> (UIWindow, PaymentSheetModel) {
+        let model = makeModel(
+            sessionData: nil,
+            merchantIdentifier: merchantIdentifier,
+            deviceCanPay: true,
+            transport: StubTransport(json: Self.openSessionJSON),
+            isPreparing: false
+        )
+
+        let controller = UIHostingController(rootView: PaymentSheetView(model: model))
+        let window = UIWindow(frame: CGRect(origin: .zero, size: Self.hostSize))
+        if let scene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene }).first {
+            window.windowScene = scene
+        }
+        window.rootViewController = controller
+        window.isHidden = false
+        window.makeKeyAndVisible()
+        windows.append(window)
+
+        controller.view.frame = window.bounds
+        controller.view.setNeedsLayout()
+        controller.view.layoutIfNeeded()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+        return (window, model)
+    }
 
     private func makeModel(
         sessionData: SessionData?,
         merchantIdentifier: String?,
         deviceCanPay: Bool,
         amount: Amount = Amount(minorUnits: 2599, currencyCode: "EUR"),
-        authorizer: (any WalletAuthorizing)? = nil
+        authorizer: (any WalletAuthorizing)? = nil,
+        transport: any HTTPTransport = StubTransport(status: 500),
+        isPreparing: Bool = true
     ) -> PaymentSheetModel {
         PaymentSheetModel(
             sessionToken: "header.payload.signature",
@@ -352,7 +553,11 @@ final class ApplePayPresentationTests: XCTestCase {
             ),
             walletAuthorizer: authorizer,
             deviceCanPay: { deviceCanPay },
-            sessionData: sessionData
+            sessionData: sessionData,
+            isPreparing: isPreparing,
+            // Never the real one. A model left holding URLSessionTransport
+            // would open a socket to the live checkout API from a unit test.
+            transport: transport
         )
     }
 
@@ -404,6 +609,36 @@ private actor FakeWalletAuthorizer: WalletAuthorizing {
     func authorize(_ spec: ApplePayRequestSpec) async -> WalletAuthorizationOutcome {
         received.append(spec)
         return outcome
+    }
+}
+
+/// Answers canned replies and records what it was asked to send.
+///
+/// The same shape as the stub `APIClientTests` uses in Core, so both targets
+/// fake the transport the same way.
+private actor StubTransport: HTTPTransport {
+    struct Reply {
+        var status: Int = 200
+        var body: Data = Data("{}".utf8)
+    }
+
+    private var replies: [Reply]
+    private(set) var sent: [URLRequest] = []
+
+    init(replies: [Reply]) { self.replies = replies }
+
+    init(status: Int = 200, json: String = "{}") {
+        self.replies = [Reply(status: status, body: Data(json.utf8))]
+    }
+
+    func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        sent.append(request)
+        let reply = replies.isEmpty ? Reply() : replies.removeFirst()
+        let response = HTTPURLResponse(
+            url: request.url ?? URL(fileURLWithPath: "/"),
+            statusCode: reply.status, httpVersion: nil, headerFields: nil
+        )
+        return (reply.body, response ?? HTTPURLResponse())
     }
 }
 

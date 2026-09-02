@@ -175,12 +175,21 @@ final class PaymentSheetModel: ObservableObject {
     var threeDSPresenter: (any ThreeDSPresenting)?
     private let walletAuthorizer: (any WalletAuthorizing)?
 
+    /// What the API client sends over.
+    ///
+    /// Injected for the same reason `PaymentFlowRunner` takes one in Core: the
+    /// authorised half of the wallet branch -- the submit body, the poll, a
+    /// decline -- is otherwise reachable only by opening a real socket to the
+    /// checkout API, so the one path that carries a payment token would have
+    /// been first executed on a shopper's device.
+    private let transport: any HTTPTransport
+
     /// Injected so the visibility rule is testable. On the CI simulator the
     /// real one is always false -- a fresh device has an empty Wallet -- so a
     /// model that called PassKit directly would answer "no button" to every
     /// test, and every negative case would pass for the same irrelevant
     /// reason while no positive case could exist at all.
-    let deviceCanPay: @Sendable () -> Bool
+    private let deviceCanPay: @Sendable () -> Bool
 
     init(
         sessionToken: String,
@@ -190,7 +199,9 @@ final class PaymentSheetModel: ObservableObject {
         deviceCanPay: @escaping @Sendable () -> Bool = {
             PassKitWalletAuthorizer.canMakePayments(networks: ApplePayNetwork.allCases)
         },
-        sessionData: SessionData? = nil
+        sessionData: SessionData? = nil,
+        isPreparing: Bool = true,
+        transport: any HTTPTransport = URLSessionTransport()
     ) {
         self.sessionToken = sessionToken
         self.claims = claims
@@ -198,6 +209,8 @@ final class PaymentSheetModel: ObservableObject {
         self.walletAuthorizer = walletAuthorizer
         self.deviceCanPay = deviceCanPay
         self.sessionData = sessionData
+        self.isPreparing = isPreparing
+        self.transport = transport
 
         var initial = CardFormState(source: .newCard)
         // Prefill is a test convenience and is nil in production by construction.
@@ -219,7 +232,7 @@ final class PaymentSheetModel: ObservableObject {
     private func makeClient() -> PayCrossAPIClient {
         PayCrossAPIClient(
             baseURL: configuration.environment.baseURL,
-            transport: URLSessionTransport(),
+            transport: transport,
             userAgent: "PayCrossSDK-iOS/\(PayCrossAPI.version)"
         )
     }
@@ -323,16 +336,20 @@ final class PaymentSheetModel: ObservableObject {
         // payment has no card data and would return at that line forever.
         guard !isLoading else { return }
 
+        // Above the validation, so a sheet that could never have opened does
+        // not first decorate the form with field errors and then do nothing.
+        // Unreachable through the button, which is only offered when the
+        // identifier is set.
+        guard let merchantIdentifier = applePayMerchantIdentifier,
+              let authorizer = walletAuthorizer
+        else { return }
+
         // Before the sheet, not after. Core validates field groups server-side
         // ahead of the wallet branch, so a payment that fails them after Face ID
         // has spent the shopper's authorisation on a rejection they could have
         // been shown first.
         fieldErrors = FieldGroupLogic.validate(groups: fieldGroups, values: fieldValues)
         guard fieldErrors.isEmpty else { return }
-
-        guard let merchantIdentifier = applePayMerchantIdentifier,
-              let authorizer = walletAuthorizer
-        else { return }
 
         let spec = ApplePayRequestSpec.make(
             claims: claims,
