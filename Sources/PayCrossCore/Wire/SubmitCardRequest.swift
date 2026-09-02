@@ -188,20 +188,29 @@ package struct WalletToken: Codable, Sendable {
         case type, data
     }
 
-    /// The only way to build an Apple Pay token, and it refuses an empty
-    /// identifier.
+    /// The only way to build an Apple Pay token. It trims the identifier and
+    /// refuses one that is empty once trimmed.
     ///
-    /// Nil rather than a `precondition`: the caller has already asked
-    /// `WalletGate.offersApplePay`, which refuses an empty identifier too, so
-    /// reaching here with one is a bug -- and crashing a merchant's app is a
-    /// worse answer to that bug than not offering the button.
+    /// Trimming, rather than passing the caller's string through, because
+    /// `WalletGate.offersApplePay` trims before it offers the button. Anything
+    /// this guard treats differently from that one is a padded identifier that
+    /// gets as far as Face ID and then loses: the edge compares the body
+    /// against the signed session claim byte for byte. A merchant reads this
+    /// value out of a plist, an environment variable or a copied console
+    /// field, so padding is how it actually arrives.
+    ///
+    /// Nil rather than a `precondition`: the caller has already asked the
+    /// gate, so reaching here with a blank identifier is a bug -- and crashing
+    /// a merchant's app is a worse answer to that bug than not offering the
+    /// button.
     package static func applePay(data: JSONValue, merchantIdentifier: String) -> WalletToken? {
-        guard !merchantIdentifier.isEmpty else { return nil }
+        let identifier = merchantIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !identifier.isEmpty else { return nil }
 
         return WalletToken(
             type: "apple_pay",
             data: data,
-            merchantIdentifier: merchantIdentifier
+            merchantIdentifier: identifier
         )
     }
 }

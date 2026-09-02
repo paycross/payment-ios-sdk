@@ -222,6 +222,24 @@ final class ApplePayPayloadTests: XCTestCase {
         XCTAssertNil(WalletToken.applePay(data: try decodedToken(), merchantIdentifier: ""))
     }
 
+    func testAWhitespaceOnlyIdentifierCannotBuildAToken() throws {
+        XCTAssertNil(WalletToken.applePay(data: try decodedToken(), merchantIdentifier: "   "))
+    }
+
+    /// A merchant reads this identifier out of a plist, an environment
+    /// variable or a copied console field, and every one of those can deliver
+    /// it padded. The gate trims before offering the button, so a padded
+    /// identifier gets all the way to Face ID; the edge then compares the body
+    /// against the signed session claim byte for byte and answers a 400. The
+    /// builder has to agree with the gate or the two guards describe different
+    /// identifiers.
+    func testAPaddedIdentifierReachesTheEdgeTrimmed() throws {
+        let padded = try applePayRequest(merchantIdentifier: "  merchant.pay-cross.com\n")
+        let wallet = try XCTUnwrap(try encodedObject(padded)["wallet_token"] as? [String: Any])
+
+        XCTAssertEqual(wallet["merchant_identifier"] as? String, "merchant.pay-cross.com")
+    }
+
     func testTheTokenBodyIsCarriedVerbatim() throws {
         let encoded = try encodedObject(try applePayRequest())
         let wallet = try XCTUnwrap(encoded["wallet_token"] as? [String: Any])
