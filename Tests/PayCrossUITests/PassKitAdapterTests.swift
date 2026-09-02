@@ -196,6 +196,35 @@ final class PassKitAdapterTests: XCTestCase {
         )
     }
 
+    /// The seam repeats `authorize`'s guard, and this is what holds it there.
+    ///
+    /// `awaitDelegateOutcome` is internal, so anything in the module can reach
+    /// it, and it is the method that installs a continuation -- the one route
+    /// back to the leak the guard exists to prevent. Bounded for the same
+    /// reason the second-sheet check is: without the guard the call installs a
+    /// second continuation and never returns, which would hang the run instead
+    /// of failing this test.
+    func testASecondWaitOnTheDelegateIsRefused() async throws {
+        let authorizer = PassKitWalletAuthorizer()
+        let box = OutcomeBox()
+        let waiter = Task { @MainActor in box.value = await authorizer.awaitDelegateOutcome() }
+        _ = await waitUntil { authorizer.isAwaitingOutcome }
+
+        let secondBox = OutcomeBox()
+        let second = Task { @MainActor in secondBox.value = await authorizer.awaitDelegateOutcome() }
+        let answered = await waitUntil { secondBox.value != nil }
+
+        XCTAssertTrue(answered, "a second wait must be refused at once, not queued behind the first")
+        XCTAssertEqual(secondBox.value, .failed("An Apple Pay sheet is already open."))
+        XCTAssertTrue(authorizer.isAwaitingOutcome, "the first caller must still be waiting")
+        await settle(second, resumed: answered)
+
+        authorizer.paymentAuthorizationControllerDidFinish(stubController())
+        let resumed = await waitUntil { box.value != nil }
+        XCTAssertEqual(box.value, .cancelled, "the first caller must still get its own answer")
+        await settle(waiter, resumed: resumed)
+    }
+
     // MARK: - The token, as PassKit hands it over
 
     /// The last function in this file that a device was the only thing
