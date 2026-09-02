@@ -39,6 +39,8 @@ package struct SessionData: Codable, Sendable, Hashable {
     package let merchantCountry: String?
     package let saveCardConfig: SaveCardConfig?
     package let savedCards: [WireSavedCard]?
+    package let wallets: WalletsAvailability?
+    package let accountFunding: Bool?
 
     enum CodingKeys: String, CodingKey {
         case returnURL = "return_url"
@@ -47,7 +49,8 @@ package struct SessionData: Codable, Sendable, Hashable {
         case merchantCountry = "merchant_country"
         case saveCardConfig = "save_card_config"
         case savedCards = "saved_cards"
-        case locale
+        case accountFunding = "account_funding"
+        case locale, wallets
     }
 
     /// The save-card checkbox appears only when the server configured it.
@@ -60,7 +63,9 @@ package struct SessionData: Codable, Sendable, Hashable {
         fieldGroups: [FieldGroup]? = nil,
         merchantCountry: String? = nil,
         saveCardConfig: SaveCardConfig? = nil,
-        savedCards: [WireSavedCard]? = nil
+        savedCards: [WireSavedCard]? = nil,
+        wallets: WalletsAvailability? = nil,
+        accountFunding: Bool? = nil
     ) {
         self.locale = locale
         self.returnURL = returnURL
@@ -69,6 +74,30 @@ package struct SessionData: Codable, Sendable, Hashable {
         self.merchantCountry = merchantCountry
         self.saveCardConfig = saveCardConfig
         self.savedCards = savedCards
+        self.wallets = wallets
+        self.accountFunding = accountFunding
+    }
+}
+
+/// Which wallets this session's snapshot allows, as the backend recorded them.
+///
+/// Both the block and every member are optional, and that is load-bearing
+/// rather than defensive: a session snapshotted before the backend shipped
+/// `wallets` carries no block, and a member the server had no opinion about
+/// arrives null. Only an explicit `false` is a refusal, which is what
+/// `WalletGate` reads and what the checkout page and the Android SDK both do.
+package struct WalletsAvailability: Codable, Sendable, Hashable {
+    package let applePay: Bool?
+    package let googlePay: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case applePay = "apple_pay"
+        case googlePay = "google_pay"
+    }
+
+    package init(applePay: Bool? = nil, googlePay: Bool? = nil) {
+        self.applePay = applePay
+        self.googlePay = googlePay
     }
 }
 

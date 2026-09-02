@@ -136,4 +136,52 @@ final class SessionDataTests: XCTestCase {
         )
         XCTAssertNil(session.data?.savedCards)
     }
+
+    /// Sessions snapshotted before the backend shipped `wallets` carry no
+    /// block at all, and there are live ones. Decoding must leave both new
+    /// fields nil rather than defaulting them to something the gate reads.
+    func testASnapshotWithoutAWalletBlockDecodes() throws {
+        let session = try JSONDecoder().decode(SessionResponse.self, from: Data(payload.utf8))
+        let data = try XCTUnwrap(session.data)
+
+        XCTAssertNil(data.wallets)
+        XCTAssertNil(data.accountFunding)
+    }
+
+    func testWalletAvailabilityDecodes() throws {
+        let json = """
+        { "session_id": "sess_1", "data": {
+            "wallets": { "apple_pay": true, "google_pay": false },
+            "account_funding": false } }
+        """
+        let session = try JSONDecoder().decode(SessionResponse.self, from: Data(json.utf8))
+        let data = try XCTUnwrap(session.data)
+
+        XCTAssertEqual(data.wallets?.applePay, true)
+        XCTAssertEqual(data.wallets?.googlePay, false)
+        XCTAssertEqual(data.accountFunding, false)
+    }
+
+    /// A member the server sent as null is not the same as one it omitted,
+    /// and neither is the same as `false`. All three have to survive decode
+    /// distinctly, because the gate treats only the explicit `false` as a no.
+    func testANullWalletMemberDecodesAsNilRatherThanFalse() throws {
+        let json = """
+        { "session_id": "sess_1", "data": { "wallets": { "apple_pay": null } } }
+        """
+        let session = try JSONDecoder().decode(SessionResponse.self, from: Data(json.utf8))
+        let data = try XCTUnwrap(session.data)
+
+        XCTAssertNotNil(data.wallets)
+        XCTAssertNil(data.wallets?.applePay)
+    }
+
+    func testAccountFundingDecodes() throws {
+        let json = """
+        { "session_id": "sess_1", "data": { "account_funding": true } }
+        """
+        let session = try JSONDecoder().decode(SessionResponse.self, from: Data(json.utf8))
+
+        XCTAssertEqual(session.data?.accountFunding, true)
+    }
 }
