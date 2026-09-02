@@ -114,4 +114,128 @@ final class ApplePayPayloadTests: XCTestCase {
 
         XCTAssertEqual(encoded["s"] as? String, "a\"b\\c\nd")
     }
+
+    // MARK: - The submit payload
+
+    private func applePayRequest(
+        merchantIdentifier: String = "merchant.pay-cross.com",
+        fieldGroups: [String: [String: String]]? = nil
+    ) throws -> SubmitCardRequest {
+        let token = try XCTUnwrap(
+            WalletToken.applePay(data: try decodedToken(), merchantIdentifier: merchantIdentifier)
+        )
+        return SubmitCardRequest(
+            session: "session.jwt.here",
+            walletToken: token,
+            browserInfo: BrowserInfo(
+                userAgent: "PayCrossSDK-iOS/0.2.0",
+                screenWidth: 1170,
+                screenHeight: 2532,
+                timezoneOffset: 0,
+                language: "en-GB"
+            ),
+            fieldGroups: fieldGroups
+        )
+    }
+
+    func testThePaymentMethodIsApplePay() throws {
+        let encoded = try encodedObject(try applePayRequest())
+
+        XCTAssertEqual(encoded["payment_method"] as? String, "apple_pay")
+    }
+
+    /// The card key must be absent, not null: `validatePaymentMethod` on the
+    /// edge branches on the payment method and a stray card object on a wallet
+    /// body is a contradiction nobody downstream has to resolve.
+    func testNoCardObjectIsSent() throws {
+        let encoded = try encodedObject(try applePayRequest())
+
+        XCTAssertFalse(encoded.keys.contains("card"))
+    }
+
+    func testTheWalletTokenTypeMatchesThePaymentMethod() throws {
+        let encoded = try encodedObject(try applePayRequest())
+        let wallet = try XCTUnwrap(encoded["wallet_token"] as? [String: Any])
+
+        // The edge refuses a body whose wallet_token.type differs from its
+        // payment_method, so these two are one decision, not two.
+        XCTAssertEqual(wallet["type"] as? String, "apple_pay")
+        XCTAssertEqual(wallet["type"] as? String, encoded["payment_method"] as? String)
+    }
+
+    /// The assertion this whole card exists for. An omitted merchant
+    /// identifier is not refused anywhere: it reads to the edge as a web
+    /// token, the vault derives the environment default key, and the shopper
+    /// gets a generic decline.
+    func testTheMerchantIdentifierIsAlwaysPresentAndNonEmpty() throws {
+        let encoded = try encodedObject(try applePayRequest())
+        let wallet = try XCTUnwrap(encoded["wallet_token"] as? [String: Any])
+
+        XCTAssertTrue(wallet.keys.contains("merchant_identifier"))
+        let identifier = try XCTUnwrap(wallet["merchant_identifier"] as? String)
+        XCTAssertEqual(identifier, "merchant.pay-cross.com")
+        XCTAssertFalse(identifier.isEmpty)
+    }
+
+    func testAnEmptyIdentifierCannotBuildAToken() throws {
+        XCTAssertNil(WalletToken.applePay(data: try decodedToken(), merchantIdentifier: ""))
+    }
+
+    func testTheTokenBodyIsCarriedVerbatim() throws {
+        let encoded = try encodedObject(try applePayRequest())
+        let wallet = try XCTUnwrap(encoded["wallet_token"] as? [String: Any])
+        let data = try XCTUnwrap(wallet["data"] as? [String: Any])
+        let paymentData = try XCTUnwrap(data["paymentData"] as? [String: Any])
+
+        XCTAssertEqual(paymentData["version"] as? String, "EC_v1")
+        XCTAssertEqual(
+            (paymentData["header"] as? [String: Any])?["publicKeyHash"] as? String,
+            "AS+1J1234ABCdef="
+        )
+    }
+
+    /// The edge backfills the IP from the request context and a body value
+    /// always wins, so the absent key is the correct one. This is existing
+    /// behaviour and the wallet path must not change it.
+    func testBrowserInfoStillOmitsTheIPAddress() throws {
+        let encoded = try encodedObject(try applePayRequest())
+        let browser = try XCTUnwrap(encoded["browser_info"] as? [String: Any])
+
+        XCTAssertFalse(browser.keys.contains("ip_address"))
+        XCTAssertEqual(browser["user_agent"] as? String, "PayCrossSDK-iOS/0.2.0")
+    }
+
+    func testFieldGroupsAreOmittedWhenEmpty() throws {
+        XCTAssertFalse(try encodedObject(try applePayRequest()).keys.contains("field_groups"))
+
+        let withGroups = try applePayRequest(fieldGroups: ["billing": ["postcode": "SW1A 1AA"]])
+        XCTAssertTrue(try encodedObject(withGroups).keys.contains("field_groups"))
+    }
+
+    /// The card path is untouched. Nothing in this plan may change what a card
+    /// payment puts on the wire.
+    func testACardRequestIsUnchanged() throws {
+        let request = SubmitCardRequest(
+            session: "session.jwt.here",
+            card: CardData.newCard(
+                cardholderName: "A PERSON",
+                pan: "4111111111111111",
+                expireMonth: "12",
+                expireYear: "2030",
+                cvv: "123"
+            ),
+            browserInfo: BrowserInfo(
+                userAgent: "ua",
+                screenWidth: 1170,
+                screenHeight: 2532,
+                timezoneOffset: 0,
+                language: "en"
+            )
+        )
+        let encoded = try encodedObject(request)
+
+        XCTAssertEqual(encoded["payment_method"] as? String, "card")
+        XCTAssertFalse(encoded.keys.contains("wallet_token"))
+        XCTAssertTrue(encoded.keys.contains("card"))
+    }
 }
