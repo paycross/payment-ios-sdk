@@ -36,10 +36,15 @@ final class ApplePayPresentationTests: XCTestCase {
 
     /// Hosts the card form in a real window and lets SwiftUI commit its layout,
     /// so the `UIViewRepresentable` actually makes its `PKPaymentButton`.
-    private func hostForm(showsApplePayButton: Bool, onApplePay: @escaping () -> Void = {}) -> UIWindow {
+    private func hostForm(
+        showsApplePayButton: Bool,
+        isLoading: Bool = false,
+        onApplePay: @escaping () -> Void = {}
+    ) -> UIWindow {
         let controller = UIHostingController(
             rootView: FormHarness(
                 showsApplePayButton: showsApplePayButton,
+                isLoading: isLoading,
                 onApplePay: onApplePay
             )
         )
@@ -76,6 +81,46 @@ final class ApplePayPresentationTests: XCTestCase {
             firstSubview(PKPaymentButton.self, in: window),
             "a form told not to offer Apple Pay must not have the button in it at all"
         )
+    }
+
+    /// The primary action of the whole feature must not lie about its state.
+    ///
+    /// For the submit-and-poll phase, which this file's own comments say can
+    /// run to a deadline of minutes, the button was fully lit and did nothing
+    /// when tapped, because the model's re-entry guard swallowed it. The
+    /// spinner is on the card button, which is not the control the shopper is
+    /// looking at.
+    func testTheButtonIsDisabledWhileAPaymentIsInFlight() throws {
+        let busy = hostForm(showsApplePayButton: true, isLoading: true)
+        let button = try XCTUnwrap(firstSubview(PKPaymentButton.self, in: busy))
+
+        // Asserted on `isUserInteractionEnabled` rather than `isEnabled`,
+        // because PKPaymentButton ignores the latter -- measured, not assumed:
+        // with both set false on the same view, the alpha changed and
+        // `isEnabled` still read true.
+        XCTAssertFalse(
+            button.isUserInteractionEnabled,
+            "a lit button that does nothing when tapped is worse than a dim one"
+        )
+        XCTAssertLessThan(button.alpha, 1, "it must also look unavailable, not merely refuse taps")
+    }
+
+    func testTheButtonIsLiveWhenNoPaymentIsInFlight() throws {
+        let idle = hostForm(showsApplePayButton: true, isLoading: false)
+        let button = try XCTUnwrap(firstSubview(PKPaymentButton.self, in: idle))
+
+        XCTAssertTrue(button.isUserInteractionEnabled)
+        XCTAssertEqual(button.alpha, 1, accuracy: 0.001)
+    }
+
+    /// SwiftUI puts `.accessibilityIdentifier` on its own accessibility node,
+    /// not on the wrapped control, so anything walking `UIView`s -- a UI test,
+    /// the demo harness in task 08 -- finds nothing without this.
+    func testTheButtonCarriesItsIdentifierOnTheControlItself() throws {
+        let window = hostForm(showsApplePayButton: true)
+        let button = try XCTUnwrap(firstSubview(PKPaymentButton.self, in: window))
+
+        XCTAssertEqual(button.accessibilityIdentifier, "applePayButton")
     }
 
     func testTappingTheButtonRunsTheAction() throws {
@@ -377,6 +422,7 @@ private final class ResultBox {
 /// `@State` of its own.
 private struct FormHarness: View {
     let showsApplePayButton: Bool
+    let isLoading: Bool
     let onApplePay: () -> Void
 
     @State private var state = CardFormState()
@@ -388,7 +434,7 @@ private struct FormHarness: View {
             amount: Amount(minorUnits: 2599, currencyCode: "EUR"),
             savedCards: [],
             allowsSaving: false,
-            isLoading: false,
+            isLoading: isLoading,
             fieldGroups: [],
             fieldValues: $fieldValues,
             fieldErrors: [],

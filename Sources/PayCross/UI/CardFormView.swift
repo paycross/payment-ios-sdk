@@ -30,7 +30,7 @@ struct CardFormView: View {
                     AmountHeader(amount: amount)
 
                     if showsApplePayButton {
-                        ApplePayButtonView(action: onApplePay)
+                        ApplePayButtonView(action: onApplePay, isEnabled: !isLoading)
                             .frame(height: 48)
                             .accessibilityIdentifier("applePayButton")
 
