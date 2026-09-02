@@ -19,6 +19,7 @@ final class ApplePayPayloadTests: XCTestCase {
         "data": "l6ptDgUVfd9...",
         "signature": "MIAGCSqGSIb3...",
         "header": {
+          "applicationData": "OGZlZDA5ODc2NTQzMjE=",
           "ephemeralPublicKey": "MFkwEwYHKoZIzj0CAQ...",
           "publicKeyHash": "AS+1J1234ABCdef=",
           "transactionId": "31323334353637"
@@ -54,13 +55,29 @@ final class ApplePayPayloadTests: XCTestCase {
         let paymentData = try XCTUnwrap(encoded["paymentData"] as? [String: Any])
         let header = try XCTUnwrap(paymentData["header"] as? [String: Any])
         XCTAssertEqual(paymentData["version"] as? String, "EC_v1")
+        XCTAssertEqual(paymentData["data"] as? String, "l6ptDgUVfd9...")
         XCTAssertEqual(paymentData["signature"] as? String, "MIAGCSqGSIb3...")
+        XCTAssertEqual(header["applicationData"] as? String, "OGZlZDA5ODc2NTQzMjE=")
+        XCTAssertEqual(header["ephemeralPublicKey"] as? String, "MFkwEwYHKoZIzj0CAQ...")
         XCTAssertEqual(header["publicKeyHash"] as? String, "AS+1J1234ABCdef=")
         XCTAssertEqual(header["transactionId"] as? String, "31323334353637")
 
         let method = try XCTUnwrap(encoded["paymentMethod"] as? [String: Any])
+        XCTAssertEqual(method["displayName"] as? String, "Visa 1234")
         XCTAssertEqual(method["network"] as? String, "Visa")
+        XCTAssertEqual(method["type"] as? String, "debit")
         XCTAssertEqual(encoded["transactionIdentifier"] as? String, "31323334353637")
+
+        // The nested key sets as well as the values. A value assertion catches
+        // a dropped key it names; these catch one it does not, so a field added
+        // to the fixture cannot sit unasserted the way `data` and
+        // `ephemeralPublicKey` once did.
+        XCTAssertEqual(Set(paymentData.keys), ["version", "data", "signature", "header"])
+        XCTAssertEqual(
+            Set(header.keys),
+            ["applicationData", "ephemeralPublicKey", "publicKeyHash", "transactionId"]
+        )
+        XCTAssertEqual(Set(method.keys), ["displayName", "network", "type"])
     }
 
     func testTheKeySetIsUnchanged() throws {
@@ -118,6 +135,12 @@ final class ApplePayPayloadTests: XCTestCase {
         XCTAssertEqual(array[1] as? String, "two")
         XCTAssertEqual(array[2] as? Bool, true)
         XCTAssertEqual((array[3] as? [String: Any])?["b"] as? Bool, false)
+
+        let empties = try JSONDecoder().decode(JSONValue.self, from: Data(#"{"o": {}, "a": []}"#.utf8))
+        let encodedEmpties = try encodedObject(empties)
+
+        XCTAssertEqual((encodedEmpties["o"] as? [String: Any])?.isEmpty, true)
+        XCTAssertEqual((encodedEmpties["a"] as? [Any])?.isEmpty, true)
     }
 
     func testAnEscapedStringSurvives() throws {
@@ -125,6 +148,12 @@ final class ApplePayPayloadTests: XCTestCase {
         let encoded = try encodedObject(value)
 
         XCTAssertEqual(encoded["s"] as? String, "a\"b\\c\nd")
+
+        // `paymentMethod.displayName` carries the card's own label and is the
+        // field most likely to arrive non-ASCII.
+        let unicode = try JSONDecoder().decode(JSONValue.self, from: Data(#"{"s": "café ¥ 😀"}"#.utf8))
+
+        XCTAssertEqual(try encodedObject(unicode)["s"] as? String, "café ¥ 😀")
     }
 
     // MARK: - The submit payload
