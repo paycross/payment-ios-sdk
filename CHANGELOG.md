@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-02
+
+### Added
+
+- Apple Pay inside the payment sheet, gated by the session's `wallets` block and
+  the merchant's Apple merchant identifier. Apple's own button is rendered above
+  the card form when the session allows the wallet, an identifier is configured
+  and the device has a card it can pay with; the host app adds no view and makes
+  no call.
+- `applePayMerchantIdentifier` on `PayCrossAPI.configure`, defaulting to nil.
+  Without it there is no Apple Pay button, which is the correct default: Apple
+  hashes the identifier into the key that encrypts every payment token, so a
+  token produced without the merchant's own identifier cannot be decrypted.
+
+### Fixed
+
+- The User-Agent reported `0.1.0-alpha` on every release since 0.1.0.
+
 ## [0.1.1] - 2026-08-28
 
 ### Fixed
@@ -44,6 +62,7 @@ Initial public release.
   merchant-facing types; internal collaborators moved to package access.
 - The payments client no longer caches status poll responses.
 
-[Unreleased]: https://github.com/paycross/payment-ios-sdk/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/paycross/payment-ios-sdk/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/paycross/payment-ios-sdk/releases/tag/v0.2.0
 [0.1.1]: https://github.com/paycross/payment-ios-sdk/releases/tag/v0.1.1
 [0.1.0]: https://github.com/paycross/payment-ios-sdk/releases/tag/v0.1.0
