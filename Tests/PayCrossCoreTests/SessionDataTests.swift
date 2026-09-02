@@ -184,4 +184,98 @@ final class SessionDataTests: XCTestCase {
 
         XCTAssertEqual(session.data?.accountFunding, true)
     }
+
+    // MARK: - Wallet flags the backend spelled in another type
+
+    /// A boolean rendered as a string still means what it says.
+    ///
+    /// The consequence of throwing instead is inverted, not merely absent: the
+    /// whole session decode fails, the sheet swallows it, session data becomes
+    /// nil, and the strict-false gate reads nil as permission. A merchant who
+    /// switched Apple Pay off would get the button.
+    func testAWalletMemberSentAsAStringCoercesToBool() throws {
+        let off = try JSONDecoder().decode(
+            SessionResponse.self,
+            from: Data(#"{"session_id":"s","data":{"wallets":{"apple_pay":"false"}}}"#.utf8)
+        )
+        XCTAssertEqual(off.data?.wallets?.applePay, false)
+        XCTAssertFalse(WalletGate.allowsApplePay(off.data), "a string false is still a refusal")
+
+        let on = try JSONDecoder().decode(
+            SessionResponse.self,
+            from: Data(#"{"session_id":"s","data":{"wallets":{"apple_pay":"true"}}}"#.utf8)
+        )
+        XCTAssertEqual(on.data?.wallets?.applePay, true)
+    }
+
+    func testAWalletMemberSentAsANumberCoercesToBool() throws {
+        let off = try JSONDecoder().decode(
+            SessionResponse.self,
+            from: Data(#"{"session_id":"s","data":{"wallets":{"apple_pay":0}}}"#.utf8)
+        )
+        XCTAssertEqual(off.data?.wallets?.applePay, false)
+        XCTAssertFalse(WalletGate.allowsApplePay(off.data), "zero is still a refusal")
+
+        let on = try JSONDecoder().decode(
+            SessionResponse.self,
+            from: Data(#"{"session_id":"s","data":{"wallets":{"apple_pay":1}}}"#.utf8)
+        )
+        XCTAssertEqual(on.data?.wallets?.applePay, true)
+    }
+
+    /// A value no coercion recognises costs that one member and nothing else.
+    /// The field groups in the same payload are the thing worth protecting:
+    /// losing them renders a card form the server never asked for.
+    func testAnUnrecognisedWalletMemberDecodesAsNilWithoutLosingTheSession() throws {
+        let json = """
+        { "session_id": "s", "data": {
+            "wallets": { "apple_pay": "maybe", "google_pay": 7 },
+            "field_groups": [{ "key": "billing" }] } }
+        """
+        let data = try XCTUnwrap(
+            try JSONDecoder().decode(SessionResponse.self, from: Data(json.utf8)).data
+        )
+
+        XCTAssertNotNil(data.wallets, "the block itself parsed")
+        XCTAssertNil(data.wallets?.applePay)
+        XCTAssertNil(data.wallets?.googlePay)
+        XCTAssertEqual(data.fieldGroups?.first?.key, "billing")
+        XCTAssertTrue(WalletGate.allowsApplePay(data), "an unreadable flag is not a refusal")
+    }
+
+    /// A `wallets` value that is not an object at all drops the block and
+    /// leaves the rest of the session standing.
+    func testAMalformedWalletsBlockDecodesAsNilWithoutLosingTheSession() throws {
+        let json = """
+        { "session_id": "s", "data": {
+            "wallets": [],
+            "field_groups": [{ "key": "billing" }] } }
+        """
+        let data = try XCTUnwrap(
+            try JSONDecoder().decode(SessionResponse.self, from: Data(json.utf8)).data
+        )
+
+        XCTAssertNil(data.wallets)
+        XCTAssertEqual(data.fieldGroups?.first?.key, "billing")
+        XCTAssertTrue(WalletGate.allowsApplePay(data))
+    }
+
+    /// `account_funding` poisons the decode exactly the way a wallet member
+    /// does, and inverts the same way: losing it reads as "not account
+    /// funding" and offers a wallet the server will reject.
+    func testAccountFundingCoercesAndStillHidesTheButton() throws {
+        let json = """
+        { "session_id": "s", "data": {
+            "wallets": { "apple_pay": true },
+            "account_funding": "true",
+            "field_groups": [{ "key": "billing" }] } }
+        """
+        let data = try XCTUnwrap(
+            try JSONDecoder().decode(SessionResponse.self, from: Data(json.utf8)).data
+        )
+
+        XCTAssertEqual(data.accountFunding, true)
+        XCTAssertEqual(data.fieldGroups?.first?.key, "billing")
+        XCTAssertFalse(WalletGate.allowsApplePay(data))
+    }
 }

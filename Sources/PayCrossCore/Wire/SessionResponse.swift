@@ -77,6 +77,66 @@ package struct SessionData: Codable, Sendable, Hashable {
         self.wallets = wallets
         self.accountFunding = accountFunding
     }
+
+    /// Decoded by hand so that a malformed wallet flag costs only itself.
+    ///
+    /// `SessionData` decodes as one value, so a throw anywhere in it takes the
+    /// field groups and the saved cards down too, and `PaymentSheet` swallows
+    /// that error and renders a form the server never described. For the two
+    /// wallet fields the loss also inverts the answer: session data becomes
+    /// nil, and `WalletGate` reads nil as permission, so a merchant who
+    /// switched Apple Pay off in a shape iOS cannot parse would get the button.
+    /// Every other field keeps throwing, because a malformed field group is a
+    /// real failure with no safe reading.
+    ///
+    /// Anything added to `CodingKeys` has to be decoded here as well; there is
+    /// no longer a synthesised initialiser to fall back on.
+    package init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        locale = try container.decodeIfPresent(String.self, forKey: .locale)
+        returnURL = try container.decodeIfPresent(String.self, forKey: .returnURL)
+        successURL = try container.decodeIfPresent(String.self, forKey: .successURL)
+        fieldGroups = try container.decodeIfPresent([FieldGroup].self, forKey: .fieldGroups)
+        merchantCountry = try container.decodeIfPresent(String.self, forKey: .merchantCountry)
+        saveCardConfig = try container.decodeIfPresent(SaveCardConfig.self, forKey: .saveCardConfig)
+        savedCards = try container.decodeIfPresent([WireSavedCard].self, forKey: .savedCards)
+        wallets = (try? container.decodeIfPresent(WalletsAvailability.self, forKey: .wallets)) ?? nil
+        accountFunding = container.decodeLenientBoolIfPresent(forKey: .accountFunding)
+    }
+}
+
+/// Reads a wire boolean the backend may have spelled as a string or a number.
+///
+/// `true`, `"true"` and `1` are all yes; `false`, `"false"` and `0` are all no.
+/// Anything else is nil -- the server said something this SDK cannot read, which
+/// is not the same as the server saying no. Never throws, because the callers
+/// that use it have decided a bad value costs one field rather than the whole
+/// message.
+private extension KeyedDecodingContainer {
+    func decodeLenientBoolIfPresent(forKey key: Key) -> Bool? {
+        guard contains(key), (try? decodeNil(forKey: key)) == false else { return nil }
+
+        if let flag = try? decode(Bool.self, forKey: key) { return flag }
+
+        if let number = try? decode(Int.self, forKey: key) {
+            switch number {
+            case 1: return true
+            case 0: return false
+            default: return nil
+            }
+        }
+
+        if let text = try? decode(String.self, forKey: key) {
+            switch text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+            case "true": return true
+            case "false": return false
+            default: return nil
+            }
+        }
+
+        return nil
+    }
 }
 
 /// Which wallets this session's snapshot allows, as the backend recorded them.
@@ -98,6 +158,19 @@ package struct WalletsAvailability: Codable, Sendable, Hashable {
     package init(applePay: Bool? = nil, googlePay: Bool? = nil) {
         self.applePay = applePay
         self.googlePay = googlePay
+    }
+
+    /// Each member is read leniently and independently, so one flag the SDK
+    /// cannot parse never costs the other one or the session around it.
+    ///
+    /// This still throws when the whole value is not an object, and that is
+    /// deliberate: `SessionData` catches it and drops the block, which the gate
+    /// already treats as "the server had no opinion".
+    package init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        applePay = container.decodeLenientBoolIfPresent(forKey: .applePay)
+        googlePay = container.decodeLenientBoolIfPresent(forKey: .googlePay)
     }
 }
 
