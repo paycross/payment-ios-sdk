@@ -119,7 +119,7 @@ final class PassKitAdapterTests: XCTestCase {
         let resumed = await waitUntil { box.value != nil }
         XCTAssertTrue(resumed, "didFinish must resume its caller, or the payment hangs forever")
         XCTAssertEqual(box.value, .cancelled, "a sheet that finished without authorising is a cancel")
-        _ = await waiter.value
+        await settle(waiter, resumed: resumed)
     }
 
     /// `resume` clears the continuation before resuming, so a second callback
@@ -132,11 +132,11 @@ final class PassKitAdapterTests: XCTestCase {
 
         let controller = stubController()
         authorizer.paymentAuthorizationControllerDidFinish(controller)
-        _ = await waitUntil { box.value != nil }
+        let resumed = await waitUntil { box.value != nil }
         authorizer.paymentAuthorizationControllerDidFinish(controller)
 
         XCTAssertFalse(authorizer.isAwaitingOutcome, "the continuation must not survive its resume")
-        _ = await waiter.value
+        await settle(waiter, resumed: resumed)
     }
 
     /// A second sheet on the same instance would overwrite the first
@@ -154,9 +154,9 @@ final class PassKitAdapterTests: XCTestCase {
         XCTAssertTrue(authorizer.isAwaitingOutcome, "the first caller must still be waiting")
 
         authorizer.paymentAuthorizationControllerDidFinish(stubController())
-        _ = await waitUntil { box.value != nil }
+        let resumed = await waitUntil { box.value != nil }
         XCTAssertEqual(box.value, .cancelled, "the first caller must still get its own answer")
-        _ = await waiter.value
+        await settle(waiter, resumed: resumed)
     }
 
     /// The SDK's own worst error message.
@@ -189,6 +189,18 @@ final class PassKitAdapterTests: XCTestCase {
     }
 
     // MARK: - Helpers
+
+    /// Joins the waiting task, but only when it actually resumed.
+    ///
+    /// Awaiting unconditionally would turn the regression these tests exist to
+    /// catch -- a `didFinish` that never resumes -- from a failed assertion
+    /// into a run that hangs until xcodebuild gives up, which reports nothing
+    /// and costs everyone ten minutes. A suspended task is simply abandoned;
+    /// the runtime logs a leaked continuation and the suite moves on.
+    private func settle(_ waiter: Task<Void, Never>, resumed: Bool) async {
+        guard resumed else { return waiter.cancel() }
+        _ = await waiter.value
+    }
 
     private func waitUntil(
         timeout: TimeInterval = 3,
