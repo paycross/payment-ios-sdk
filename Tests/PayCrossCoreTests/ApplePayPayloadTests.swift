@@ -199,7 +199,11 @@ final class ApplePayPayloadTests: XCTestCase {
         let wallet = try XCTUnwrap(encoded["wallet_token"] as? [String: Any])
 
         // The edge refuses a body whose wallet_token.type differs from its
-        // payment_method, so these two are one decision, not two.
+        // payment_method, so these two are one decision, not two. The second
+        // assertion cannot fail as the code stands, because the wallet
+        // initialiser derives payment_method from the token's own type; it is
+        // kept as the guard that fires if anyone splits it back into two
+        // arguments, which is the only way they could ever disagree.
         XCTAssertEqual(wallet["type"] as? String, "apple_pay")
         XCTAssertEqual(wallet["type"] as? String, encoded["payment_method"] as? String)
     }

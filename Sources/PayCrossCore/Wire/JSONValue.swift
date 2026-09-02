@@ -10,7 +10,18 @@ import Foundation
 /// the symptom would be a decryption failure with no field to point at.
 ///
 /// Integers decode as integers rather than through `Double`, so a long numeric
-/// field cannot come back in exponent notation.
+/// field cannot come back in exponent notation. `Int64` is the ceiling: a JSON
+/// number above `Int64.max` falls through to `Double` and loses precision.
+/// Apple's token cannot carry one, because every field the vault reads is a
+/// string, `transactionId` included. Widening the type needs a reason this does
+/// not supply.
+///
+/// What survives is every field's *value*, not the bytes. Key order is not
+/// preserved, since a Swift dictionary has none and the encoder does not sort,
+/// and number spelling normalises so `1.0` re-encodes as `1`. Neither can
+/// matter: the edge re-serializes the envelope before the vault opens it, and
+/// Apple's EC_v1 signature covers field values rather than their
+/// serialization. Nothing should be added here to preserve byte order.
 package enum JSONValue: Codable, Sendable, Hashable {
     case object([String: JSONValue])
     case array([JSONValue])
