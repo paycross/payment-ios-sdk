@@ -40,6 +40,10 @@ package struct SessionData: Codable, Sendable, Hashable {
     package let saveCardConfig: SaveCardConfig?
     package let savedCards: [WireSavedCard]?
     package let wallets: WalletsAvailability?
+    // Decoded for the wire contract and deliberately unread: no source file
+    // consumes this after the gate stopped checking it. Kept because the
+    // backend keeps writing it and dropping the decode would be a silent
+    // wire-contract regression.
     package let accountFunding: Bool?
 
     enum CodingKeys: String, CodingKey {

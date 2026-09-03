@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-03
+
 ### Changed
 
 - The Apple Pay button is offered on account-funding sessions. `account_funding`
@@ -71,7 +73,8 @@ Initial public release.
   merchant-facing types; internal collaborators moved to package access.
 - The payments client no longer caches status poll responses.
 
-[Unreleased]: https://github.com/paycross/payment-ios-sdk/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/paycross/payment-ios-sdk/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/paycross/payment-ios-sdk/releases/tag/v0.2.1
 [0.2.0]: https://github.com/paycross/payment-ios-sdk/releases/tag/v0.2.0
 [0.1.1]: https://github.com/paycross/payment-ios-sdk/releases/tag/v0.1.1
 [0.1.0]: https://github.com/paycross/payment-ios-sdk/releases/tag/v0.1.0
