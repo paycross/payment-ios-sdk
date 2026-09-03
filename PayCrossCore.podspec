@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name             = 'PayCrossCore'
-  s.version          = '0.2.0'
+  s.version          = '0.2.1'
   s.summary          = 'Platform-agnostic core of the PayCross iOS SDK.'
   s.description      = <<-DESC
     The payment state machine, wire models, JWT decoding, card validation and 3DS

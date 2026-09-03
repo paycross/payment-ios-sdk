@@ -262,9 +262,9 @@ final class SessionDataTests: XCTestCase {
 
     /// `account_funding` coerces exactly the way a wallet member does. It no
     /// longer decides the button -- it marks the session as an account-funding
-    /// transfer, which a wallet may pay -- but the flag still has to survive a
-    /// backend that spells a bool as a string, because the transfer block rides
-    /// on it downstream.
+    /// transfer, which a wallet may pay -- but the flag still has to decode,
+    /// because the backend keeps writing it and a future client may read it
+    /// again.
     func testAccountFundingCoercesFromAString() throws {
         let json = """
         { "session_id": "s", "data": {
