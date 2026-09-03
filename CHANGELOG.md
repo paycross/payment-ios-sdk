@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The Apple Pay button is offered on account-funding sessions. `account_funding`
+  marks a session as an account-funding transfer, and the backend now accepts a
+  wallet payment on one and forwards the transfer to the acquirer as an AFT, so
+  the flag no longer hides the button. `wallets.apple_pay: false` is still the
+  only refusal, and the transfer's sender and recipient fields are still
+  collected from `field_groups` before the sheet opens.
+
 ## [0.2.0] - 2026-09-02
 
 ### Added

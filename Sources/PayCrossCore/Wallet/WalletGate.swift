@@ -13,11 +13,16 @@ package enum WalletGate {
     /// Offered unless the snapshot says `apple_pay: false` in so many words.
     /// An absent block and a null member are both "the server had no opinion",
     /// and every session minted before the backend shipped the block is the
-    /// former. Account funding overrides everything: core rejects wallet
-    /// payments on those sessions, so a button there buys a Face ID prompt and
-    /// a rejection.
+    /// former.
+    ///
+    /// `account_funding` is not an answer to this question. It says the session
+    /// is an account-funding transfer, and core takes a wallet payment on one:
+    /// the payment carries the same transfer block a card payment carries and
+    /// reaches the acquirer as an AFT. The transfer's own sender and recipient
+    /// fields arrive as `field_groups` and are collected before the sheet opens,
+    /// exactly as on the card path.
     package static func allowsApplePay(_ data: SessionData?) -> Bool {
-        data?.wallets?.applePay != false && data?.accountFunding != true
+        data?.wallets?.applePay != false
     }
 
     /// The whole eligibility question: the session allows it, the integration

@@ -49,11 +49,25 @@ final class WalletGateTests: XCTestCase {
         XCTAssertTrue(WalletGate.allowsApplePay(data(applePay: true, googlePay: false)))
     }
 
-    /// Account funding beats an explicit yes: core rejects wallet payments on
-    /// account-funding sessions server-side, so offering the button would
-    /// spend a Face ID authorisation on a payment that cannot succeed.
-    func testAccountFundingHidesApplePayEvenWhenTheBlockSaysTrue() {
-        XCTAssertFalse(WalletGate.allowsApplePay(data(applePay: true, accountFunding: true)))
+    /// Account funding is not a wallet refusal. Core accepts a wallet payment
+    /// on an account-funding session and forwards the transfer block with it,
+    /// so the flag marks what the session is, not what it may pay with.
+    func testAccountFundingDoesNotHideApplePay() {
+        XCTAssertTrue(WalletGate.allowsApplePay(data(applePay: true, accountFunding: true)))
+    }
+
+    /// The absent-block path, on an account-funding session. Two silences at
+    /// once are still two silences: neither one is the explicit false.
+    func testAccountFundingWithNoWalletBlockOffersApplePay() {
+        XCTAssertTrue(
+            WalletGate.allowsApplePay(data(walletsPresent: false, accountFunding: true))
+        )
+    }
+
+    /// The one refusal that survives account funding. A merchant who switched
+    /// Apple Pay off stays switched off whatever else the session carries.
+    func testAnExplicitFalseHidesApplePayOnAnAccountFundingSession() {
+        XCTAssertFalse(WalletGate.allowsApplePay(data(applePay: false, accountFunding: true)))
     }
 
     func testAccountFundingFalseOffersApplePay() {

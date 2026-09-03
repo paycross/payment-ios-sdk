@@ -260,10 +260,12 @@ final class SessionDataTests: XCTestCase {
         XCTAssertTrue(WalletGate.allowsApplePay(data))
     }
 
-    /// `account_funding` poisons the decode exactly the way a wallet member
-    /// does, and inverts the same way: losing it reads as "not account
-    /// funding" and offers a wallet the server will reject.
-    func testAccountFundingCoercesAndStillHidesTheButton() throws {
+    /// `account_funding` coerces exactly the way a wallet member does. It no
+    /// longer decides the button -- it marks the session as an account-funding
+    /// transfer, which a wallet may pay -- but the flag still has to survive a
+    /// backend that spells a bool as a string, because the transfer block rides
+    /// on it downstream.
+    func testAccountFundingCoercesFromAString() throws {
         let json = """
         { "session_id": "s", "data": {
             "wallets": { "apple_pay": true },
@@ -276,6 +278,6 @@ final class SessionDataTests: XCTestCase {
 
         XCTAssertEqual(data.accountFunding, true)
         XCTAssertEqual(data.fieldGroups?.first?.key, "billing")
-        XCTAssertFalse(WalletGate.allowsApplePay(data))
+        XCTAssertTrue(WalletGate.allowsApplePay(data))
     }
 }
