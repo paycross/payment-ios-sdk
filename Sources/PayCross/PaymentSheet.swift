@@ -243,9 +243,9 @@ final class PaymentSheetModel: ObservableObject {
     /// second time, and the new idempotency key gives the backend nothing to
     /// relate the two submissions by.
     func load() async {
-        // Warmed off the critical path so submit does not pay for the WKWebView
-        // round trip.
-        await DeviceInfo.warmUserAgent()
+        // Started, not awaited. The form must not be gated on WebKit; the value is
+        // collected at submit, by which time a healthy WebKit has long answered.
+        DeviceInfo.startReadingUserAgent()
 
         let response = try? await makeClient()
             .session(id: claims.sessionID, sessionToken: sessionToken)
@@ -424,7 +424,7 @@ final class PaymentSheetModel: ObservableObject {
         let request = SubmitCardRequest(
             session: sessionToken,
             card: card,
-            browserInfo: DeviceInfo.browserInfo(),
+            browserInfo: await DeviceInfo.browserInfo(),
             // Only visible, non-blank values go on the wire; a hidden field's
             // stale value must not be submitted.
             fieldGroups: FieldGroupLogic.submissionValues(
@@ -442,7 +442,7 @@ final class PaymentSheetModel: ObservableObject {
         let request = SubmitCardRequest(
             session: sessionToken,
             walletToken: walletToken,
-            browserInfo: DeviceInfo.browserInfo(),
+            browserInfo: await DeviceInfo.browserInfo(),
             fieldGroups: FieldGroupLogic.submissionValues(
                 groups: fieldGroups, values: fieldValues
             ).nilIfEmpty
@@ -463,6 +463,36 @@ private struct ThreeDSPresenterStub: ThreeDSPresenting {
     func dismiss() async {}
 }
 
+/// Resumes its continuation at most once, so the first of two racing tasks wins
+/// and the loser is dropped rather than awaited.
+@MainActor
+private final class FirstAnswer {
+    private var continuation: CheckedContinuation<String?, Never>?
+
+    init(_ continuation: CheckedContinuation<String?, Never>) {
+        self.continuation = continuation
+    }
+
+    func resume(_ value: String?) {
+        continuation?.resume(returning: value)
+        continuation = nil
+    }
+}
+
+/// Where the real user agent comes from.
+///
+/// A seam, so a unit test never depends on WebKit launching its helper processes.
+typealias UserAgentProvider = @MainActor @Sendable () async -> String?
+
+/// Reads the user agent out of a throwaway web view.
+@MainActor
+enum WebKitUserAgent {
+    static func read() async -> String? {
+        let webView = WKWebView(frame: .zero)
+        return try? await webView.evaluateJavaScript("navigator.userAgent") as? String
+    }
+}
+
 /// Collects the device characteristics 3DS v2 requires.
 ///
 /// Every field here except `ip_address` is validated non-blank by
@@ -479,17 +509,73 @@ enum DeviceInfo {
     /// not recognise, which raises the odds of a forced challenge.
     private static var cachedUserAgent: String?
 
-    static func warmUserAgent() async {
-        guard cachedUserAgent == nil else { return }
-        let webView = WKWebView(frame: .zero)
-        cachedUserAgent = try? await webView.evaluateJavaScript("navigator.userAgent") as? String
+    /// The read in flight, if one is. Held rather than awaited, so the caller that
+    /// starts it is not the caller that pays for it.
+    private static var reading: Task<String?, Never>?
+
+    /// Replacing the provider discards anything read from the previous one, which
+    /// is what a test switching to a stub wants.
+    static var userAgentProvider: UserAgentProvider = WebKitUserAgent.read {
+        didSet {
+            cachedUserAgent = nil
+            reading?.cancel()
+            reading = nil
+        }
     }
 
-    static func browserInfo() -> BrowserInfo {
+    /// Starts reading the real user agent, and returns immediately.
+    ///
+    /// Nothing awaits this. `evaluateJavaScript` waits on WebKit's helper
+    /// processes, which can take tens of seconds to launch on a loaded machine and
+    /// need not answer at all — so a sheet that awaited it before fetching its
+    /// session showed no form until WebKit was ready, and none at all when WebKit
+    /// never came up.
+    static func startReadingUserAgent() {
+        guard cachedUserAgent == nil, reading == nil else { return }
+        reading = Task { await userAgentProvider() }
+    }
+
+    /// The real user agent if it has arrived, or arrives within `timeout`; the
+    /// fallback otherwise.
+    ///
+    /// Awaited only where the value is actually consumed, which is the submit body.
+    /// A shopper spends many seconds typing a card, so a healthy WebKit has long
+    /// since answered and the bound is never reached. The bound is short because by
+    /// this point the shopper is waiting on a payment.
+    ///
+    /// The fallback is not free — `defaultUserAgent` is non-blank and the backend
+    /// accepts it, but the ACS does not recognise it, which raises the odds of a
+    /// forced challenge — so it is reached only when WebKit is genuinely dead.
+    static func userAgent(timeout: Duration = .seconds(2)) async -> String {
+        if let cachedUserAgent { return cachedUserAgent }
+        startReadingUserAgent()
+        guard let reading else { return defaultUserAgent }
+
+        // Not a task group: that waits for every child before it returns, and
+        // walking away from a read that may never finish is the whole point.
+        let resolved = await withCheckedContinuation { continuation in
+            let answer = FirstAnswer(continuation)
+            Task { @MainActor in answer.resume(await reading.value) }
+            Task { @MainActor in
+                try? await Task.sleep(for: timeout)
+                answer.resume(nil)
+            }
+        }
+
+        if let resolved { cachedUserAgent = resolved }
+        return resolved ?? defaultUserAgent
+    }
+
+    static func browserInfo(timeout: Duration = .seconds(2)) async -> BrowserInfo {
+        await browserInfo(userAgent: userAgent(timeout: timeout))
+    }
+
+    private static func browserInfo(userAgent: String) -> BrowserInfo {
+
         let bounds = screenBounds()
         let scale = UITraitCollection.current.displayScale
         return BrowserInfo(
-            userAgent: cachedUserAgent ?? defaultUserAgent,
+            userAgent: userAgent,
             // Pixels, not points: 3DS specifies browserScreenWidth in pixels and
             // Android sends displayMetrics.widthPixels.
             screenWidth: Int(bounds.width * scale),

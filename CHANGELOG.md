@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The payment sheet no longer waits on WebKit before showing its form. The user
+  agent the ACS fingerprints against is read out of a `WKWebView`, and that read
+  was awaited before the session was fetched, so on a device whose WebKit is slow
+  to start the sheet sat on its spinner — and where WebKit never came up, it stayed
+  there. The read now starts with the sheet and is collected at submit instead,
+  where it is bounded at two seconds and falls back to a static agent. A shopper
+  spends far longer than that entering a card, so a healthy device is unaffected.
+
+### Fixed
+
 - A saved American Express card can have its 4-digit CID entered. The saved-card
   path forced the CVV brand to `.unknown`, capping the field at three digits, so
   a correct CID never validated and the Pay button stayed disabled: the card was
