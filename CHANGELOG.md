@@ -37,6 +37,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   A decline that arrives on an already-expired session now resolves as
   `.failed(recovery: .restart)`, and a sheet whose session expires while the form
   waits resolves the same way.
+- The decline banner is drawn where the shopper can see it. It was the last item
+  in the scrolling column, so on a form carrying server-driven field groups it
+  landed off the bottom of the screen: after a retryable decline the shopper saw
+  an unchanged form and a Pay button that had gone disabled, with no reason given
+  for either. It now sits directly under the total.
 
 ## [0.2.1] - 2026-09-03
 
