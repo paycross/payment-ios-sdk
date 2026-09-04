@@ -7,13 +7,16 @@ Native iOS SDK for PayCross payments, mirroring [`payment-android-sdk`](https://
 ### CocoaPods
 
 ```ruby
-pod 'PayCross', '~> 0.1'
+pod 'PayCross', '~> 0.3.0'
 ```
 
 ### Swift Package Manager
 
 ```swift
-.package(url: "https://github.com/paycross/payment-ios-sdk.git", from: "0.1.0")
+.package(
+    url: "https://github.com/paycross/payment-ios-sdk.git",
+    .upToNextMinor(from: "0.3.0")
+)
 ```
 
 Add `PayCross` as a dependency of your app target. `PayCrossCore` comes along
