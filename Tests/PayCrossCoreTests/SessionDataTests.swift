@@ -84,7 +84,7 @@ final class SessionDataTests: XCTestCase {
     }
 
     /// An unknown brand must not break the sheet; it validates its CVV at three
-    /// digits, which is what Android does for every saved card anyway.
+    /// digits, the right guess for every scheme but Amex.
     func testUnknownBrandFallsBackRatherThanFailing() {
         XCTAssertEqual(WireSavedCard.brand(from: "Diners Club"), .unknown)
 
