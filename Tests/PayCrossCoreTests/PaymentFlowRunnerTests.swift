@@ -399,7 +399,7 @@ final class PaymentFlowRunnerTests: XCTestCase {
 
         let outcome = await runner.run(sampleRequest)
 
-        XCTAssertEqual(outcome, .finished(.failed(transactionID: "t1", recovery: .retry)))
+        XCTAssertEqual(outcome, .finished(.failed(transactionID: "t1", recovery: .verifyBeforeRetry)))
         // 480s deadline / 2s interval = 240 polls, asserted without waiting 8 minutes.
         let statusCount = await transport.statusCount
         XCTAssertEqual(statusCount, 240)
@@ -450,7 +450,7 @@ final class PaymentFlowRunnerTests: XCTestCase {
 
         // The run ends at the poll deadline, whose effects carry no dismissal —
         // so any dismissal recorded here came from the resolved step itself.
-        XCTAssertEqual(outcome, .finished(.failed(transactionID: "t1", recovery: .retry)))
+        XCTAssertEqual(outcome, .finished(.failed(transactionID: "t1", recovery: .verifyBeforeRetry)))
         for _ in 0..<100 { await Task.yield() }
         let dismissals = await presenter.dismissals
         XCTAssertEqual(dismissals, 1, "an answered 3DS step must be torn down when it resolves")
