@@ -243,8 +243,9 @@ final class PaymentSheetModel: ObservableObject {
     /// second time, and the new idempotency key gives the backend nothing to
     /// relate the two submissions by.
     func load() async {
-        // Warmed off the critical path so submit does not pay for the WKWebView
-        // round trip.
+        // Warmed before the session fetch so submit does not pay for the WKWebView
+        // round trip. Bounded, because this is the critical path: nothing of the
+        // form is on screen until the line below returns.
         await DeviceInfo.warmUserAgent()
 
         let response = try? await makeClient()
@@ -463,6 +464,22 @@ private struct ThreeDSPresenterStub: ThreeDSPresenting {
     func dismiss() async {}
 }
 
+/// Resumes its continuation at most once, so the first of two racing tasks wins
+/// and the loser is dropped rather than awaited.
+@MainActor
+private final class FirstAnswer {
+    private var continuation: CheckedContinuation<String?, Never>?
+
+    init(_ continuation: CheckedContinuation<String?, Never>) {
+        self.continuation = continuation
+    }
+
+    func resume(_ value: String?) {
+        continuation?.resume(returning: value)
+        continuation = nil
+    }
+}
+
 /// Collects the device characteristics 3DS v2 requires.
 ///
 /// Every field here except `ip_address` is validated non-blank by
@@ -479,10 +496,37 @@ enum DeviceInfo {
     /// not recognise, which raises the odds of a forced challenge.
     private static var cachedUserAgent: String?
 
-    static func warmUserAgent() async {
+    /// Reads the real user agent, and gives up after `timeout`.
+    ///
+    /// `evaluateJavaScript` waits on WebKit's helper processes, and those can take
+    /// tens of seconds to launch on a loaded machine — or never answer at all. This
+    /// is awaited by `PaymentSheetModel.load()` before it fetches the session, so an
+    /// unbounded wait here is a payment sheet that never shows its form.
+    ///
+    /// Falling back costs a real but small thing, which is why the bound is generous
+    /// rather than tight: `defaultUserAgent` is non-blank and the backend accepts it,
+    /// but the ACS does not recognise it, which raises the odds of a forced
+    /// challenge. A device whose WebKit is healthy answers in milliseconds and never
+    /// reaches the bound.
+    static func warmUserAgent(timeout: Duration = .seconds(5)) async {
         guard cachedUserAgent == nil else { return }
         let webView = WKWebView(frame: .zero)
-        cachedUserAgent = try? await webView.evaluateJavaScript("navigator.userAgent") as? String
+
+        // A task group would wait for both children before returning, which is the
+        // one thing this must not do: the whole point is to walk away from a call
+        // that may never finish.
+        cachedUserAgent = await withCheckedContinuation { continuation in
+            let answer = FirstAnswer(continuation)
+            Task { @MainActor in
+                answer.resume(
+                    try? await webView.evaluateJavaScript("navigator.userAgent") as? String
+                )
+            }
+            Task { @MainActor in
+                try? await Task.sleep(for: timeout)
+                answer.resume(nil)
+            }
+        }
     }
 
     static func browserInfo() -> BrowserInfo {

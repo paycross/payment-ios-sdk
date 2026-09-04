@@ -340,8 +340,14 @@ final class PassKitAdapterTests: XCTestCase {
         return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
     }
 
+    /// Polls until `condition` holds, or the ceiling passes.
+    ///
+    /// Generous for the same reason as its twin in `ApplePayPresentationTests`: it
+    /// returns the instant the condition is true, so the ceiling only ever bounds a
+    /// failure. Every use here waits for something to happen, so none of them pay
+    /// for it.
     private func waitUntil(
-        timeout: TimeInterval = 3,
+        timeout: TimeInterval = 30,
         _ condition: () async -> Bool
     ) async -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
