@@ -80,6 +80,9 @@ struct CardFormView: View {
                 }
                 .padding(20)
             }
+            // Dragging the form is the gesture a shopper reaches for first when
+            // something covers what they want to read.
+            .scrollDismissesKeyboard(.interactively)
 
             // Pinned rather than trailing the fields. A Pay button that floats
             // mid-screen reads as unfinished, and on a taller device it drifts
@@ -92,6 +95,10 @@ struct CardFormView: View {
             .background(.ultraThinMaterial)
         }
         .background(Color(.systemGroupedBackground))
+        // A tap off the fields is the other habit. Buttons and the toggle still
+        // win their own taps; this only claims the gaps between them.
+        .contentShape(Rectangle())
+        .onTapGesture { KeypadDismissal.resignFirstResponder() }
     }
 
     private var newCardFields: some View {
@@ -110,17 +117,21 @@ struct CardFormView: View {
                 // keyboard process. UIKeyboardType has no such variation, so
                 // iOS has NO equivalent protection on this field today. Do not
                 // record this as covered in a security review.
-                TextField("1234 5678 9012 3456", text: panBinding)
-                    .keyboardType(.numberPad)
-                    .textContentType(.creditCardNumber)
-                    .accessibilityIdentifier("cardNumber")
+                NumericField(
+                    placeholder: "1234 5678 9012 3456",
+                    text: panBinding,
+                    contentType: .creditCardNumber,
+                    identifier: "cardNumber"
+                )
             }
 
             HStack(spacing: 12) {
                 LabeledField(title: "MM/YY") {
-                    TextField("12/30", text: expiryBinding)
-                        .keyboardType(.numberPad)
-                        .accessibilityIdentifier("expiry")
+                    NumericField(
+                        placeholder: "12/30",
+                        text: expiryBinding,
+                        identifier: "expiry"
+                    )
                 }
                 cvvField
             }
@@ -129,9 +140,12 @@ struct CardFormView: View {
 
     private var cvvField: some View {
         LabeledField(title: "CVV") {
-            SecureField(String(repeating: "•", count: state.cvvBrand.cvvLength), text: cvvBinding)
-                .keyboardType(.numberPad)
-                .accessibilityIdentifier("cvv")
+            NumericField(
+                placeholder: String(repeating: "•", count: state.cvvBrand.cvvLength),
+                text: cvvBinding,
+                isSecure: true,
+                identifier: "cvv"
+            )
         }
     }
 

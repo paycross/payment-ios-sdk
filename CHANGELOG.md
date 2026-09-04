@@ -16,13 +16,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   there. The read now starts with the sheet and is collected at submit instead,
   where it is bounded at two seconds and falls back to a static agent. A shopper
   spends far longer than that entering a card, so a healthy device is unaffected.
-
-### Fixed
-
 - A saved American Express card can have its 4-digit CID entered. The saved-card
   path forced the CVV brand to `.unknown`, capping the field at three digits, so
   a correct CID never validated and the Pay button stayed disabled: the card was
   unusable once saved. The stored brand now governs the field's length.
+- The numeric keypad the card fields raise can be dismissed. `numberPad` has no
+  Return key and iOS attaches no accessory to it, so the pad covered the lower
+  third of the sheet with nothing on screen that would put it away. The card
+  number, expiry and CVV fields now carry a Done button above the keypad, a drag
+  down the form dismisses it, and so does a tap off the fields.
 
 ## [0.2.1] - 2026-09-03
 
