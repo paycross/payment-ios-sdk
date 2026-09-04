@@ -238,6 +238,13 @@ final class WebKitThreeDSPresenter: ThreeDSPresenting {
                 return continuation.resume(returning: .failed)
             }
 
+            // The CVV field is still first responder when the flow leaves the
+            // card form, so without this its keypad follows the shopper onto the
+            // issuer's page and covers the lower third of it — which is where the
+            // challenge's own buttons sit. Scoped to the sheet's own view, so a
+            // host app editing something behind the sheet is left alone.
+            host.view.endEditing(true)
+
             let controller = ThreeDSWebViewController(
                 action: step.action,
                 onCancel: step.isChallenge ? onCancelRequested : nil

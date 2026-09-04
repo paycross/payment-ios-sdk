@@ -181,6 +181,59 @@ final class ThreeDSPresentationTests: XCTestCase {
         _ = await task.value
     }
 
+    // MARK: - The keypad the card form left behind
+
+    /// The CVV field is still first responder when the flow leaves the card form,
+    /// so its keypad follows the step onto the issuer's page and covers the lower
+    /// third of it — where the challenge's own buttons sit. A rotation then leaves
+    /// it stuck there with nothing that will close it.
+    ///
+    /// Asserted at the presenter rather than on the card form: the form is gone
+    /// from view by this point, and the sheet has no other moment that knows a
+    /// step is about to cover it.
+    func testPresentingAChallengePutsTheFormsKeypadAway() async throws {
+        try await assertKeypadIsPutAway(isChallenge: true)
+    }
+
+    /// The fingerprint runs under the processing overlay, which the keypad would
+    /// cover just the same.
+    func testPresentingAFingerprintPutsTheFormsKeypadAway() async throws {
+        try await assertKeypadIsPutAway(isChallenge: false)
+    }
+
+    private func assertKeypadIsPutAway(isChallenge: Bool) async throws {
+        let host = makeHost()
+        // `makeHost` only unhides its window; first responder needs a key one.
+        host.view.window?.makeKeyAndVisible()
+
+        // Stands in for the card form's CVV field, editing when the step arrives.
+        let field = UITextField(frame: CGRect(x: 0, y: 0, width: 100, height: 40))
+        field.accessibilityIdentifier = "cvv"
+        host.view.addSubview(field)
+        try XCTSkipUnless(field.becomeFirstResponder(), "the stand-in field could not take focus")
+
+        let presenter = WebKitThreeDSPresenter(host: host) {}
+        let task = Task { await presenter.present(step(isChallenge: isChallenge)) }
+        // The shared `present` helper waits for the host to gain its first
+        // subview, and the stand-in field is already one; wait for the step's own
+        // web view instead.
+        for _ in 0..<200 where firstSubview(WKWebView.self, in: host.view) == nil {
+            await Task.yield()
+        }
+        try XCTSkipIf(
+            firstSubview(WKWebView.self, in: host.view) == nil,
+            "the step was never installed"
+        )
+
+        XCTAssertFalse(
+            field.isFirstResponder,
+            "the shopper's keypad must not follow them onto the bank's page"
+        )
+
+        await presenter.dismiss()
+        _ = await task.value
+    }
+
     // MARK: - Helpers
 
     private func firstSubview<T: UIView>(_ type: T.Type, in root: UIView) -> T? {
