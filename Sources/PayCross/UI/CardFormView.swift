@@ -29,6 +29,16 @@ struct CardFormView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     AmountHeader(amount: amount)
 
+                    // Directly under the total, not at the end of the column.
+                    // Last meant below the fields, the field groups and the save
+                    // toggle, which on a form with server-driven fields put it off
+                    // the bottom of the screen: the shopper saw an unchanged form
+                    // and a Pay button that had gone disabled, with no reason for
+                    // either. Here it is on screen whatever the session asks for.
+                    if let error = state.inlineError {
+                        ErrorBanner(message: error)
+                    }
+
                     if showsApplePayButton {
                         ApplePayButtonView(action: onApplePay, isEnabled: !isLoading)
                             .frame(height: 48)
@@ -72,10 +82,6 @@ struct CardFormView: View {
                     if allowsSaving && state.source.isNewCard {
                         Toggle("Save this card", isOn: saveCardBinding)
                             .font(.subheadline)
-                    }
-
-                    if let error = state.inlineError {
-                        ErrorBanner(message: error)
                     }
                 }
                 .padding(20)

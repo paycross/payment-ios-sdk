@@ -30,6 +30,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   keypad stayed up over the lower third of the challenge, where the issuer's own
   buttons sit. After a device rotation nothing would close it. Editing now ends
   as a 3-D Secure step is presented.
+- A form re-armed after a retryable decline is bounded by the session's own
+  lifetime. The 480 s poll deadline ends with the poll it belongs to, so nothing
+  bounded the re-armed sheet: it could sit on a live Pay button long after the
+  session had expired server-side, and the shopper's next tap could only fail.
+  A decline that arrives on an already-expired session now resolves as
+  `.failed(recovery: .restart)`, and a sheet whose session expires while the form
+  waits resolves the same way.
+- The decline banner is drawn where the shopper can see it. It was the last item
+  in the scrolling column, so on a form carrying server-driven field groups it
+  landed off the bottom of the screen: after a retryable decline the shopper saw
+  an unchanged form and a Pay button that had gone disabled, with no reason given
+  for either. It now sits directly under the total.
 
 ## [0.2.1] - 2026-09-03
 
