@@ -59,10 +59,11 @@ package struct CardFormState: Sendable, Equatable {
         }
     }
 
-    /// A saved card's CVV is validated at 3 digits, matching Android's use of
-    /// `CardType.UNKNOWN` on that path.
+    /// The brand that governs CVV length. A saved card carries its own brand, so an
+    /// Amex keeps its 4-digit CID; forcing `.unknown` here capped it at 3 and left
+    /// the card unusable once saved.
     package var cvvBrand: CardBrand {
-        source.isNewCard ? brand : .unknown
+        brand
     }
 
     package var expiryMonth: String {

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A saved American Express card can have its 4-digit CID entered. The saved-card
+  path forced the CVV brand to `.unknown`, capping the field at three digits, so
+  a correct CID never validated and the Pay button stayed disabled: the card was
+  unusable once saved. The stored brand now governs the field's length.
+
 ## [0.2.1] - 2026-09-03
 
 ### Changed

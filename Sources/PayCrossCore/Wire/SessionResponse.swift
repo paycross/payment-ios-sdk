@@ -224,7 +224,8 @@ package struct WireSavedCard: Codable, Sendable, Hashable {
     /// Maps to the type the form uses.
     ///
     /// An unrecognised or absent brand becomes `.unknown`, which validates its
-    /// CVV at three digits — the same fallback Android takes for saved cards.
+    /// CVV at three digits. That is a guess, and the only safe one: every scheme
+    /// but Amex is three. The backend does send `card_brand`.
     package var presentable: SavedCard {
         SavedCard(
             id: uuid,

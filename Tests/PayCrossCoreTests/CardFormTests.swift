@@ -160,9 +160,10 @@ final class CardFormTests: XCTestCase {
         XCTAssertNil(card.save)
     }
 
-    /// Android validates a saved card's CVV against CardType.UNKNOWN, i.e. 3 digits,
-    /// regardless of the saved card's brand.
-    func testSavedCardCVVIsThreeDigits() {
+    /// A saved Amex is the only card whose CID is four digits, and the saved card
+    /// carries its own brand, so nothing has to be re-detected from a PAN we no
+    /// longer hold.
+    func testSavedAmexCardTakesAFourDigitCVV() {
         var state = CardFormState()
         CardFormReducer.reduce(
             state: &state,
@@ -170,8 +171,24 @@ final class CardFormTests: XCTestCase {
                 SavedCard(id: "u", brand: .amex, last4: "0005", expiryLabel: "12/30")
             ))
         )
+        XCTAssertEqual(state.cvvBrand, .amex)
+
         CardFormReducer.reduce(state: &state, event: .cvvChanged("1234"))
-        XCTAssertEqual(state.cvvDigits, "123")
+        XCTAssertEqual(state.cvvDigits, "1234", "an Amex CID is 4 digits")
+        XCTAssertTrue(state.isCVVValid())
+
+        var short = state
+        CardFormReducer.reduce(state: &short, event: .cvvChanged("123"))
+        XCTAssertFalse(short.isCVVValid(), "3 digits is not a complete CID")
+    }
+
+    func testSavedVisaCardStillTakesThreeDigits() {
+        var state = CardFormState()
+        CardFormReducer.reduce(state: &state, event: .sourceSelected(.saved(savedCard)))
+        XCTAssertEqual(state.cvvBrand, .visa)
+
+        CardFormReducer.reduce(state: &state, event: .cvvChanged("1234"))
+        XCTAssertEqual(state.cvvDigits, "123", "a Visa CVV is 3 digits")
         XCTAssertTrue(state.isCVVValid())
     }
 
