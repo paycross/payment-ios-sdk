@@ -25,6 +25,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   third of the sheet with nothing on screen that would put it away. The card
   number, expiry and CVV fields now carry a Done button above the keypad, a drag
   down the form dismisses it, and so does a tap off the fields.
+- The card form's keypad no longer follows the shopper onto a 3-D Secure page.
+  The CVV field was still first responder when the flow left the form, so its
+  keypad stayed up over the lower third of the challenge, where the issuer's own
+  buttons sit. After a device rotation nothing would close it. Editing now ends
+  as a 3-D Secure step is presented.
 
 ## [0.2.1] - 2026-09-03
 
