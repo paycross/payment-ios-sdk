@@ -463,6 +463,26 @@ final class PaymentFlowRunnerTests: XCTestCase {
     /// second matters because a cancelled sleep returns *immediately* — swallowing
     /// it would leave the loop hammering the status endpoint at full speed for the
     /// remaining eight minutes, behind a sheet the shopper has already dismissed.
+    /// Cancelled before the submit produced anything: there is no transaction to
+    /// name, and inventing one would be worse than nil.
+    func testCancellingBeforeATransactionExistsCarriesNoID() async {
+        let transport = ScriptedTransport(
+            submit: [.init(json: #"{"success":false,"retry_after":30}"#)],
+            status: []
+        )
+        let runner = makeRunner(
+            transport: transport, scheduler: CancellableScheduler(), presenter: RecordingPresenter()
+        )
+
+        let request = sampleRequest
+        let task = Task { await runner.run(request) }
+        while await transport.submitCount < 1 { await Task.yield() }
+        task.cancel()
+
+        let outcome = await task.value
+        XCTAssertEqual(outcome, .finished(.cancelled(transactionID: nil)))
+    }
+
     func testCancellingStopsPollingAndTearsDown3DS() async {
         let transport = ScriptedTransport(
             submit: [.init(json: #"{"success":true,"transaction_id":"t1"}"#)],
@@ -484,7 +504,10 @@ final class PaymentFlowRunnerTests: XCTestCase {
         task.cancel()
 
         let outcome = await task.value
-        XCTAssertEqual(outcome, .finished(.cancelled))
+        XCTAssertEqual(
+            outcome, .finished(.cancelled(transactionID: "t1")),
+            "a cancelled payment leaves a transaction behind; the host has to be able to name it"
+        )
 
         let atCancellation = await transport.statusCount
         for _ in 0..<100 { await Task.yield() }

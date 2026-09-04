@@ -59,16 +59,25 @@ package actor PaymentFlowRunner {
     /// shopper -- it can name internal fields.
     package private(set) var lastServerDiagnostic: String?
 
+    /// Told the transaction id the moment the flow has one.
+    ///
+    /// The sheet resolves its own cancellation without waiting for the runner —
+    /// the shopper tapped Cancel and the sheet has to go — so it cannot read the
+    /// id off the runner at that point. This hands it over as soon as it exists.
+    private let onTransactionID: @Sendable (String) async -> Void
+
     package init(
         client: PayCrossAPIClient,
         presenter: any ThreeDSPresenting,
         scheduler: any FlowScheduler = ContinuousScheduler(),
-        claims: SessionClaims? = nil
+        claims: SessionClaims? = nil,
+        onTransactionID: @escaping @Sendable (String) async -> Void = { _ in }
     ) {
         self.client = client
         self.presenter = presenter
         self.scheduler = scheduler
         self.state = PaymentFlowState(claims: claims)
+        self.onTransactionID = onTransactionID
     }
 
     package func currentState() -> PaymentFlowState { state }
@@ -80,6 +89,7 @@ package actor PaymentFlowRunner {
     /// create a second transaction against the same session.
     package func resume(transactionID: String) async -> FlowOutcome {
         state.transactionID = transactionID
+        await onTransactionID(transactionID)
         return await poll(transactionID: transactionID)
     }
 
@@ -92,6 +102,8 @@ package actor PaymentFlowRunner {
             return await stopped()
         case .success(let transactionID):
             state.transactionID = transactionID
+            // Before polling starts, so a cancellation mid-poll always finds it.
+            await onTransactionID(transactionID)
             return await poll(transactionID: transactionID)
         }
     }
@@ -206,7 +218,7 @@ package actor PaymentFlowRunner {
         presentationTask?.cancel()
         presentationTask = nil
         await presenter.dismiss()
-        return .finished(.cancelled)
+        return .finished(.cancelled(transactionID: state.transactionID))
     }
 
     /// Called when a presented 3DS step resolves.

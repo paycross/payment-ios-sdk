@@ -7,12 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The transaction id on a cancellation. A payment cancelled mid-authorization may
+  still complete server-side, and after a decline-then-cancel or a cancel during a
+  3-D Secure challenge the merchant was left with a transaction in `failed` or
+  `threeds_challenge_requested` that the host app had no way to correlate. It is
+  nil when the sheet is dismissed before a transaction exists.
+
 ### Changed — source-incompatible, and the next release is a MINOR bump
 
 - `Recovery` gains a `verifyBeforeRetry` case, so an exhaustive `switch` over
   `Recovery` in merchant code will no longer compile until it handles the new
   value. Handle it as terminal: `isRetryable` is false for it, so code branching
   on `isRetryable` rather than on the case needs no change.
+- `PaymentResult.cancelled` carries the last transaction this session created, as
+  `cancelled(transactionID: String?)`. A `case .cancelled:` pattern keeps
+  compiling; constructing `.cancelled` and comparing against it do not, and become
+  `.cancelled(transactionID: nil)`.
 
 ### Fixed
 
