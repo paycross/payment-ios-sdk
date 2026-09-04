@@ -13,7 +13,7 @@ import PayCrossCore
 /// case .succeeded(let id, _, let amount): …
 /// case .failed(_, let recovery) where recovery.isRetryable: …
 /// case .failed: …
-/// case .cancelled: …
+/// case .cancelled(let transactionID): …
 /// }
 /// ```
 ///
@@ -173,6 +173,10 @@ final class PaymentSheetModel: ObservableObject {
     /// Ends the sheet once the session can no longer take a payment. Only ever
     /// armed while the form is re-armed after a retryable decline.
     private var sessionDeadlineTask: Task<Void, Never>?
+    /// The last transaction this sheet created, so a cancellation can name it.
+    /// The server keeps its own record and a payment cancelled mid-authorization
+    /// may still complete; without this the merchant has nothing to reconcile it by.
+    private(set) var lastTransactionID: String?
     /// Set once the host controller exists, since the presenter needs somewhere
     /// to attach its web view.
     var threeDSPresenter: (any ThreeDSPresenting)?
@@ -299,7 +303,7 @@ final class PaymentSheetModel: ObservableObject {
     func cancel() {
         paymentTask?.cancel()
         paymentTask = nil
-        finish(.cancelled)
+        finish(.cancelled(transactionID: lastTransactionID))
     }
 
 
@@ -464,7 +468,10 @@ final class PaymentSheetModel: ObservableObject {
             // could not be shown. Reporting .failed rather than .completed keeps
             // an unanswered challenge from looking like an answered one.
             presenter: threeDSPresenter ?? ThreeDSPresenterStub(),
-            claims: claims
+            claims: claims,
+            onTransactionID: { [weak self] id in
+                await MainActor.run { self?.lastTransactionID = id }
+            }
         )
     }
 

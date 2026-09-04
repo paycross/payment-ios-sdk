@@ -30,5 +30,10 @@ public enum PaymentResult: Sendable, Hashable {
     /// The payment failed. `transactionID` may be nil for early failures.
     case failed(transactionID: String?, recovery: Recovery)
     /// The user dismissed the payment sheet.
-    case cancelled
+    ///
+    /// `transactionID` is the last transaction this session created, or nil when
+    /// the sheet was dismissed before one existed. The server keeps its own record
+    /// and a payment cancelled mid-authorization may still complete, so this is
+    /// what lets the merchant reconcile the one the shopper walked away from.
+    case cancelled(transactionID: String?)
 }
