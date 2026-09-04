@@ -170,6 +170,9 @@ final class PaymentSheetModel: ObservableObject {
     /// finishing the Activity tears down the viewModelScope - but a bare Task
     /// here would keep polling for the full deadline after the sheet is gone.
     private var paymentTask: Task<Void, Never>?
+    /// Ends the sheet once the session can no longer take a payment. Only ever
+    /// armed while the form is re-armed after a retryable decline.
+    private var sessionDeadlineTask: Task<Void, Never>?
     /// Set once the host controller exists, since the presenter needs somewhere
     /// to attach its web view.
     var threeDSPresenter: (any ThreeDSPresenting)?
@@ -264,9 +267,8 @@ final class PaymentSheetModel: ObservableObject {
             case .finished(let result):
                 finish(result)
             case .reArmForm(let message):
-                isLoading = false
                 applySessionData(response?.data)
-                CardFormReducer.reduce(state: &form, event: .declined(message: message))
+                reArm(with: message)
             }
 
         case .showForm(let data):
@@ -300,6 +302,7 @@ final class PaymentSheetModel: ObservableObject {
         finish(.cancelled)
     }
 
+
     func pay() {
         guard let card = form.cardData(), !isLoading else { return }
 
@@ -309,6 +312,9 @@ final class PaymentSheetModel: ObservableObject {
         guard fieldErrors.isEmpty else { return }
 
         isLoading = true
+        // A payment is in flight again, so the re-armed form's deadline no longer
+        // applies; the poll deadline takes over.
+        sessionDeadlineTask?.cancel()
         // Clears the CVV from form state the moment it is handed off (Req 3.3.1).
         CardFormReducer.reduce(state: &form, event: .paySubmitted)
 
@@ -320,8 +326,7 @@ final class PaymentSheetModel: ObservableObject {
             case .finished(let result):
                 self.finish(result)
             case .reArmForm(let message):
-                self.isLoading = false
-                CardFormReducer.reduce(state: &self.form, event: .declined(message: message))
+                self.reArm(with: message)
             }
         }
     }
@@ -358,6 +363,7 @@ final class PaymentSheetModel: ObservableObject {
         )
 
         isLoading = true
+        sessionDeadlineTask?.cancel()
 
         paymentTask = Task { [weak self] in
             guard let self else { return }
@@ -403,8 +409,37 @@ final class PaymentSheetModel: ObservableObject {
         case .finished(let result):
             finish(result)
         case .reArmForm(let message):
-            isLoading = false
-            CardFormReducer.reduce(state: &form, event: .declined(message: message))
+            reArm(with: message)
+        }
+    }
+
+    /// Re-arms the form after a decline the shopper may retry.
+    ///
+    /// One method for all three routes into it — a resumed transaction, a card
+    /// payment, a wallet payment — so the session deadline below cannot be
+    /// attached to two of them and left off the third.
+    func reArm(with message: String) {
+        isLoading = false
+        CardFormReducer.reduce(state: &form, event: .declined(message: message))
+        startSessionDeadline()
+    }
+
+    /// Ends the payment once the session can no longer take one.
+    ///
+    /// A re-armed form has nothing else bounding it: the 480s poll deadline went
+    /// with the poll it belonged to. Without this the sheet sits on a live Pay
+    /// button long after the session has expired server-side, and the shopper's
+    /// next tap can only fail.
+    private func startSessionDeadline() {
+        sessionDeadlineTask?.cancel()
+        // No expiry claim is not the same as an expired session; leave it unbounded
+        // rather than guessing a lifetime the server never stated.
+        guard let remaining = SessionLifetime.remaining(claims: claims) else { return }
+
+        sessionDeadlineTask = Task { [weak self] in
+            try? await Task.sleep(for: remaining)
+            guard !Task.isCancelled, let self else { return }
+            self.finish(SessionLifetime.expired)
         }
     }
 
@@ -451,6 +486,8 @@ final class PaymentSheetModel: ObservableObject {
     }
 
     private func finish(_ result: PaymentResult) {
+        sessionDeadlineTask?.cancel()
+        sessionDeadlineTask = nil
         continuation?.resume(returning: result)
         continuation = nil
     }

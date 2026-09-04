@@ -3,16 +3,22 @@ import XCTest
 
 final class PaymentFlowReducerTests: XCTestCase {
 
-    private func claims(amount: Int64 = 1000, currency: String = "EUR") -> SessionClaims {
+    private func claims(
+        amount: Int64 = 1000,
+        currency: String = "EUR",
+        expiresAt: Int64? = nil
+    ) -> SessionClaims {
         SessionClaims(
             sessionID: "sess_1",
             merchantID: "merch_1",
             customerID: "cust_1",
             brandingID: nil,
             amount: Amount(minorUnits: amount, currencyCode: currency),
-            expiresAt: nil
+            expiresAt: expiresAt
         )
     }
+
+    private let noon = Date(timeIntervalSince1970: 1_700_000_000)
 
     // MARK: - Success
 
@@ -99,6 +105,62 @@ final class PaymentFlowReducerTests: XCTestCase {
         XCTAssertNil(state.result, "a retryable decline re-arms the form, it does not end the sheet")
         XCTAssertNil(state.transactionID)
         XCTAssertTrue(state.handledThreeDSKeys.isEmpty, "re-arming clears handled 3DS actions")
+        XCTAssertEqual(state.inlineError, "Payment failed. Please try again.")
+    }
+
+    /// A re-armed form is only worth showing while the session can still take a
+    /// payment. Nothing else bounds it — the 480 s poll deadline goes with the
+    /// poll — so the sheet would otherwise sit on a live Pay button long after the
+    /// session expired, and the shopper's next tap could only fail.
+    func testRetryableDeclineOnAnExpiredSessionIsTerminal() {
+        var state = PaymentFlowState(
+            claims: claims(expiresAt: Int64(noon.timeIntervalSince1970) - 1)
+        )
+        state.transactionID = "txn_1"
+
+        let effects = PaymentFlowReducer.reduce(
+            state: &state,
+            event: .statusReceived(
+                StatusResponse(transactionID: "txn_1", status: "failed", recovery: "retry")
+            ),
+            now: noon
+        )
+
+        XCTAssertEqual(state.result, .failed(transactionID: nil, recovery: .restart))
+        XCTAssertTrue(effects.contains(.finish(.failed(transactionID: nil, recovery: .restart))))
+        XCTAssertNil(state.inlineError, "a dead session must not offer the form again")
+    }
+
+    func testRetryableDeclineStillReArmsWhileTheSessionIsOpen() {
+        var state = PaymentFlowState(
+            claims: claims(expiresAt: Int64(noon.timeIntervalSince1970) + 60)
+        )
+
+        _ = PaymentFlowReducer.reduce(
+            state: &state,
+            event: .statusReceived(
+                StatusResponse(transactionID: "txn_1", status: "failed", recovery: "retry")
+            ),
+            now: noon
+        )
+
+        XCTAssertNil(state.result)
+        XCTAssertEqual(state.inlineError, "Payment failed. Please try again.")
+    }
+
+    /// A session with no `exp` claim at all is not treated as expired.
+    func testRetryableDeclineReArmsWhenTheSessionHasNoExpiry() {
+        var state = PaymentFlowState(claims: claims(expiresAt: nil))
+
+        _ = PaymentFlowReducer.reduce(
+            state: &state,
+            event: .statusReceived(
+                StatusResponse(transactionID: "txn_1", status: "failed", recovery: "retry")
+            ),
+            now: noon
+        )
+
+        XCTAssertNil(state.result)
         XCTAssertEqual(state.inlineError, "Payment failed. Please try again.")
     }
 

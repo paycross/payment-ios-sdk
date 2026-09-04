@@ -65,9 +65,12 @@ package enum PaymentFlowEffect: Sendable, Equatable {
 /// microseconds on Linux.
 package enum PaymentFlowReducer {
 
+    /// - Parameter now: the reference date, for the session-expiry check. Taken as
+    ///   a parameter rather than read from the clock so the boundary is testable.
     package static func reduce(
         state: inout PaymentFlowState,
-        event: PaymentFlowEvent
+        event: PaymentFlowEvent,
+        now: Date = Date()
     ) -> [PaymentFlowEffect] {
         switch event {
         case .threeDSCompleted:
@@ -86,13 +89,14 @@ package enum PaymentFlowReducer {
             return [.stopPolling, .finish(result)]
 
         case .statusReceived(let status):
-            return apply(status: status, to: &state)
+            return apply(status: status, to: &state, now: now)
         }
     }
 
     private static func apply(
         status: StatusResponse,
-        to state: inout PaymentFlowState
+        to state: inout PaymentFlowState,
+        now: Date
     ) -> [PaymentFlowEffect] {
         switch TransactionStatus(rawValue: status.status) {
         case .success, .authorized:
@@ -118,6 +122,16 @@ package enum PaymentFlowReducer {
             state.pendingThreeDS = nil
 
             if recovery.isRetryable {
+                // Only while the session can still take a payment. Nothing else
+                // bounds a re-armed form — the 480s poll deadline goes with the
+                // poll — so the sheet would sit on a live Pay button long after
+                // the session expired, and the next tap could only fail.
+                if state.claims?.isExpired(now: now) == true {
+                    let result = SessionLifetime.expired
+                    state.result = result
+                    return [.stopPolling, .dismiss3DS, .finish(result)]
+                }
+
                 // Re-arm the form like the checkout page does. No result is
                 // produced, but the poll loop still stops.
                 state.transactionID = nil
