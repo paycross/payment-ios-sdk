@@ -32,6 +32,22 @@ final class ApplePayPresentationTests: XCTestCase {
     /// go when the suite does.
     private var windows: [UIWindow] = []
 
+    /// Nothing in this file is about the user agent, and WebKit's helper processes
+    /// can take tens of seconds to launch on a loaded CI machine — or never answer.
+    /// A stub keeps these tests measuring what they are about.
+    private var originalUserAgentProvider: UserAgentProvider!
+
+    override func setUp() {
+        super.setUp()
+        originalUserAgentProvider = DeviceInfo.userAgentProvider
+        DeviceInfo.userAgentProvider = { "Mozilla/5.0 (iPhone) StubAgent/1.0" }
+    }
+
+    override func tearDown() async throws {
+        DeviceInfo.userAgentProvider = originalUserAgentProvider
+        try await super.tearDown()
+    }
+
     // MARK: - The button in the hierarchy
 
     /// Hosts the card form in a real window and lets SwiftUI commit its layout,
@@ -318,7 +334,8 @@ final class ApplePayPresentationTests: XCTestCase {
 
         model.payWithApplePay()
         // Long enough that a sheet opened before validation would have been
-        // recorded by now.
+        // recorded by now. Short on purpose: this waits to prove the sheet never
+        // opens, so it always runs to the deadline.
         _ = await waitUntil(timeout: 0.5) { await authorizer.callCount > 0 }
 
         let calls = await authorizer.callCount
@@ -364,6 +381,9 @@ final class ApplePayPresentationTests: XCTestCase {
         window.layoutIfNeeded()
         // Watched for a second rather than sampled once, so this cannot pass by
         // looking before SwiftUI has committed the update the session triggered.
+        // Short on purpose: it proves the button never appears, so it always runs
+        // to the deadline. The session it depends on was already awaited above,
+        // with the generous ceiling.
         let appeared = await waitUntil(timeout: 1) {
             self.firstSubview(PKPaymentButton.self, in: window) != nil
         }
@@ -566,8 +586,18 @@ final class ApplePayPresentationTests: XCTestCase {
         return await authorizer.received.first
     }
 
+    /// Polls until `condition` holds, or the ceiling passes.
+    ///
+    /// The ceiling is generous because it costs nothing: this returns the instant
+    /// the condition is true, so a fast machine never waits and a slow one is not
+    /// failed for being slow. A model that is genuinely broken still fails, on the
+    /// caller's own assertion and its message, rather than on the clock.
+    ///
+    /// Two calls in this file pass a deliberately *short* ceiling instead, and must
+    /// keep it. They wait to prove something never happens, so they always run to
+    /// the deadline and a generous one would only make the suite slow.
     private func waitUntil(
-        timeout: TimeInterval = 2,
+        timeout: TimeInterval = 30,
         _ condition: () async -> Bool
     ) async -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
