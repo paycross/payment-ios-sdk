@@ -42,6 +42,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   landed off the bottom of the screen: after a retryable decline the shopper saw
   an unchanged form and a Pay button that had gone disabled, with no reason given
   for either. It now sits directly under the total.
+- A declined Apple Pay payment no longer wipes a CVV the shopper had already
+  typed into the card form. All three wallet decline routes used the card path's
+  decline event, which clears the CVV because PCI DSS 3.3.1 forbids retaining it
+  after authorization. A wallet payment carries a payment token, so the card on
+  the form was never authorized and there is nothing to discard. Deferred from
+  0.2.0.
 
 ## [0.2.1] - 2026-09-03
 

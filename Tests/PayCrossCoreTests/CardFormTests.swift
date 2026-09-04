@@ -221,6 +221,29 @@ final class CardFormTests: XCTestCase {
         XCTAssertEqual(state.inlineError, "Card declined")
     }
 
+    /// A wallet decline is not an authorization of the card on the form. The
+    /// shopper typed a CVV, tried Apple Pay instead, and it failed; nothing they
+    /// typed left the device, so there is nothing PCI requires be discarded and no
+    /// reason to make them type it again.
+    func testAWalletDeclineKeepsTheCVV() {
+        var state = CardFormState()
+        fill(&state)
+        CardFormReducer.reduce(state: &state, event: .walletDeclined(message: "Apple Pay failed"))
+
+        XCTAssertEqual(state.cvvDigits, "123", "the wallet never saw this card")
+        XCTAssertEqual(state.inlineError, "Apple Pay failed")
+        XCTAssertEqual(state.panDigits, "4111111111111111")
+    }
+
+    /// The card path is unchanged: there the CVV really was handed off.
+    func testACardDeclineStillClearsTheCVV() {
+        var state = CardFormState()
+        fill(&state)
+        CardFormReducer.reduce(state: &state, event: .declined(message: "Card declined"))
+
+        XCTAssertEqual(state.cvvDigits, "")
+    }
+
     func testEditingClearsTheError() {
         var state = CardFormState()
         CardFormReducer.reduce(state: &state, event: .declined(message: "Card declined"))

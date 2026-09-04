@@ -137,7 +137,15 @@ package enum CardFormEvent: Sendable, Equatable {
     case saveCardToggled(Bool)
     case sourceSelected(CardEntrySource)
     case paySubmitted
+    /// A card payment was declined. Clears the CVV.
     case declined(message: String)
+    /// A wallet payment was declined. Keeps the CVV.
+    ///
+    /// Separate from `declined` rather than a flag on it: the two differ in
+    /// whether the card on the form was ever authorized, and that is the whole
+    /// question. A wallet payment carries a payment token, so the CVV typed here
+    /// never left the device.
+    case walletDeclined(message: String)
 }
 
 package enum CardFormReducer {
@@ -180,6 +188,13 @@ package enum CardFormReducer {
         case .declined(let message):
             state.inlineError = message
             state.setCVV("")
+
+        case .walletDeclined(let message):
+            // No CVV clearing: PCI DSS 3.3.1 is about data retained *after
+            // authorization*, and this card was never authorized. Wiping it would
+            // make the shopper retype three digits for a payment method they
+            // abandoned, at the moment they have just been told something failed.
+            state.inlineError = message
         }
     }
 }
