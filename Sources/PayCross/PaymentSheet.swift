@@ -378,7 +378,10 @@ final class PaymentSheetModel: ObservableObject {
 
             case .failed(let message):
                 self.isLoading = false
-                CardFormReducer.reduce(state: &self.form, event: .declined(message: message))
+                CardFormReducer.reduce(
+                    state: &self.form,
+                    event: .walletDeclined(message: message)
+                )
 
             case .authorized(let token):
                 await self.submitWallet(token, merchantIdentifier: merchantIdentifier)
@@ -398,7 +401,7 @@ final class PaymentSheetModel: ObservableObject {
             isLoading = false
             CardFormReducer.reduce(
                 state: &form,
-                event: .declined(message: "Apple Pay is not configured for this merchant.")
+                event: .walletDeclined(message: "Apple Pay is not configured for this merchant.")
             )
             return
         }
@@ -409,18 +412,29 @@ final class PaymentSheetModel: ObservableObject {
         case .finished(let result):
             finish(result)
         case .reArmForm(let message):
-            reArm(with: message)
+            reArmAfterWalletDecline(with: message)
         }
     }
 
-    /// Re-arms the form after a decline the shopper may retry.
-    ///
-    /// One method for all three routes into it — a resumed transaction, a card
-    /// payment, a wallet payment — so the session deadline below cannot be
-    /// attached to two of them and left off the third.
+    /// Re-arms the form after a card decline. The CVV goes with it: it was
+    /// handed off, and PCI DSS 3.3.1 forbids keeping it after authorization.
     func reArm(with message: String) {
+        reArm(showing: .declined(message: message))
+    }
+
+    /// Re-arms after a wallet decline. The CVV stays: that submission carried a
+    /// payment token, so the card on the form was never authorized and there is
+    /// nothing to discard.
+    func reArmAfterWalletDecline(with message: String) {
+        reArm(showing: .walletDeclined(message: message))
+    }
+
+    /// The tail all the re-arm routes share — a resumed transaction, a card
+    /// payment, a wallet payment — so the session deadline below cannot be
+    /// attached to some of them and left off the others.
+    private func reArm(showing event: CardFormEvent) {
         isLoading = false
-        CardFormReducer.reduce(state: &form, event: .declined(message: message))
+        CardFormReducer.reduce(state: &form, event: event)
         startSessionDeadline()
     }
 
