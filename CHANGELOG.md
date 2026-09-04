@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — source-incompatible, and the next release is a MINOR bump
+
+- `Recovery` gains a `verifyBeforeRetry` case, so an exhaustive `switch` over
+  `Recovery` in merchant code will no longer compile until it handles the new
+  value. Handle it as terminal: `isRetryable` is false for it, so code branching
+  on `isRetryable` rather than on the case needs no change.
+
 ### Fixed
 
 - The payment sheet no longer waits on WebKit before showing its form. The user
@@ -48,6 +55,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   after authorization. A wallet payment carries a payment token, so the card on
   the form was never authorized and there is nothing to discard. Deferred from
   0.2.0.
+- The status poll no longer reports a retryable failure when it runs out of time.
+  A payment whose outcome the SDK never observed may have succeeded and shifted
+  liability, and `.retry` invited the merchant to re-collect it. The deadline now
+  resolves as `.failed(transactionID:, recovery: .verifyBeforeRetry)`, meaning
+  check this transaction's status before charging again. The transaction id was
+  already carried and is what resolves the outcome out of band. `verify_before_retry`
+  is also accepted from the server, matching the Android SDK.
 
 ## [0.2.1] - 2026-09-03
 

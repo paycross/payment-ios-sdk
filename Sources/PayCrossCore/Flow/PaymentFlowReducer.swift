@@ -84,7 +84,15 @@ package enum PaymentFlowReducer {
 
         case .pollDeadlineReached:
             state.isPolling = false
-            let result = PaymentResult.failed(transactionID: state.transactionID, recovery: .retry)
+            // The poll ran out without ever seeing an outcome, and a full network
+            // loss is indistinguishable from a blip the loop was right to ignore.
+            // The payment may have succeeded and shifted liability, so this must
+            // not come back as something the merchant may retry: the transaction
+            // id is here to resolve it out of band.
+            let result = PaymentResult.failed(
+                transactionID: state.transactionID,
+                recovery: .verifyBeforeRetry
+            )
             state.result = result
             return [.stopPolling, .finish(result)]
 

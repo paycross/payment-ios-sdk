@@ -13,6 +13,14 @@ public enum Recovery: Sendable, Hashable {
     case contactSupport
     /// Terminal decline. Never offer a retry of this payment.
     case doNotRetry
+    /// The outcome was never observed. Check the transaction's status before
+    /// re-collecting.
+    ///
+    /// Produced when the status poll runs out of time. The payment may have
+    /// succeeded and shifted liability, so the failure carries a transaction id
+    /// and nothing else about it should be assumed. Not retryable: this is the
+    /// one case where a retry can charge a shopper twice.
+    case verifyBeforeRetry
     /// A value this SDK version does not know. Treated as terminal.
     case unrecognized(String)
 
@@ -22,7 +30,7 @@ public enum Recovery: Sendable, Hashable {
     public var isRetryable: Bool {
         switch self {
         case .retry, .changeMethod: true
-        case .restart, .contactSupport, .doNotRetry, .unrecognized: false
+        case .restart, .contactSupport, .doNotRetry, .verifyBeforeRetry, .unrecognized: false
         }
     }
 
@@ -44,6 +52,7 @@ public enum Recovery: Sendable, Hashable {
         case "restart": self = .restart
         case "contact_support", "contact_us": self = .contactSupport
         case "do_not_retry": self = .doNotRetry
+        case "verify_before_retry": self = .verifyBeforeRetry
         case let other?: self = .unrecognized(other)
         }
     }

@@ -292,12 +292,20 @@ final class PaymentFlowReducerTests: XCTestCase {
         XCTAssertNil(state.result)
     }
 
-    func testDeadlineFailsWithRetry() {
+    /// The poll ran out without ever seeing an outcome. The payment may have
+    /// succeeded and shifted liability, so telling the merchant to retry invites
+    /// them to charge a shopper twice. The transaction id stays, because it is what
+    /// resolves the outcome out of band.
+    func testDeadlineReportsAnUnknownOutcomeRatherThanARetry() {
         var state = PaymentFlowState(claims: claims())
         state.transactionID = "txn_1"
         let effects = PaymentFlowReducer.reduce(state: &state, event: .pollDeadlineReached)
 
-        XCTAssertEqual(state.result, .failed(transactionID: "txn_1", recovery: .retry))
+        XCTAssertEqual(
+            state.result,
+            .failed(transactionID: "txn_1", recovery: .verifyBeforeRetry)
+        )
+        XCTAssertFalse(Recovery.verifyBeforeRetry.isRetryable)
         XCTAssertTrue(effects.contains(.stopPolling))
     }
 

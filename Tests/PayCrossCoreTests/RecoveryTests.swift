@@ -10,6 +10,7 @@ final class RecoveryTests: XCTestCase {
         XCTAssertEqual(Recovery(apiValue: "contact_support"), .contactSupport)
         XCTAssertEqual(Recovery(apiValue: "contact_us"), .contactSupport)
         XCTAssertEqual(Recovery(apiValue: "do_not_retry"), .doNotRetry)
+        XCTAssertEqual(Recovery(apiValue: "verify_before_retry"), .verifyBeforeRetry)
     }
 
     func testParsingIsCaseAndWhitespaceInsensitive() {
@@ -39,6 +40,17 @@ final class RecoveryTests: XCTestCase {
         XCTAssertFalse(Recovery.contactSupport.isRetryable)
         XCTAssertFalse(Recovery.doNotRetry.isRetryable)
         XCTAssertFalse(Recovery.unrecognized("x").isRetryable)
+        XCTAssertFalse(
+            Recovery.verifyBeforeRetry.isRetryable,
+            "an outcome nobody observed is the one case that must never be retried"
+        )
+    }
+
+    /// It is a value this SDK understands, unlike `unrecognized`. A merchant
+    /// telling the two apart is the difference between "check this transaction"
+    /// and "upgrade the SDK".
+    func testVerifyBeforeRetryIsARecognizedValue() {
+        XCTAssertTrue(Recovery.verifyBeforeRetry.isRecognized)
     }
 
     /// Guards the reason Recovery is not RawRepresentable: a synthesised
