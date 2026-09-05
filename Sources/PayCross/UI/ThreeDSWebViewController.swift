@@ -79,12 +79,12 @@ final class ThreeDSWebViewController: UIViewController {
         bar.compactAppearance = appearance
 
         let cancel = UIBarButtonItem(
-            title: L("cancel", "Cancel"), style: .plain, target: self, action: #selector(cancelTapped)
+            title: L("paycross_cancel", "Cancel"), style: .plain, target: self, action: #selector(cancelTapped)
         )
         cancel.accessibilityIdentifier = "threeDSCancel"
         // Titled like the sheet it stands in for, so answering the bank still
         // looks like the same payment rather than a screen of its own.
-        let item = UINavigationItem(title: L("payment", "Payment"))
+        let item = UINavigationItem(title: L("paycross_payment", "Payment"))
         item.leftBarButtonItem = cancel
         bar.items = [item]
 

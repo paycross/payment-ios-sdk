@@ -34,6 +34,9 @@ let package = Package(
         .testTarget(
             name: "PayCrossUITests",
             dependencies: ["PayCross", "PayCrossCore", "DemoHarnessCore", "DemoHarnessUI"],
+            // An en.lproj of its own, so a test can pass its Bundle.module to L
+            // as the merchant app and watch the override land.
+            resources: [.process("Resources")],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         // The demo harness's logic: seeds, minting, deep links, outcome reading.

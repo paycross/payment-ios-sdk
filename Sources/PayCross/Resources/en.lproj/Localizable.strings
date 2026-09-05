@@ -1,53 +1,53 @@
 /* Separator between the Apple Pay button and the card fields */
-"or_pay_with_card" = "or pay with card";
+"paycross_or_pay_with_card" = "or pay with card";
 
 /* Label above the cardholder name field */
-"cardholder_name" = "Cardholder Name";
+"paycross_cardholder_name" = "Cardholder Name";
 
 /* Placeholder inside the cardholder name field */
-"name_on_card" = "NAME ON CARD";
+"paycross_name_on_card" = "NAME ON CARD";
 
 /* Label above the card number field */
-"card_number" = "Card Number";
+"paycross_card_number" = "Card Number";
 
 /* Label above the expiry field, showing the expected shape */
-"expiry_placeholder" = "MM/YY";
+"paycross_expiry_label" = "MM/YY";
 
 /* Label above the card security code field */
-"cvv" = "CVV";
+"paycross_cvv" = "CVV";
 
 /* Toggle offering to store the card for a later payment */
-"save_this_card" = "Save this card";
+"paycross_save_this_card" = "Save this card";
 
 /* Row that switches from a stored card back to card entry */
-"use_a_new_card" = "Use a new card";
+"paycross_use_a_new_card" = "Use a new card";
 
 /* Caption above the amount being paid */
-"total" = "Total";
+"paycross_total" = "Total";
 
 /* Pay button. %@ is the formatted amount, e.g. "Pay €12.00" */
-"pay_amount" = "Pay %@";
+"paycross_pay_amount" = "Pay %@";
 
 /* Title of the payment sheet, and of the 3-D Secure challenge over it */
-"payment" = "Payment";
+"paycross_payment" = "Payment";
 
 /* Button that starts the cancel confirmation, and the one on the challenge */
-"cancel" = "Cancel";
+"paycross_cancel" = "Cancel";
 
 /* Title of the cancel confirmation */
-"cancel_payment_title" = "Cancel Payment?";
+"paycross_cancel_payment_title" = "Cancel Payment?";
 
 /* Confirms the cancellation */
-"cancel_payment_yes" = "Yes, Cancel";
+"paycross_cancel_payment_yes" = "Yes, Cancel";
 
 /* Dismisses the cancel confirmation and keeps paying */
-"cancel_payment_continue" = "Continue Payment";
+"paycross_cancel_payment_continue" = "Continue Payment";
 
 /* Body of the cancel confirmation */
-"cancel_payment_message" = "Are you sure you want to cancel this payment?";
+"paycross_cancel_payment_message" = "Are you sure you want to cancel this payment?";
 
 /* Shown when the merchant has no Apple Pay merchant identifier configured */
-"apple_pay_not_configured" = "Apple Pay is not configured for this merchant.";
+"paycross_apple_pay_not_configured" = "Apple Pay is not configured for this merchant.";
 
 /* Button above the numeric keypad that puts it away */
-"keyboard_done" = "Done";
+"paycross_keyboard_done" = "Done";

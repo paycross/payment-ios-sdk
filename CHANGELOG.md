@@ -13,9 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   shipped inside the SDK's own bundle, so the sheet's copy travels with the SDK
   under both Swift Package Manager and CocoaPods.
 - A deliberate way to reword the sheet. Every user-visible string is looked up by
-  a snake_case key, merchant bundle first, so an app that defines one of those
-  keys in its own `Localizable.strings` gets its own wording, and an app that
-  defines none of them gets ours. The keys are listed in the README.
+  a `paycross_`-prefixed key, merchant bundle first, so an app that defines one of
+  those keys in its own `Localizable.strings` gets its own wording, and an app
+  that defines none of them gets ours. The prefix is what makes the override
+  deliberate: no string an app already names collides with one of ours, so
+  rewording a label takes naming the key on purpose. The keys are in the README.
 
 ### Fixed
 
@@ -26,7 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   define one of our English labels silently replaced our copy with theirs, and an
   app localized into a language the SDK does not ship could render the sheet in a
   mix of the two. Nothing announced this: the sheet simply came up wrong. Lookups
-  now resolve in the SDK bundle, and an override has to name the key to happen.
+  now resolve in the SDK bundle under keys of ours that an app cannot name by
+  chance, so an override has to be asked for to happen.
 
 ## [0.3.0] - 2026-09-04
 

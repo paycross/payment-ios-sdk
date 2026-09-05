@@ -68,7 +68,7 @@ struct NumericField: UIViewRepresentable {
         lazy var doneBar: UIToolbar = {
             let bar = UIToolbar(frame: CGRect(x: 0, y: 0, width: 0, height: 44))
             let done = UIBarButtonItem(
-                title: L("keyboard_done", "Done"),
+                title: L("paycross_keyboard_done", "Done"),
                 style: .done,
                 target: self,
                 action: #selector(dismissKeypad)
