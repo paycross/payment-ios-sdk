@@ -193,6 +193,11 @@ final class PaymentFlowReducerTests: XCTestCase {
 
         let expected = PaymentResult.pending(transactionID: "txn_1", reason: .serverVerify)
         XCTAssertEqual(state.result, expected)
+        XCTAssertTrue(effects.contains(.stopPolling))
+        XCTAssertTrue(
+            effects.contains(.dismiss3DS),
+            "a challenge answered just before this must not stay up over a finished payment"
+        )
         XCTAssertTrue(effects.contains(.finish(expected)))
         XCTAssertNil(state.inlineError, "an unobserved outcome must not re-arm the form")
     }

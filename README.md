@@ -82,7 +82,11 @@ neither a success to fulfil on nor a decline to re-collect on — take the
 transaction id, settle it against your own records, and only then decide. Its
 `PendingReason` carries why, with raw values (`poll_timeout`, `result_lost`,
 `server_verify`) shared verbatim with the Android SDK and the Flutter plugin, so
-the same unresolved payment reads the same whichever platform reported it.
+the same unresolved payment reads the same whichever platform reported it. This
+SDK produces `poll_timeout` and `server_verify` only. `result_lost` belongs to
+the Flutter plugin, whose result crosses a platform channel that can drop it; it
+is in the shared vocabulary so that code handling pending outcomes handles it on
+every platform, but nothing native ever emits it.
 
 ## Deliberate divergences from Android
 

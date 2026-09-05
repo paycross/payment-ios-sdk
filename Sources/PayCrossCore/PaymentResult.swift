@@ -52,7 +52,12 @@ public enum PaymentResult: Sendable, Hashable {
 /// The raw values are the wire vocabulary, agreed verbatim with the Android SDK
 /// and the Flutter plugin, so the same unresolved payment reads identically
 /// whichever platform reported it. Renaming one is a wire break, not a rename.
-public enum PendingReason: String, Sendable, Hashable {
+///
+/// The `String` raw value here is an output — what this SDK hands the bridges —
+/// and nothing on iOS ever parses one back off the wire, so the synthesised
+/// `init?(rawValue:)` is not the fail-open parser `Recovery` refuses to have. A
+/// reason the SDK does not know cannot arrive, because none arrives at all.
+public enum PendingReason: String, Sendable, Hashable, CaseIterable {
     /// The status poll ran out of time without ever seeing a verdict. A full
     /// network loss looks exactly like a blip the loop was right to ignore.
     case pollTimeout = "poll_timeout"

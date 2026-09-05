@@ -128,6 +128,23 @@ package enum PaymentFlowReducer {
             state.isPolling = false
             state.pendingThreeDS = nil
 
+            // Ahead of the retryable branch on purpose. `verifyBeforeRetry` is not
+            // on the retry whitelist, so today both orderings behave the same — but
+            // that makes the one outcome which can charge a shopper twice depend on
+            // a list kept in another file, where a one-line edit would silently
+            // re-arm the form on a payment that may already have succeeded. The
+            // server has no verdict here, which is the same unknown the poll
+            // deadline produces and has to reach the merchant the same way:
+            // delivered as a decline it reads as "collect again".
+            if case .verifyBeforeRetry = recovery {
+                let result = PaymentResult.pending(
+                    transactionID: status.transactionID,
+                    reason: .serverVerify
+                )
+                state.result = result
+                return [.stopPolling, .dismiss3DS, .finish(result)]
+            }
+
             if recovery.isRetryable {
                 // Only while the session can still take a payment. Nothing else
                 // bounds a re-armed form — the 480s poll deadline goes with the
@@ -145,18 +162,6 @@ package enum PaymentFlowReducer {
                 state.handledThreeDSKeys.removeAll()
                 state.inlineError = "Payment failed. Please try again."
                 return [.stopPolling, .dismiss3DS]
-            }
-
-            if case .verifyBeforeRetry = recovery {
-                // The server has no verdict either, so this is the same unknown
-                // outcome the poll deadline produces and must reach the merchant
-                // the same way. Delivered as a decline it reads as "collect again".
-                let result = PaymentResult.pending(
-                    transactionID: status.transactionID,
-                    reason: .serverVerify
-                )
-                state.result = result
-                return [.stopPolling, .dismiss3DS, .finish(result)]
             }
 
             let result = PaymentResult.failed(
