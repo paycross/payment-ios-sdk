@@ -65,6 +65,7 @@ switch result {
 case .succeeded(let transactionID, _, let amount): …
 case .failed(_, let recovery) where recovery.isRetryable: …
 case .failed: …
+case .pending(let transactionID, _): // Outcome unknown. Reconcile server-side before charging again.
 case .cancelled(let transactionID): …
 }
 ```
@@ -73,6 +74,15 @@ Shaped after the conventions merchants already know from Stripe, Adyen and
 Braintree: configure once, construct a sheet with a session token, await a
 result. Nothing throws — a decline is `.failed`, not a Swift `Error`, so the
 happy path needs no `catch` and the compiler still checks the recovery branch.
+
+`.pending` is the one outcome that deserves a second look. It means nobody saw a
+verdict: the status poll ran out of time, or the server itself answered that it
+cannot say. The payment may have succeeded and shifted liability, so it is
+neither a success to fulfil on nor a decline to re-collect on — take the
+transaction id, settle it against your own records, and only then decide. Its
+`PendingReason` carries why, with raw values (`poll_timeout`, `result_lost`,
+`server_verify`) shared verbatim with the Android SDK and the Flutter plugin, so
+the same unresolved payment reads the same whichever platform reported it.
 
 ## Deliberate divergences from Android
 

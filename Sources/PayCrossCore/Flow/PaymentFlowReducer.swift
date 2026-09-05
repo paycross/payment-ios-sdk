@@ -86,12 +86,11 @@ package enum PaymentFlowReducer {
             state.isPolling = false
             // The poll ran out without ever seeing an outcome, and a full network
             // loss is indistinguishable from a blip the loop was right to ignore.
-            // The payment may have succeeded and shifted liability, so this must
-            // not come back as something the merchant may retry: the transaction
-            // id is here to resolve it out of band.
-            let result = PaymentResult.failed(
+            // The payment may have succeeded and shifted liability, so this is not
+            // a failure at all: the transaction id is here to resolve it out of band.
+            let result = PaymentResult.pending(
                 transactionID: state.transactionID,
-                recovery: .verifyBeforeRetry
+                reason: .pollTimeout
             )
             state.result = result
             return [.stopPolling, .finish(result)]
@@ -146,6 +145,18 @@ package enum PaymentFlowReducer {
                 state.handledThreeDSKeys.removeAll()
                 state.inlineError = "Payment failed. Please try again."
                 return [.stopPolling, .dismiss3DS]
+            }
+
+            if case .verifyBeforeRetry = recovery {
+                // The server has no verdict either, so this is the same unknown
+                // outcome the poll deadline produces and must reach the merchant
+                // the same way. Delivered as a decline it reads as "collect again".
+                let result = PaymentResult.pending(
+                    transactionID: status.transactionID,
+                    reason: .serverVerify
+                )
+                state.result = result
+                return [.stopPolling, .dismiss3DS, .finish(result)]
             }
 
             let result = PaymentResult.failed(

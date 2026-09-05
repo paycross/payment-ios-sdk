@@ -175,6 +175,28 @@ final class PaymentFlowReducerTests: XCTestCase {
         XCTAssertEqual(state.result, .failed(transactionID: "txn_1", recovery: .doNotRetry))
     }
 
+    /// `verify_before_retry` from the server says exactly what the poll deadline
+    /// says: nobody observed the outcome. Delivering it as a decline was the whole
+    /// defect — a merchant reading `.failed` re-collects, and the payment that may
+    /// already have succeeded gets charged twice. It is a pending outcome whoever
+    /// noticed first, so the only thing that differs is the reason.
+    func testServerVerifyBeforeRetryIsPendingRatherThanADecline() {
+        var state = PaymentFlowState(claims: claims())
+        let effects = PaymentFlowReducer.reduce(
+            state: &state,
+            event: .statusReceived(
+                StatusResponse(
+                    transactionID: "txn_1", status: "failed", recovery: "verify_before_retry"
+                )
+            )
+        )
+
+        let expected = PaymentResult.pending(transactionID: "txn_1", reason: .serverVerify)
+        XCTAssertEqual(state.result, expected)
+        XCTAssertTrue(effects.contains(.finish(expected)))
+        XCTAssertNil(state.inlineError, "an unobserved outcome must not re-arm the form")
+    }
+
     /// An unknown recovery value must end the payment, not re-arm the form.
     func testUnknownRecoveryFailsClosedAndFinishes() {
         var state = PaymentFlowState(claims: claims())
@@ -293,20 +315,18 @@ final class PaymentFlowReducerTests: XCTestCase {
     }
 
     /// The poll ran out without ever seeing an outcome. The payment may have
-    /// succeeded and shifted liability, so telling the merchant to retry invites
-    /// them to charge a shopper twice. The transaction id stays, because it is what
-    /// resolves the outcome out of band.
-    func testDeadlineReportsAnUnknownOutcomeRatherThanARetry() {
+    /// succeeded and shifted liability, so reporting a failure is a lie that
+    /// invites the merchant to charge a shopper twice. The transaction id stays,
+    /// because it is what resolves the outcome out of band.
+    func testDeadlineReportsPendingRatherThanAFailure() {
         var state = PaymentFlowState(claims: claims())
         state.transactionID = "txn_1"
         let effects = PaymentFlowReducer.reduce(state: &state, event: .pollDeadlineReached)
 
-        XCTAssertEqual(
-            state.result,
-            .failed(transactionID: "txn_1", recovery: .verifyBeforeRetry)
-        )
-        XCTAssertFalse(Recovery.verifyBeforeRetry.isRetryable)
+        let expected = PaymentResult.pending(transactionID: "txn_1", reason: .pollTimeout)
+        XCTAssertEqual(state.result, expected)
         XCTAssertTrue(effects.contains(.stopPolling))
+        XCTAssertTrue(effects.contains(.finish(expected)))
     }
 
     func testLimitsMatchTheKotlin() {

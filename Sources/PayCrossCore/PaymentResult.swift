@@ -29,6 +29,15 @@ public enum PaymentResult: Sendable, Hashable {
     case succeeded(transactionID: String, status: String, amount: Amount)
     /// The payment failed. `transactionID` may be nil for early failures.
     case failed(transactionID: String?, recovery: Recovery)
+    /// The outcome is not known. The payment MAY have succeeded.
+    ///
+    /// Not a decline and not a success: the SDK never saw a verdict, and a payment
+    /// that completed and shifted liability is indistinguishable from one that
+    /// never happened. Reconcile server-side against `transactionID` before
+    /// charging again — re-collecting on this is the one path that can charge a
+    /// shopper twice. `transactionID` is nil only where there was no transaction
+    /// to name; the SDK's own poll deadline always carries one.
+    case pending(transactionID: String?, reason: PendingReason)
     /// The user dismissed the payment sheet.
     ///
     /// `transactionID` is the last transaction this session created, or nil when
@@ -36,4 +45,23 @@ public enum PaymentResult: Sendable, Hashable {
     /// and a payment cancelled mid-authorization may still complete, so this is
     /// what lets the merchant reconcile the one the shopper walked away from.
     case cancelled(transactionID: String?)
+}
+
+/// Why a payment's outcome is unknown.
+///
+/// The raw values are the wire vocabulary, agreed verbatim with the Android SDK
+/// and the Flutter plugin, so the same unresolved payment reads identically
+/// whichever platform reported it. Renaming one is a wire break, not a rename.
+public enum PendingReason: String, Sendable, Hashable {
+    /// The status poll ran out of time without ever seeing a verdict. A full
+    /// network loss looks exactly like a blip the loop was right to ignore.
+    case pollTimeout = "poll_timeout"
+    /// A result was produced but never reached the caller. The native SDK does
+    /// not produce this: it exists for the Flutter plugin, whose result crosses a
+    /// platform channel that can drop it, and it is in the shared vocabulary so
+    /// merchant code handling pending outcomes handles it on every platform.
+    case resultLost = "result_lost"
+    /// The server answered `verify_before_retry` on a failed transaction, which
+    /// says it has no verdict to give either.
+    case serverVerify = "server_verify"
 }

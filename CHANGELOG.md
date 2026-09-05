@@ -19,6 +19,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   deliberate: no string an app already names collides with one of ours, so
   rewording a label takes naming the key on purpose. The keys are in the README.
 
+### Changed — source-incompatible, and the next release is a MINOR bump
+
+- `PaymentResult` gains a `pending(transactionID:, reason: PendingReason)` case,
+  so an exhaustive `switch` over a result in merchant code will no longer compile
+  until it handles the new value. It is the outcome nobody observed — the status
+  poll ran out of time, or the server itself answered `verify_before_retry` — and
+  the payment may have succeeded and shifted liability, so it is neither a success
+  to fulfil on nor a decline to re-collect on. Reconcile the transaction id
+  server-side before charging again: this is the one outcome where retrying can
+  charge a shopper twice, and reporting it as a failure is what invited that.
+  `PendingReason` says which of the two produced it (`poll_timeout`,
+  `server_verify`; `result_lost` is in the vocabulary for the Flutter plugin and
+  is never produced natively), and its raw values match the Android SDK and the
+  plugin exactly. `Recovery.verifyBeforeRetry` remains in the enum and is still
+  parsed off the wire, but no `.failed` result carries it any more, so merchant
+  code that branched on it moves to `.pending`.
+
 ### Fixed
 
 - A merchant app can no longer repaint the payment sheet's labels by accident. A
