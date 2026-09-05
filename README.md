@@ -88,6 +88,41 @@ happy path needs no `catch` and the compiler still checks the recovery branch.
   reading the clock, so year-boundary cases are testable.
 - **`CardBrand.maxPANLength`** is 15 for Amex; Android bounds every PAN at 19.
 
+## Strings
+
+The sheet ships English, in the SDK's own bundle. Every user-visible string is
+looked up by key — the merchant's bundle first, ours second — so defining one of
+these keys in your app's `Localizable.strings` replaces our wording for that one
+label, and defining none of them leaves the sheet as it comes. Localizing the
+sheet into another language is the same mechanism: supply the keys you want, in
+your app's `.lproj` for that language.
+
+```
+"or_pay_with_card"         = "or pay with card";
+"cardholder_name"          = "Cardholder Name";
+"name_on_card"             = "NAME ON CARD";
+"card_number"              = "Card Number";
+"expiry_placeholder"       = "MM/YY";
+"cvv"                      = "CVV";
+"save_this_card"           = "Save this card";
+"use_a_new_card"           = "Use a new card";
+"total"                    = "Total";
+"pay_amount"               = "Pay %@";
+"payment"                  = "Payment";
+"cancel"                   = "Cancel";
+"cancel_payment_title"     = "Cancel Payment?";
+"cancel_payment_yes"       = "Yes, Cancel";
+"cancel_payment_continue"  = "Continue Payment";
+"cancel_payment_message"   = "Are you sure you want to cancel this payment?";
+"apple_pay_not_configured" = "Apple Pay is not configured for this merchant.";
+"keyboard_done"            = "Done";
+```
+
+`pay_amount` interpolates the formatted amount, so an override has to keep the
+`%@`. The placeholders shown inside the card number and expiry fields, and the
+dash standing in for an unmade selection, are shape hints rather than copy, and
+are not overridable.
+
 ## Apple Pay
 
 ### What the SDK does

@@ -50,7 +50,7 @@ struct CardFormView: View {
                         // than they read a gap.
                         HStack {
                             VStack { Divider() }
-                            Text("or pay with card")
+                            Text(L("or_pay_with_card", "or pay with card"))
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
                             VStack { Divider() }
@@ -80,7 +80,7 @@ struct CardFormView: View {
                     }
 
                     if allowsSaving && state.source.isNewCard {
-                        Toggle("Save this card", isOn: saveCardBinding)
+                        Toggle(L("save_this_card", "Save this card"), isOn: saveCardBinding)
                             .font(.subheadline)
                     }
                 }
@@ -109,15 +109,15 @@ struct CardFormView: View {
 
     private var newCardFields: some View {
         VStack(alignment: .leading, spacing: 14) {
-            LabeledField(title: "Cardholder Name") {
-                TextField("NAME ON CARD", text: binding(\.cardholderName, event: CardFormEvent.nameChanged))
+            LabeledField(title: L("cardholder_name", "Cardholder Name")) {
+                TextField(L("name_on_card", "NAME ON CARD"), text: binding(\.cardholderName, event: CardFormEvent.nameChanged))
                     .textContentType(.name)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.characters)
                     .accessibilityIdentifier("cardholderName")
             }
 
-            LabeledField(title: "Card Number", trailing: BrandBadge(brand: state.brand)) {
+            LabeledField(title: L("card_number", "Card Number"), trailing: BrandBadge(brand: state.brand)) {
                 // NOTE: Android uses KeyboardType.NumberPassword here, which
                 // makes the framework withhold the field's contents from the
                 // keyboard process. UIKeyboardType has no such variation, so
@@ -132,7 +132,7 @@ struct CardFormView: View {
             }
 
             HStack(spacing: 12) {
-                LabeledField(title: "MM/YY") {
+                LabeledField(title: L("expiry_placeholder", "MM/YY")) {
                     NumericField(
                         placeholder: "12/30",
                         text: expiryBinding,
@@ -145,7 +145,7 @@ struct CardFormView: View {
     }
 
     private var cvvField: some View {
-        LabeledField(title: "CVV") {
+        LabeledField(title: L("cvv", "CVV")) {
             NumericField(
                 placeholder: String(repeating: "•", count: state.cvvBrand.cvvLength),
                 text: cvvBinding,
@@ -209,7 +209,7 @@ private struct AmountHeader: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Total")
+            Text(L("total", "Total"))
                 .font(.footnote.weight(.medium))
                 .foregroundStyle(.secondary)
                 .textCase(.uppercase)
@@ -283,7 +283,7 @@ private struct SavedCardPicker: View {
                 )
             }
             row(
-                label: "Use a new card",
+                label: L("use_a_new_card", "Use a new card"),
                 detail: nil,
                 isSelected: selection.isNewCard,
                 action: { onSelect(.newCard) }
@@ -345,7 +345,7 @@ private struct PayButton: View {
                 if isLoading {
                     ProgressView().tint(.white)
                 } else {
-                    Text("Pay \(Amounts.formatted(amount))")
+                    Text(String(format: L("pay_amount", "Pay %@"), Amounts.formatted(amount)))
                         .font(.headline)
                 }
             }

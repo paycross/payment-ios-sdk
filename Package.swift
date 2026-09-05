@@ -7,6 +7,7 @@ import PackageDescription
 // commit, and everything in PayCross is not.
 let package = Package(
     name: "PayCross",
+    defaultLocalization: "en",
     platforms: [.iOS(.v16)],
     products: [
         .library(name: "PayCross", targets: ["PayCross"]),

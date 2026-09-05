@@ -28,7 +28,10 @@ Pod::Spec.new do |s|
   # Apple requires SDKs to ship a privacy manifest; CocoaPods/Apple guidance is
   # to place it in a resource bundle named after the pod so the built app gets
   # a PayCrossPrivacy.bundle/PrivacyInfo.xcprivacy Apple's tooling expects.
-  s.resource_bundles = { 'PayCrossPrivacy' => ['Sources/PayCross/Resources/PrivacyInfo.xcprivacy'] }
+  s.resource_bundles = {
+    'PayCrossPrivacy' => ['Sources/PayCross/Resources/PrivacyInfo.xcprivacy'],
+    'PayCrossLocalizations' => ['Sources/PayCross/Resources/*.lproj']
+  }
 
   # Exact, not optimistic: the two pods are cut from one tag and one repo, so a
   # merchant resolving PayCross 0.1.0 against PayCrossCore 0.2.0 is never a

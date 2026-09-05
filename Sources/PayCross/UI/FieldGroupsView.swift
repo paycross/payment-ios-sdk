@@ -93,7 +93,7 @@ private struct FieldRow: View {
                     // An empty tag so an unset optional select has somewhere to sit;
                     // without it SwiftUI silently picks the first option and the
                     // shopper appears to have chosen something they did not.
-                    Text("—").tag("")
+                    Text(verbatim: "—").tag("")
                     ForEach(options, id: \.value) { option in
                         Text(option.label ?? option.value).tag(option.value)
                     }
