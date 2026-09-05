@@ -542,6 +542,15 @@ private final class FirstAnswer {
 /// A seam, so a unit test never depends on WebKit launching its helper processes.
 typealias UserAgentProvider = @MainActor @Sendable () async -> String?
 
+/// How long the read is allowed to take before the fallback is used.
+///
+/// A seam for the same reason as the provider above. The bound is the only thing
+/// between a shopper and a WebKit that never answers, so it is worth a test, and a
+/// wall clock cannot give one: a 100ms bound asserted against a loaded CI runner
+/// that stalls for seconds is a coin toss, and a stopwatch cannot tell a read that
+/// ended because its bound elapsed from one that ended for some other reason.
+typealias BoundedWait = @MainActor @Sendable (Duration) async -> Void
+
 /// Reads the user agent out of a throwaway web view.
 @MainActor
 enum WebKitUserAgent {
@@ -581,6 +590,12 @@ enum DeviceInfo {
         }
     }
 
+    /// Cancellation is swallowed rather than propagated: a cancelled bound has
+    /// still stopped waiting, and the caller wants the fallback either way.
+    static var boundedWait: BoundedWait = { duration in
+        try? await Task.sleep(for: duration)
+    }
+
     /// Starts reading the real user agent, and returns immediately.
     ///
     /// Nothing awaits this. `evaluateJavaScript` waits on WebKit's helper
@@ -615,7 +630,7 @@ enum DeviceInfo {
             let answer = FirstAnswer(continuation)
             Task { @MainActor in answer.resume(await reading.value) }
             Task { @MainActor in
-                try? await Task.sleep(for: timeout)
+                await boundedWait(timeout)
                 answer.resume(nil)
             }
         }

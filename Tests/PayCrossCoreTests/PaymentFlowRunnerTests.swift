@@ -65,14 +65,40 @@ private actor VirtualScheduler: FlowScheduler {
     func elapsed() async -> Duration { consumed }
 }
 
-/// Advances virtual time like `VirtualScheduler`, but observes cancellation the
-/// way `ContinuousClock.sleep` does. Without this a cancelled run is untestable:
-/// a scheduler that always returns instantly cannot distinguish a loop that
-/// stopped from one that is spinning.
-private actor CancellableScheduler: FlowScheduler {
+/// Advances virtual time like `VirtualScheduler`, observes cancellation the way
+/// `ContinuousClock.sleep` does, and issues the cancellation itself at a chosen
+/// sleep.
+///
+/// Owning the run is what makes a cancellation test deterministic. Starting the
+/// run, spinning on a counter the transport bumps, and then calling `cancel()`
+/// races the runner: the counter moves at the top of `send`, so the run is free to
+/// finish that reply, take its instant virtual sleep and start the next attempt
+/// before the cancel lands. Cancelling from inside `sleep` puts it at an exact
+/// point in the run's own sequence instead.
+private actor CancellingScheduler: FlowScheduler {
     private var consumed: Duration = .zero
+    private var sleeps = 0
+    private let cancelsOnSleep: Int
+    private var run: Task<FlowOutcome, Never>?
+
+    init(cancelsOnSleep: Int) { self.cancelsOnSleep = cancelsOnSleep }
+
+    /// Starts the run and returns how it ended.
+    ///
+    /// The task is stored before this method suspends, and `sleep` below is
+    /// isolated to this same actor, so no sleep can ever observe a nil one.
+    func runUntilCancelled(
+        _ body: @escaping @Sendable () async -> FlowOutcome
+    ) async -> FlowOutcome {
+        let task = Task(operation: body)
+        run = task
+        return await task.value
+    }
 
     func sleep(for duration: Duration) async throws {
+        sleeps += 1
+        if sleeps == cancelsOnSleep { run?.cancel() }
+        // Runs in the calling task, so it sees the cancellation issued just above.
         try Task.checkCancellation()
         consumed += duration
     }
@@ -470,17 +496,22 @@ final class PaymentFlowRunnerTests: XCTestCase {
             submit: [.init(json: #"{"success":false,"retry_after":30}"#)],
             status: []
         )
+        // The retry-after wait that follows the first submit: the run has been
+        // told to try again and has not yet built a transaction.
+        let scheduler = CancellingScheduler(cancelsOnSleep: 1)
         let runner = makeRunner(
-            transport: transport, scheduler: CancellableScheduler(), presenter: RecordingPresenter()
+            transport: transport, scheduler: scheduler, presenter: RecordingPresenter()
         )
 
         let request = sampleRequest
-        let task = Task { await runner.run(request) }
-        while await transport.submitCount < 1 { await Task.yield() }
-        task.cancel()
+        let outcome = await scheduler.runUntilCancelled { await runner.run(request) }
 
-        let outcome = await task.value
         XCTAssertEqual(outcome, .finished(.cancelled(transactionID: nil)))
+        let submits = await transport.submitCount
+        XCTAssertEqual(
+            submits, 1,
+            "a cancellation that lands after a second attempt pins nothing this test is about"
+        )
     }
 
     func testCancellingStopsPollingAndTearsDown3DS() async {
@@ -489,31 +520,26 @@ final class PaymentFlowRunnerTests: XCTestCase {
             status: [.init(json: #"{"transaction_id":"t1","status":"pending"}"#)]
         )
         let presenter = RecordingPresenter()
+        // The second poll-interval wait, so cancellation lands mid-poll rather
+        // than before the first iteration.
+        let scheduler = CancellingScheduler(cancelsOnSleep: 2)
         let runner = makeRunner(
-            transport: transport, scheduler: CancellableScheduler(), presenter: presenter
+            transport: transport, scheduler: scheduler, presenter: presenter
         )
 
         // Bound outside the closure: `sampleRequest` is a computed property, so
         // referencing it inside would capture `self` and trip Swift 6's sending check.
         let request = sampleRequest
-        let task = Task { await runner.run(request) }
+        let outcome = await scheduler.runUntilCancelled { await runner.run(request) }
 
-        // Let the loop get going, so cancellation lands mid-poll rather than
-        // before the first iteration.
-        while await transport.statusCount < 2 { await Task.yield() }
-        task.cancel()
-
-        let outcome = await task.value
         XCTAssertEqual(
             outcome, .finished(.cancelled(transactionID: "t1")),
             "a cancelled payment leaves a transaction behind; the host has to be able to name it"
         )
 
-        let atCancellation = await transport.statusCount
-        for _ in 0..<100 { await Task.yield() }
-        let afterwards = await transport.statusCount
+        let polls = await transport.statusCount
         XCTAssertEqual(
-            atCancellation, afterwards,
+            polls, 2,
             "polling must stop on cancellation, not spin out the remaining deadline"
         )
 

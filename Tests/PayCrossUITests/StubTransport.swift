@@ -16,6 +16,7 @@ actor StubTransport: HTTPTransport {
 
     private var replies: [Reply]
     private(set) var sent: [URLRequest] = []
+    private var waiters: [(count: Int, continuation: CheckedContinuation<Void, Never>)] = []
 
     init(replies: [Reply]) { self.replies = replies }
 
@@ -23,8 +24,22 @@ actor StubTransport: HTTPTransport {
         self.replies = [Reply(status: status, body: Data(json.utf8))]
     }
 
+    /// Returns once the stub has been handed its `count`-th request.
+    ///
+    /// A test that needs the flow to have reached a known point waits here rather
+    /// than on a clock. Wall-clock waiting is what made the cancellation tests a
+    /// coin toss on a loaded machine: the budget expires while the main actor is
+    /// busy, and the cancellation then lands somewhere the test never meant.
+    func hasBeenAsked(for count: Int) async {
+        guard sent.count < count else { return }
+        await withCheckedContinuation { waiters.append((count, $0)) }
+    }
+
     func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         sent.append(request)
+        for waiter in waiters where waiter.count <= sent.count { waiter.continuation.resume() }
+        waiters.removeAll { $0.count <= sent.count }
+
         let reply = replies.isEmpty ? Reply() : replies.removeFirst()
         let response = HTTPURLResponse(
             url: request.url ?? URL(fileURLWithPath: "/"),

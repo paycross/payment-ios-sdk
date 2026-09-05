@@ -18,22 +18,54 @@ import XCTest
 final class UserAgentWarmUpTests: XCTestCase {
 
     private var original: UserAgentProvider!
+    private var originalBoundedWait: BoundedWait!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         original = DeviceInfo.userAgentProvider
+        originalBoundedWait = DeviceInfo.boundedWait
     }
 
     override func tearDown() async throws {
         // Assigning the provider clears anything read from the previous one, so
         // this also resets the cache for the next test.
         DeviceInfo.userAgentProvider = original
+        DeviceInfo.boundedWait = originalBoundedWait
         try await super.tearDown()
     }
 
     /// A provider that never answers, standing in for WebKit that never comes up.
     private static let neverAnswers: UserAgentProvider = {
         await withCheckedContinuation { (_: CheckedContinuation<String?, Never>) in }
+    }
+
+    /// The read's bound, driven by hand instead of by a clock.
+    ///
+    /// Records the duration it was handed, reports when the read has reached it,
+    /// and holds there until the test says the bound has elapsed.
+    private actor ManualBound {
+        private(set) var requested: Duration?
+        private var reached = false
+        private var arrival: CheckedContinuation<Void, Never>?
+        private var elapsed: CheckedContinuation<Void, Never>?
+
+        func wait(_ duration: Duration) async {
+            requested = duration
+            reached = true
+            arrival?.resume()
+            arrival = nil
+            await withCheckedContinuation { elapsed = $0 }
+        }
+
+        func hasBeenReached() async {
+            guard !reached else { return }
+            await withCheckedContinuation { arrival = $0 }
+        }
+
+        func elapse() {
+            elapsed?.resume()
+            elapsed = nil
+        }
     }
 
     func testTheRealAgentIsUsedWhenItArrives() async {
@@ -46,16 +78,31 @@ final class UserAgentWarmUpTests: XCTestCase {
 
     /// The bound is real, and the fallback is usable. The backend validates the
     /// agent non-blank, so an empty one is a rejected payment.
+    ///
+    /// Driven rather than timed. A stopwatch made this a coin toss on a loaded
+    /// runner — a 100ms bound measured 2.24s against a 2s assertion — and it could
+    /// not tell a read that ended because its bound elapsed from one that ended
+    /// for some other reason. Releasing the bound by hand pins both: the read is
+    /// waiting on its bound and nothing else, and the duration it waits on is the
+    /// caller's own, which no elapsed time could establish.
     func testAProviderThatNeverAnswersFallsBackWithinItsBound() async {
         DeviceInfo.userAgentProvider = Self.neverAnswers
-        let started = ContinuousClock().now
+        let bound = ManualBound()
+        DeviceInfo.boundedWait = { await bound.wait($0) }
 
-        let agent = await DeviceInfo.userAgent(timeout: .milliseconds(100))
+        async let read = DeviceInfo.userAgent(timeout: .milliseconds(100))
+        await bound.hasBeenReached()
+        await bound.elapse()
+        let agent = await read
 
         XCTAssertEqual(agent, DeviceInfo.defaultUserAgent)
-        XCTAssertFalse(agent.trimmingCharacters(in: .whitespaces).isEmpty)
-        XCTAssertLessThan(
-            ContinuousClock().now - started, .seconds(2),
+        XCTAssertFalse(
+            agent.trimmingCharacters(in: .whitespaces).isEmpty,
+            "the backend rejects a blank user agent outright"
+        )
+        let waitedOn = await bound.requested
+        XCTAssertEqual(
+            waitedOn, .milliseconds(100),
             "a read that outlives its own bound is a shopper waiting on nothing"
         )
     }

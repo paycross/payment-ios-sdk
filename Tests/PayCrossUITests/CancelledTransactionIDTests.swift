@@ -14,6 +14,24 @@ import XCTest
 @MainActor
 final class CancelledTransactionIDTests: XCTestCase {
 
+    private var originalUserAgentProvider: UserAgentProvider!
+
+    /// WebKit is never touched. `pay()` reads the user agent out of a throwaway
+    /// `WKWebView` on its way to the submit body, and building one waits on
+    /// WebKit's helper processes: on a loaded machine that holds the main actor
+    /// long enough that nothing else on it — including a test waiting for the
+    /// flow — makes any progress. `UserAgentWarmUpTests` covers that read.
+    override func setUp() async throws {
+        try await super.setUp()
+        originalUserAgentProvider = DeviceInfo.userAgentProvider
+        DeviceInfo.userAgentProvider = { "Mozilla/5.0 (iPhone) StubAgent/1.0" }
+    }
+
+    override func tearDown() async throws {
+        DeviceInfo.userAgentProvider = originalUserAgentProvider
+        try await super.tearDown()
+    }
+
     private func makeModel(transport: any HTTPTransport) -> PaymentSheetModel {
         PaymentSheetModel(
             sessionToken: "header.payload.signature",
@@ -43,42 +61,37 @@ final class CancelledTransactionIDTests: XCTestCase {
         CardFormReducer.reduce(state: &model.form, event: .cvvChanged("123"))
     }
 
-    private func waitUntil(
-        timeout: Duration = .seconds(5),
-        _ condition: () -> Bool
-    ) async -> Bool {
-        let deadline = ContinuousClock().now + timeout
-        while ContinuousClock().now < deadline {
-            if condition() { return true }
-            try? await Task.sleep(for: .milliseconds(20))
-        }
-        return condition()
-    }
-
     private actor ResultBox {
         private(set) var value: PaymentResult?
         func set(_ result: PaymentResult) { value = result }
     }
 
-    /// Installs the continuation, runs `act`, then polls for the result.
+    /// Installs the continuation, runs `act`, then reports what the sheet resolved.
     ///
-    /// Polling rather than awaiting the task directly: a result that never arrives
-    /// has to fail the test, not hang the suite.
+    /// The install is waited on rather than slept over: `finish` drops a result
+    /// nothing is waiting for, so an `act` that gets there first loses the outcome
+    /// altogether. The timeouts bound the test rather than drive it — a result
+    /// that never arrives has to fail the test, not hang the suite.
     private func result(
         of model: PaymentSheetModel,
         after act: () async -> Void
     ) async -> PaymentResult? {
         let box = ResultBox()
-        Task { await box.set(await model.awaitResult()) }
-        try? await Task.sleep(for: .milliseconds(50))
+        let waiting = expectation(description: "the sheet is waiting for a result")
+        let reported = expectation(description: "the sheet reported a result")
+
+        Task { @MainActor in
+            // Nothing suspends between this and the continuation going in, so the
+            // wait below cannot return before the sheet is ready to be finished.
+            waiting.fulfill()
+            await box.set(await model.awaitResult())
+            reported.fulfill()
+        }
+        await fulfillment(of: [waiting], timeout: 5)
 
         await act()
 
-        let deadline = ContinuousClock().now + .seconds(5)
-        while ContinuousClock().now < deadline {
-            if let value = await box.value { return value }
-            try? await Task.sleep(for: .milliseconds(20))
-        }
+        await fulfillment(of: [reported], timeout: 5)
         return await box.value
     }
 
@@ -92,8 +105,12 @@ final class CancelledTransactionIDTests: XCTestCase {
 
         let outcome = await result(of: model) {
             model.pay()
-            let gotID = await waitUntil { model.lastTransactionID != nil }
-            XCTAssertTrue(gotID, "the flow never reported a transaction id")
+            // The runner hands the id to the sheet before it starts polling, so
+            // the status request arriving is proof the sheet already has it.
+            await transport.hasBeenAsked(for: 2)
+            XCTAssertNotNil(
+                model.lastTransactionID, "the flow never reported a transaction id"
+            )
             model.cancel()
         }
 
