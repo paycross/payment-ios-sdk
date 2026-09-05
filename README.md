@@ -88,6 +88,43 @@ happy path needs no `catch` and the compiler still checks the recovery branch.
   reading the clock, so year-boundary cases are testable.
 - **`CardBrand.maxPANLength`** is 15 for Amex; Android bounds every PAN at 19.
 
+## Strings
+
+The sheet ships English, in the SDK's own bundle. Every user-visible string is
+looked up by key — the merchant's bundle first, ours second — so defining one of
+these keys in your app's `Localizable.strings` replaces our wording for that one
+label, and defining none of them leaves the sheet as it comes. Every key is
+prefixed `paycross_`, so nothing your app already names can collide with one:
+an override happens because you asked for it, never by accident. Localizing the
+sheet into another language is the same mechanism: supply the keys you want, in
+your app's `.lproj` for that language.
+
+```
+"paycross_or_pay_with_card"         = "or pay with card";
+"paycross_cardholder_name"          = "Cardholder Name";
+"paycross_name_on_card"             = "NAME ON CARD";
+"paycross_card_number"              = "Card Number";
+"paycross_expiry_label"             = "MM/YY";
+"paycross_cvv"                      = "CVV";
+"paycross_save_this_card"           = "Save this card";
+"paycross_use_a_new_card"           = "Use a new card";
+"paycross_total"                    = "Total";
+"paycross_pay_amount"               = "Pay %@";
+"paycross_payment"                  = "Payment";
+"paycross_cancel"                   = "Cancel";
+"paycross_cancel_payment_title"     = "Cancel Payment?";
+"paycross_cancel_payment_yes"       = "Yes, Cancel";
+"paycross_cancel_payment_continue"  = "Continue Payment";
+"paycross_cancel_payment_message"   = "Are you sure you want to cancel this payment?";
+"paycross_apple_pay_not_configured" = "Apple Pay is not configured for this merchant.";
+"paycross_keyboard_done"            = "Done";
+```
+
+`paycross_pay_amount` interpolates the formatted amount, so an override has to
+keep the `%@`. The placeholders shown inside the card number and expiry fields,
+and the dash standing in for an unmade selection, are shape hints rather than
+copy, and are not overridable.
+
 ## Apple Pay
 
 ### What the SDK does

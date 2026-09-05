@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `defaultLocalization: "en"` on the package and an English `Localizable.strings`
+  shipped inside the SDK's own bundle, so the sheet's copy travels with the SDK
+  under both Swift Package Manager and CocoaPods.
+- A deliberate way to reword the sheet. Every user-visible string is looked up by
+  a `paycross_`-prefixed key, merchant bundle first, so an app that defines one of
+  those keys in its own `Localizable.strings` gets its own wording, and an app
+  that defines none of them gets ours. The prefix is what makes the override
+  deliberate: no string an app already names collides with one of ours, so
+  rewording a label takes naming the key on purpose. The keys are in the README.
+
+### Fixed
+
+- A merchant app can no longer repaint the payment sheet's labels by accident. A
+  SwiftUI `Text("Card Number")` inside a package resolves that literal as a
+  lookup key against `Bundle.main` — the merchant's app — and not against the
+  package's own bundle, so any host app whose `Localizable.strings` happened to
+  define one of our English labels silently replaced our copy with theirs, and an
+  app localized into a language the SDK does not ship could render the sheet in a
+  mix of the two. Nothing announced this: the sheet simply came up wrong. Lookups
+  now resolve in the SDK bundle under keys of ours that an app cannot name by
+  chance, so an override has to be asked for to happen.
+
 ## [0.3.0] - 2026-09-04
 
 ### Added

@@ -405,7 +405,12 @@ final class PaymentSheetModel: ObservableObject {
             isLoading = false
             CardFormReducer.reduce(
                 state: &form,
-                event: .walletDeclined(message: "Apple Pay is not configured for this merchant.")
+                event: .walletDeclined(
+                    message: L(
+                        "paycross_apple_pay_not_configured",
+                        "Apple Pay is not configured for this merchant."
+                    )
+                )
             )
             return
         }
@@ -704,7 +709,7 @@ struct PaymentSheetView: View {
                 }
             }
             .task { await model.load() }
-            .navigationTitle("Payment")
+            .navigationTitle(L("paycross_payment", "Payment"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -713,16 +718,16 @@ struct PaymentSheetView: View {
                     // swiped away, and there is no back gesture - gating this on
                     // isLoading left a shopper whose ACS never returns with no way
                     // out at all. Android's back handler is likewise unconditional.
-                    Button("Cancel") { model.isConfirmingCancel = true }
+                    Button(L("paycross_cancel", "Cancel")) { model.isConfirmingCancel = true }
                 }
             }
             // Same two-step as Android, so a stray tap cannot abandon a payment
             // that is already in flight.
-            .alert("Cancel Payment?", isPresented: $model.isConfirmingCancel) {
-                Button("Yes, Cancel", role: .destructive, action: model.cancel)
-                Button("Continue Payment", role: .cancel) {}
+            .alert(L("paycross_cancel_payment_title", "Cancel Payment?"), isPresented: $model.isConfirmingCancel) {
+                Button(L("paycross_cancel_payment_yes", "Yes, Cancel"), role: .destructive, action: model.cancel)
+                Button(L("paycross_cancel_payment_continue", "Continue Payment"), role: .cancel) {}
             } message: {
-                Text("Are you sure you want to cancel this payment?")
+                Text(L("paycross_cancel_payment_message", "Are you sure you want to cancel this payment?"))
             }
         }
     }
