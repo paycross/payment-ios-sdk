@@ -51,3 +51,18 @@
 
 /* Button above the numeric keypad that puts it away */
 "paycross_keyboard_done" = "Done";
+
+/* Accessibility label on the button that deletes a stored card */
+"paycross_remove_card" = "Remove card";
+
+/* Title of the confirmation raised before a stored card is deleted */
+"paycross_remove_card_title" = "Remove this card?";
+
+/* Body of the delete confirmation */
+"paycross_remove_card_message" = "It will no longer be offered for future payments.";
+
+/* Confirms the deletion */
+"paycross_remove_card_confirm" = "Remove";
+
+/* Shown when the card could not be deleted */
+"paycross_remove_card_failed" = "Could not remove the card. Try again.";

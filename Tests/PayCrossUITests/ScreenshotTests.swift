@@ -116,19 +116,19 @@ final class ScreenshotTests: XCTestCase {
 
     private func form(
         _ state: CardFormState,
-        savedCards: [SavedCard] = [],
         isLoading: Bool = false,
         fieldGroups: [FieldGroup] = [],
         fieldErrors: [FieldGroupError] = [],
-        showsApplePayButton: Bool = false
+        showsApplePayButton: Bool = false,
+        allowsCardRemoval: Bool = false
     ) -> some View {
         StatefulPreviewWrapper([String: [String: String]]()) { values in
         StatefulPreviewWrapper(state) { binding in
             CardFormView(
                 state: binding,
                 amount: self.amount,
-                savedCards: savedCards,
                 allowsSaving: true,
+                allowsCardRemoval: allowsCardRemoval,
                 isLoading: isLoading,
                 fieldGroups: fieldGroups,
                 fieldValues: values,
@@ -184,20 +184,28 @@ final class ScreenshotTests: XCTestCase {
     }
 
     func testSavedCardSelection() throws {
-        let saved = [
-            SavedCard(id: "a", brand: .visa, last4: "1111", expiryLabel: "12/30"),
-            SavedCard(id: "b", brand: .mastercard, last4: "4444", expiryLabel: "01/29")
-        ]
-        var state = CardFormState()
-        CardFormReducer.reduce(state: &state, event: .sourceSelected(.saved(saved[0])))
+        var state = CardFormState(savedCards: Self.savedCards)
+        CardFormReducer.reduce(state: &state, event: .sourceSelected(.saved(Self.savedCards[0])))
         CardFormReducer.reduce(state: &state, event: .cvvChanged("123"))
-        try capture("06-saved-card") { form(state, savedCards: saved) }
+        try capture("06-saved-card") { form(state) }
     }
 
     func testNewCardAlongsideSavedCards() throws {
-        let saved = [SavedCard(id: "a", brand: .visa, last4: "1111", expiryLabel: "12/30")]
-        try capture("07-new-card-with-saved") { form(CardFormState(), savedCards: saved) }
+        let state = CardFormState(savedCards: [Self.savedCards[0]])
+        try capture("07-new-card-with-saved") { form(state) }
     }
+
+    /// The same picker under a session that allowed removal: every stored row
+    /// gains a trash button, and the "Use a new card" row does not.
+    func testSavedCardsWithRemovalAllowed() throws {
+        let state = CardFormState(savedCards: Self.savedCards)
+        try capture("14-saved-card-removable") { form(state, allowsCardRemoval: true) }
+    }
+
+    private static let savedCards = [
+        SavedCard(id: "a", brand: .visa, last4: "1111", expiryLabel: "12/30"),
+        SavedCard(id: "b", brand: .mastercard, last4: "4444", expiryLabel: "01/29")
+    ]
 
     /// A checkout the server has decorated with extra fields, one of them
     /// conditional and one showing a validation failure.

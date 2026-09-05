@@ -192,6 +192,90 @@ final class APIClientTests: XCTestCase {
         XCTAssertFalse(path.contains("/api/session/secret"), "path traversal: \(path)")
     }
 
+    // MARK: - Removing a saved card
+
+    func testDeleteSavedCardRequestShape() async throws {
+        let transport = StubTransport(status: 204, json: "")
+        try await makeClient(transport).deleteSavedCard(uuid: "card_1", sessionToken: "jwt-here")
+
+        let request = await transport.sent[0]
+        XCTAssertEqual(
+            request.url?.absoluteString,
+            "https://checkout.test-pay-cross.com/api/saved-cards/card_1"
+        )
+        XCTAssertEqual(request.httpMethod, "DELETE")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer jwt-here")
+        XCTAssertEqual(request.cachePolicy, .reloadIgnoringLocalAndRemoteCacheData)
+    }
+
+    /// The endpoint is idempotent and answers 204 whether or not the card was
+    /// still active, so a second removal is a success and not an error.
+    func testDeleteSavedCardTreats204AsSuccess() async throws {
+        let transport = StubTransport(replies: [
+            .init(status: 204, body: Data()),
+            .init(status: 204, body: Data())
+        ])
+        let client = makeClient(transport)
+
+        try await client.deleteSavedCard(uuid: "card_1", sessionToken: "jwt")
+        try await client.deleteSavedCard(uuid: "card_1", sessionToken: "jwt")
+
+        let sent = await transport.sent
+        XCTAssertEqual(sent.count, 2)
+    }
+
+    /// 404 is the ownership check failing — the card is not this session's
+    /// customer's — and is distinct from a transient failure because there is
+    /// nothing to retry.
+    func testDeleteSavedCardTreats404AsNotFound() async {
+        let transport = StubTransport(status: 404, json: #"{"error":"not found"}"#)
+        do {
+            try await makeClient(transport).deleteSavedCard(uuid: "card_1", sessionToken: "jwt")
+            XCTFail("expected a throw")
+        } catch {
+            XCTAssertEqual(error as? PayCrossError, .notFound)
+        }
+    }
+
+    func testDeleteSavedCardTreats401AsSessionExpired() async {
+        let transport = StubTransport(status: 401)
+        do {
+            try await makeClient(transport).deleteSavedCard(uuid: "card_1", sessionToken: "jwt")
+            XCTFail("expected a throw")
+        } catch {
+            XCTAssertEqual(error as? PayCrossError, .sessionExpired)
+        }
+    }
+
+    func testDeleteSavedCardSurfacesOtherFailures() async {
+        let transport = StubTransport(status: 500, json: #"{"error":"boom"}"#)
+        do {
+            try await makeClient(transport).deleteSavedCard(uuid: "card_1", sessionToken: "jwt")
+            XCTFail("expected a throw")
+        } catch let error as PayCrossError {
+            guard case .http(let status, _) = error else { return XCTFail("wrong case: \(error)") }
+            XCTAssertEqual(status, 500)
+        } catch {
+            XCTFail("wrong error type")
+        }
+    }
+
+    /// A 404 on the status poll must stay an `.http` failure: the row is still
+    /// being written while the poll runs, and reading that as "gone" would end
+    /// a live payment. Only the no-content path reads 404 as a missing resource.
+    func testA404OnAPollIsStillAnHTTPFailure() async {
+        let transport = StubTransport(status: 404, json: #"{"error":"not found"}"#)
+        do {
+            _ = try await makeClient(transport).status(transactionID: "t1")
+            XCTFail("expected a throw")
+        } catch let error as PayCrossError {
+            guard case .http(let status, _) = error else { return XCTFail("wrong case: \(error)") }
+            XCTAssertEqual(status, 404)
+        } catch {
+            XCTFail("wrong error type")
+        }
+    }
+
     // MARK: - browser_info
 
     /// 3DS expects the JavaScript getTimezoneOffset() convention: minutes WEST of

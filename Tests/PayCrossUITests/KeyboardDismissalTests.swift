@@ -25,11 +25,10 @@ final class KeyboardDismissalTests: XCTestCase {
     }
 
     private func hostForm(savedCards: [SavedCard] = []) -> UIWindow {
-        var state = CardFormState()
+        var state = CardFormState(savedCards: savedCards)
         let view = CardFormView(
             state: Binding(get: { state }, set: { state = $0 }),
             amount: Amount(minorUnits: 1000, currencyCode: "EUR"),
-            savedCards: savedCards,
             allowsSaving: false,
             isLoading: false,
             fieldGroups: [],

@@ -137,6 +137,83 @@ final class SessionDataTests: XCTestCase {
         XCTAssertNil(session.data?.savedCards)
     }
 
+    // MARK: - saved_cards_config
+
+    func testSavedCardsConfigDecodes() throws {
+        let json = """
+        { "session_id": "s", "data": {
+            "saved_cards_config": { "allow_removal": true, "preselect": true } } }
+        """
+        let data = try XCTUnwrap(
+            try JSONDecoder().decode(SessionResponse.self, from: Data(json.utf8)).data
+        )
+
+        XCTAssertTrue(data.allowsSavedCardRemoval)
+        XCTAssertTrue(data.preselectsSavedCard)
+    }
+
+    /// Every session minted before the backend shipped the block carries no
+    /// `saved_cards_config` at all, and there are live ones. Absent has to read
+    /// as "the merchant asked for neither", not as permission: the delete
+    /// endpoint may not even be routed for that session's environment yet.
+    func testSavedCardsConfigDefaultsToOffWhenTheBlockIsAbsent() throws {
+        let session = try JSONDecoder().decode(SessionResponse.self, from: Data(payload.utf8))
+        let data = try XCTUnwrap(session.data)
+
+        XCTAssertNil(data.savedCardsConfig)
+        XCTAssertFalse(data.allowsSavedCardRemoval)
+        XCTAssertFalse(data.preselectsSavedCard)
+        XCTAssertEqual(data.savedCards?.count, 1, "the cards themselves still decode")
+    }
+
+    /// The two flags are independent, and a member the server omitted inside a
+    /// block it did send is still off.
+    func testAPartialSavedCardsConfigLeavesTheOtherFlagOff() throws {
+        let json = #"{"session_id":"s","data":{"saved_cards_config":{"allow_removal":true}}}"#
+        let data = try XCTUnwrap(
+            try JSONDecoder().decode(SessionResponse.self, from: Data(json.utf8)).data
+        )
+
+        XCTAssertTrue(data.allowsSavedCardRemoval)
+        XCTAssertFalse(data.preselectsSavedCard)
+    }
+
+    /// A flag rendered as a string still means what it says, the same coercion
+    /// the wallet flags get.
+    func testSavedCardsConfigFlagsCoerceFromStringsAndNumbers() throws {
+        let json = """
+        { "session_id": "s", "data": {
+            "saved_cards_config": { "allow_removal": "true", "preselect": 0 } } }
+        """
+        let data = try XCTUnwrap(
+            try JSONDecoder().decode(SessionResponse.self, from: Data(json.utf8)).data
+        )
+
+        XCTAssertTrue(data.allowsSavedCardRemoval)
+        XCTAssertFalse(data.preselectsSavedCard)
+    }
+
+    /// A config the SDK cannot read costs the two affordances it enables and
+    /// nothing else. Throwing would take the saved cards down with it and leave
+    /// the sheet offering none of them.
+    func testAMalformedSavedCardsConfigDoesNotLoseTheSession() throws {
+        let json = """
+        { "session_id": "s", "data": {
+            "saved_cards_config": "yes",
+            "saved_cards": [{
+              "uuid": "card_1", "masked_pan": "411111******1111", "card_brand": "VISA",
+              "expire_month": "12", "expire_year": "2030", "cardholder_name": "A PERSON"
+            }] } }
+        """
+        let data = try XCTUnwrap(
+            try JSONDecoder().decode(SessionResponse.self, from: Data(json.utf8)).data
+        )
+
+        XCTAssertNil(data.savedCardsConfig)
+        XCTAssertFalse(data.allowsSavedCardRemoval)
+        XCTAssertEqual(data.savedCards?.count, 1)
+    }
+
     /// Sessions snapshotted before the backend shipped `wallets` carry no
     /// block at all, and there are live ones. Decoding must leave both new
     /// fields nil rather than defaulting them to something the gate reads.

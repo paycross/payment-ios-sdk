@@ -36,7 +36,8 @@ final class PaymentFlowReducerTests: XCTestCase {
             .succeeded(
                 transactionID: "txn_1",
                 status: "success",
-                amount: Amount(minorUnits: 2500, currencyCode: "USD")
+                amount: Amount(minorUnits: 2500, currencyCode: "USD"),
+                savedCardToken: nil
             )
         )
         XCTAssertTrue(effects.contains(.stopPolling))
@@ -49,7 +50,7 @@ final class PaymentFlowReducerTests: XCTestCase {
             state: &state,
             event: .statusReceived(StatusResponse(transactionID: "txn_1", status: "authorized"))
         )
-        guard case .succeeded(_, let status, _) = state.result else {
+        guard case .succeeded(_, let status, _, _) = state.result else {
             return XCTFail("expected success")
         }
         XCTAssertEqual(status, "authorized")
@@ -68,7 +69,8 @@ final class PaymentFlowReducerTests: XCTestCase {
         XCTAssertEqual(state.result, .succeeded(
             transactionID: "t",
             status: "success",
-            amount: Amount(minorUnits: 4200, currencyCode: "EUR")
+            amount: Amount(minorUnits: 4200, currencyCode: "EUR"),
+            savedCardToken: nil
         ))
     }
 
@@ -81,8 +83,47 @@ final class PaymentFlowReducerTests: XCTestCase {
         XCTAssertEqual(state.result, .succeeded(
             transactionID: "t",
             status: "success",
-            amount: Amount(minorUnits: 0, currencyCode: "")
+            amount: Amount(minorUnits: 0, currencyCode: ""),
+            savedCardToken: nil
         ))
+    }
+
+    /// The token for a card this payment stored rides the terminal status and
+    /// has to reach the merchant: it is the only handle they get on the card,
+    /// and it does not exist anywhere before this response.
+    func testATerminalStatusCarriesTheSavedCardTokenThrough() {
+        var state = PaymentFlowState(claims: claims())
+        _ = PaymentFlowReducer.reduce(
+            state: &state,
+            event: .statusReceived(
+                StatusResponse(
+                    transactionID: "txn_1", status: "success",
+                    amount: 2500, currency: "USD", savedToken: "tok_abc"
+                )
+            )
+        )
+
+        XCTAssertEqual(state.result, .succeeded(
+            transactionID: "txn_1",
+            status: "success",
+            amount: Amount(minorUnits: 2500, currencyCode: "USD"),
+            savedCardToken: "tok_abc"
+        ))
+    }
+
+    /// A payment that stored nothing reports nothing. Most do not: the shopper
+    /// left the toggle off, or paid with a card already on file.
+    func testASuccessWithNoSavedTokenReportsNil() {
+        var state = PaymentFlowState(claims: claims())
+        _ = PaymentFlowReducer.reduce(
+            state: &state,
+            event: .statusReceived(StatusResponse(transactionID: "txn_1", status: "authorized"))
+        )
+
+        guard case .succeeded(_, _, _, let token) = state.result else {
+            return XCTFail("expected success")
+        }
+        XCTAssertNil(token)
     }
 
     // MARK: - Failure

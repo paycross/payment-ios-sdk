@@ -39,7 +39,8 @@ final class SessionResolutionTests: XCTestCase {
         let resolution = SessionResolver.resolve(session(status: "completed"), claims: claims)
         XCTAssertEqual(resolution, .finish(.succeeded(
             transactionID: "", status: "success",
-            amount: Amount(minorUnits: 2599, currencyCode: "EUR")
+            amount: Amount(minorUnits: 2599, currencyCode: "EUR"),
+            savedCardToken: nil
         )))
     }
 
@@ -112,7 +113,8 @@ final class SessionResolutionTests: XCTestCase {
             SessionResolver.resolve(session(status: "completed", latest: "  "), claims: claims),
             .finish(.succeeded(
                 transactionID: "", status: "success",
-                amount: Amount(minorUnits: 2599, currencyCode: "EUR")
+                amount: Amount(minorUnits: 2599, currencyCode: "EUR"),
+                savedCardToken: nil
             ))
         )
     }

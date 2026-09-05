@@ -422,7 +422,8 @@ final class ApplePayPresentationTests: XCTestCase {
             delivered.value,
             .succeeded(
                 transactionID: "txn_1", status: "success",
-                amount: Amount(minorUnits: 2599, currencyCode: "EUR")
+                amount: Amount(minorUnits: 2599, currencyCode: "EUR"),
+                savedCardToken: nil
             ),
             "an Apple Pay payment completes through the same callback as a card payment"
         )
@@ -667,7 +668,6 @@ private struct FormHarness: View {
         CardFormView(
             state: $state,
             amount: Amount(minorUnits: 2599, currencyCode: "EUR"),
-            savedCards: [],
             allowsSaving: false,
             isLoading: isLoading,
             fieldGroups: [],

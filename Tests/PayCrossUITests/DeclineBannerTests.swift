@@ -46,7 +46,6 @@ final class DeclineBannerTests: XCTestCase {
         let view = CardFormView(
             state: Binding(get: { state }, set: { state = $0 }),
             amount: Amount(minorUnits: 1000, currencyCode: "EUR"),
-            savedCards: [],
             allowsSaving: true,
             isLoading: false,
             fieldGroups: fieldGroups(fieldGroupCount),

@@ -62,7 +62,7 @@ let sheet = PaymentSheet(sessionToken: token)
 let result = await sheet.present(from: viewController)
 
 switch result {
-case .succeeded(let transactionID, _, let amount): …
+case .succeeded(let transactionID, _, let amount, let savedCardToken): …
 case .failed(_, let recovery) where recovery.isRetryable: …
 case .failed: …
 case .pending(let transactionID, _): // Outcome unknown. Reconcile server-side before charging again.
@@ -87,6 +87,43 @@ SDK produces `poll_timeout` and `server_verify` only. `result_lost` belongs to
 the Flutter plugin, whose result crosses a platform channel that can drop it; it
 is in the shared vocabulary so that code handling pending outcomes handles it on
 every platform, but nothing native ever emits it.
+
+`savedCardToken` on `.succeeded` is the token for a card **this payment stored**,
+and is nil whenever it stored none — the shopper left the save toggle off, paid
+with a card already on file, or the session was already complete and had no
+status to read one from. It is a handle on the stored card for a later payment,
+useless anywhere but your own account, and it is the only place the token
+appears: nothing else in the flow reports it.
+
+## Saved cards
+
+Which stored cards the sheet offers, and what it may do with them, is decided by
+the session, not by the integration. `saved_cards` lists the cards, most recently
+used first, and a sibling `saved_cards_config` block carries two flags:
+
+```json
+"saved_cards_config": { "allow_removal": true, "preselect": true }
+```
+
+Both default to off, and a session minted before the backend shipped the block
+behaves as if both were false. Ask for them when you create the payment session.
+
+- **`allow_removal`** puts a delete button on every stored row. Confirming it
+  calls `DELETE saved-cards/{uuid}` with the session's own bearer token, and the
+  row leaves the picker only once the server has answered — a card that vanishes
+  on the tap and returns next session is worse than no button. A failure leaves
+  the row where it was and says so above the fields. The endpoint is idempotent,
+  so removing a card twice is not an error, and it is scoped to the session's
+  customer, so a uuid belonging to someone else is a 404 and not a deletion.
+- **`preselect`** opens the sheet with the most recently used card already
+  picked, rather than on "Use a new card".
+
+Preselection is a merchant opt-in for a reason, and the reason it is safe under
+one is the CVC. A stored card on this sheet is never submittable on its own: the
+shopper types its security code every time, whether they picked the card or the
+session did. That is an issuer rule before it is a UX one, and it is what keeps a
+preselected card from being one unnoticed tap away from a charge. The SDK does
+not offer a way to turn it off.
 
 ## Deliberate divergences from Android
 
@@ -132,6 +169,11 @@ your app's `.lproj` for that language.
 "paycross_cancel_payment_message"   = "Are you sure you want to cancel this payment?";
 "paycross_apple_pay_not_configured" = "Apple Pay is not configured for this merchant.";
 "paycross_keyboard_done"            = "Done";
+"paycross_remove_card"              = "Remove card";
+"paycross_remove_card_title"        = "Remove this card?";
+"paycross_remove_card_message"      = "It will no longer be offered for future payments.";
+"paycross_remove_card_confirm"      = "Remove";
+"paycross_remove_card_failed"       = "Could not remove the card. Try again.";
 ```
 
 `paycross_pay_amount` interpolates the formatted amount, so an override has to

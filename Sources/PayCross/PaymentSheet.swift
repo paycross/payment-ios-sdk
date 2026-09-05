@@ -10,7 +10,7 @@ import PayCrossCore
 /// PayCrossAPI.configure(environment: .sandbox)
 /// let sheet = PaymentSheet(sessionToken: token)
 /// switch await sheet.present(from: viewController) {
-/// case .succeeded(let id, _, let amount): …
+/// case .succeeded(let id, _, let amount, let savedCardToken): …
 /// case .failed(_, let recovery) where recovery.isRetryable: …
 /// case .failed: …
 /// case .pending(let transactionID, _): // Unknown. Reconcile before charging again.
@@ -112,8 +112,11 @@ final class PaymentSheetModel: ObservableObject {
 
     let claims: SessionClaims
 
-    var savedCards: [SavedCard] {
-        sessionData?.savedCards?.map(\.presentable) ?? []
+    /// Whether the session invited the shopper to delete a stored card. The
+    /// picker holds the cards themselves, because removing one also moves the
+    /// selection.
+    var allowsCardRemoval: Bool {
+        sessionData?.allowsSavedCardRemoval ?? false
     }
 
     var allowsSavingCard: Bool {
@@ -286,8 +289,45 @@ final class PaymentSheetModel: ObservableObject {
         guard let data else { return }
         sessionData = data
         fieldValues = FieldGroupLogic.initialValues(data.fieldGroups ?? [])
-        // Android initialises the selection to null and shows "Use a new card";
-        // auto-selecting a stored card is one unnoticed tap from charging it.
+        form.savedCards = data.savedCards?.map(\.presentable) ?? []
+
+        // Preselection is a merchant opt-in, and safe under one because a saved
+        // card still needs its CVV: no tap on this sheet can charge one on its own.
+        if data.preselectsSavedCard, let first = form.savedCards.first {
+            CardFormReducer.reduce(state: &form, event: .sourceSelected(.saved(first)))
+        }
+    }
+
+    /// Deletes a stored card, then drops it from the picker.
+    ///
+    /// Server first, and only then the row: a card that vanishes on the tap and
+    /// comes back next session is a promise the sheet did not keep. A failure
+    /// leaves the row exactly where it was and says so in the banner.
+    func removeSavedCard(_ card: SavedCard) {
+        // Not while a payment is in flight. The picker stays live during
+        // authorization so the shopper can read what they chose, but deleting a
+        // card the server is in the middle of charging is not a state worth having.
+        guard !isLoading else { return }
+
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await self.makeClient().deleteSavedCard(
+                    uuid: card.id, sessionToken: self.sessionToken
+                )
+                CardFormReducer.reduce(
+                    state: &self.form, event: .savedCardRemoved(uuid: card.id)
+                )
+            } catch {
+                // Straight onto the form's banner rather than through the
+                // reducer: nothing about the card being entered changed, and a
+                // decline event here would clear a CVV the shopper still needs.
+                self.form.inlineError = L(
+                    "paycross_remove_card_failed",
+                    "Could not remove the card. Try again."
+                )
+            }
+        }
     }
 
     func awaitResult() async -> PaymentResult {
@@ -697,15 +737,16 @@ struct PaymentSheetView: View {
                     CardFormView(
                         state: $model.form,
                         amount: model.amount,
-                        savedCards: model.savedCards,
                         allowsSaving: model.allowsSavingCard,
+                        allowsCardRemoval: model.allowsCardRemoval,
                         isLoading: model.isLoading,
                         fieldGroups: model.fieldGroups,
                         fieldValues: $model.fieldValues,
                         fieldErrors: model.fieldErrors,
                         onPay: model.pay,
                         showsApplePayButton: model.showsApplePayButton,
-                        onApplePay: { model.payWithApplePay() }
+                        onApplePay: { model.payWithApplePay() },
+                        onRemoveCard: { model.removeSavedCard($0) }
                     )
                 }
             }
