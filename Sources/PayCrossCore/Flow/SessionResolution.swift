@@ -46,7 +46,9 @@ package enum SessionResolver {
                 return .finish(.succeeded(
                     transactionID: "",
                     status: "success",
-                    amount: claims.amount
+                    amount: claims.amount,
+                    // No transaction to name is no status to read a token from.
+                    savedCardToken: nil
                 ))
             }
             return .resume(transactionID: resumeID)

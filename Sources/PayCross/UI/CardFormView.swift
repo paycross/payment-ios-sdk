@@ -11,8 +11,9 @@ import PayCrossCore
 struct CardFormView: View {
     @Binding var state: CardFormState
     let amount: Amount
-    let savedCards: [SavedCard]
     let allowsSaving: Bool
+    /// Whether the session invited the shopper to delete a stored card.
+    var allowsCardRemoval: Bool = false
     let isLoading: Bool
     let fieldGroups: [FieldGroup]
     @Binding var fieldValues: [String: [String: String]]
@@ -20,6 +21,10 @@ struct CardFormView: View {
     let onPay: () -> Void
     var showsApplePayButton: Bool = false
     var onApplePay: () -> Void = {}
+    /// Called when the shopper presses a row's trash. Nothing is deleted here:
+    /// the sheet confirms first, then calls the server, and the row goes only
+    /// once the server has taken the card.
+    var onRemoveRequested: (SavedCard) -> Void = { _ in }
 
     private var canPay: Bool { state.canSubmit() && !isLoading }
 
@@ -57,11 +62,14 @@ struct CardFormView: View {
                         }
                     }
 
-                    if !savedCards.isEmpty {
+                    if !state.savedCards.isEmpty {
                         SavedCardPicker(
-                            cards: savedCards,
+                            cards: state.savedCards,
                             selection: state.source,
-                            onSelect: { send(.sourceSelected($0)) }
+                            allowsRemoval: allowsCardRemoval,
+                            isPaying: isLoading,
+                            onSelect: { send(.sourceSelected($0)) },
+                            onRemoveRequested: onRemoveRequested
                         )
                     }
 
@@ -264,54 +272,6 @@ private struct BrandBadge: View {
             .font(.caption.weight(.semibold))
             .foregroundStyle(.secondary)
             .accessibilityIdentifier("brand")
-    }
-}
-
-private struct SavedCardPicker: View {
-    let cards: [SavedCard]
-    let selection: CardEntrySource
-    let onSelect: (CardEntrySource) -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ForEach(cards) { card in
-                row(
-                    label: "\(card.brand.displayName) •••• \(card.last4)",
-                    detail: card.expiryLabel,
-                    isSelected: selection == .saved(card),
-                    action: { onSelect(.saved(card)) }
-                )
-            }
-            row(
-                label: L("paycross_use_a_new_card", "Use a new card"),
-                detail: nil,
-                isSelected: selection.isNewCard,
-                action: { onSelect(.newCard) }
-            )
-        }
-    }
-
-    private func row(
-        label: String,
-        detail: String?,
-        isSelected: Bool,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack {
-                Image(systemName: isSelected ? "largecircle.fill.circle" : "circle")
-                    .foregroundStyle(isSelected ? Color.accentColor : .secondary)
-                Text(label)
-                Spacer()
-                if let detail {
-                    Text(detail).foregroundStyle(.secondary).font(.footnote)
-                }
-            }
-            .padding(12)
-            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10))
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 }
 

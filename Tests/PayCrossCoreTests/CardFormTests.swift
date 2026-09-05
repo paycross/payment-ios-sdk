@@ -199,6 +199,69 @@ final class CardFormTests: XCTestCase {
         XCTAssertEqual(state.cvvDigits, "", "a CVV must not carry across entry modes")
     }
 
+    // MARK: - Removing a saved card
+
+    private var twoSavedCards: [SavedCard] {
+        [
+            savedCard,
+            SavedCard(id: "uuid-2", brand: .mastercard, last4: "4444", expiryLabel: "01/29")
+        ]
+    }
+
+    func testRemovingACardDropsItFromThePicker() {
+        var state = CardFormState(savedCards: twoSavedCards)
+        CardFormReducer.reduce(state: &state, event: .savedCardRemoved(uuid: "uuid-1"))
+
+        XCTAssertEqual(state.savedCards.map(\.id), ["uuid-2"])
+    }
+
+    /// The selection cannot survive the card it points at. Leaving it would
+    /// submit a token the server has just disabled.
+    func testRemovingTheSelectedCardFallsBackToNewCardAndClearsTheCVV() {
+        var state = CardFormState(savedCards: twoSavedCards)
+        CardFormReducer.reduce(state: &state, event: .sourceSelected(.saved(savedCard)))
+        CardFormReducer.reduce(state: &state, event: .cvvChanged("123"))
+
+        CardFormReducer.reduce(state: &state, event: .savedCardRemoved(uuid: "uuid-1"))
+
+        XCTAssertTrue(state.source.isNewCard)
+        XCTAssertEqual(state.cvvDigits, "", "the CVV belonged to a card that is gone")
+        XCTAssertEqual(state.savedCards.map(\.id), ["uuid-2"])
+    }
+
+    func testRemovingAnUnselectedCardKeepsTheSelectionAndTheCVV() {
+        var state = CardFormState(savedCards: twoSavedCards)
+        CardFormReducer.reduce(state: &state, event: .sourceSelected(.saved(savedCard)))
+        CardFormReducer.reduce(state: &state, event: .cvvChanged("123"))
+
+        CardFormReducer.reduce(state: &state, event: .savedCardRemoved(uuid: "uuid-2"))
+
+        XCTAssertEqual(state.source, .saved(savedCard))
+        XCTAssertEqual(state.cvvDigits, "123")
+        XCTAssertEqual(state.savedCards.map(\.id), ["uuid-1"])
+    }
+
+    /// The removal is confirmed by a server that answers 204 whether or not the
+    /// card was still there, so the same uuid can arrive twice.
+    func testRemovingACardThatIsAlreadyGoneChangesNothing() {
+        var state = CardFormState(savedCards: twoSavedCards)
+        CardFormReducer.reduce(state: &state, event: .savedCardRemoved(uuid: "uuid-1"))
+        let after = state
+
+        CardFormReducer.reduce(state: &state, event: .savedCardRemoved(uuid: "uuid-1"))
+        XCTAssertEqual(state, after)
+    }
+
+    /// A saved card is submittable on a CVV alone, so preselecting one puts a
+    /// form one field short of a charge in front of the shopper -- not one tap.
+    func testAPreselectedCardStillCannotPayWithoutItsCVV() {
+        var state = CardFormState(savedCards: twoSavedCards)
+        CardFormReducer.reduce(state: &state, event: .sourceSelected(.saved(savedCard)))
+
+        XCTAssertFalse(state.canSubmit(now: june2026))
+        XCTAssertNil(state.cardData(now: june2026))
+    }
+
     // MARK: - PCI
 
     /// PCI DSS 3.3.1 forbids retaining sensitive authentication data after

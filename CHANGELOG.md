@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — source-incompatible, and the next release is a MINOR bump
+
+- `PaymentResult.succeeded` gains a fourth associated value,
+  `savedCardToken: String?`, so a `case .succeeded(let id, let status, let amount)`
+  in merchant code no longer compiles until it binds or ignores the new one. It
+  carries the token for a card *this payment* stored and is nil whenever the
+  payment stored none — the save toggle was off, the shopper paid with a card
+  already on file, or the session resolved as complete with no status to read
+  one from. Nothing else in the flow ever reported it, so a merchant who offers
+  "save this card" had no way to learn the token from the SDK at all.
+
+### Added
+
+- Saved-card removal, driven by the session. A new `saved_cards_config` block
+  beside `saved_cards` carries `allow_removal`, which puts a delete button on
+  every stored row; confirming it calls `DELETE saved-cards/{uuid}` with the
+  session bearer, and the row leaves the picker only once the server has taken
+  the card. The endpoint is idempotent, so a repeated removal is a success; a 404
+  means the card is not this session customer's and the row goes; a 401 reports
+  the finished session rather than blaming the card; anything else leaves the row
+  and offers a retry. The button is not offered while a payment is being
+  authorized.
+- `saved_cards_config.preselect`, a merchant opt-in that opens the sheet with the
+  most recently used stored card already picked instead of "Use a new card". Safe
+  under an opt-in because a stored card still needs its CVC on every payment: no
+  single tap on this sheet can charge one. Both flags default to off, and a
+  session minted before the backend shipped the block reads as both off.
+- Six strings keys, overridable the same way as the rest: `paycross_remove_card`
+  (the delete button's VoiceOver label, interpolating the row it belongs to, so
+  an override has to keep its `%@`), `paycross_remove_card_title`,
+  `paycross_remove_card_message`, `paycross_remove_card_confirm`,
+  `paycross_remove_card_failed` and `paycross_session_expired`.
+
 ## [0.4.0] - 2026-09-05
 
 ### Added

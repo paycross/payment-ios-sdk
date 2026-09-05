@@ -25,6 +25,29 @@ final class LocalizedTests: XCTestCase {
         XCTAssertEqual(L("paycross_card_number", "MISSING", merchant: Bundle.module), "Kartennummer")
     }
 
+    /// The delete affordance's copy is only reachable under a session that
+    /// allows removal, so a key missing from the strings file would ship
+    /// unnoticed and read as its own name in the alert.
+    func testTheRemovalKeysResolveFromTheSDKBundle() {
+        for key in [
+            "paycross_remove_card",
+            "paycross_remove_card_title",
+            "paycross_remove_card_message",
+            "paycross_remove_card_confirm",
+            "paycross_remove_card_failed",
+            "paycross_session_expired"
+        ] {
+            XCTAssertNotEqual(L(key, "MISSING"), "MISSING", "\(key) is not in the strings file")
+        }
+    }
+
+    /// The delete button's label interpolates the row it belongs to, so an
+    /// override that drops the `%@` silently unnames every trash on the screen.
+    func testTheRemoveCardLabelKeepsItsPlaceholder() {
+        let label = String(format: L("paycross_remove_card", "MISSING"), "Visa •••• 1111")
+        XCTAssertEqual(label, "Remove card, Visa •••• 1111")
+    }
+
     func testUnknownKeyFallsBackToTheEnglishLiteral() {
         XCTAssertEqual(L("paycross_no_such_key", "Fallback"), "Fallback")
     }

@@ -26,7 +26,19 @@ public enum PaymentResult: Sendable, Hashable {
     ///
     /// `transactionID` is empty in the edge case where the session was already
     /// complete and the server returned no transaction reference.
-    case succeeded(transactionID: String, status: String, amount: Amount)
+    ///
+    /// `savedCardToken` is the token for a card this payment stored, and is nil
+    /// whenever the payment stored none — the shopper left the save toggle off,
+    /// paid with a card already on file, or the session was resolved as complete
+    /// without a status of its own to read one from. It is the merchant's handle
+    /// on the stored card for a later payment; it is not a card number and is
+    /// useless anywhere but this merchant's own account.
+    case succeeded(
+        transactionID: String,
+        status: String,
+        amount: Amount,
+        savedCardToken: String?
+    )
     /// The payment failed. `transactionID` may be nil for early failures.
     case failed(transactionID: String?, recovery: Recovery)
     /// The outcome is not known. The payment MAY have succeeded.

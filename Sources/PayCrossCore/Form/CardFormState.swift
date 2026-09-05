@@ -34,6 +34,14 @@ package enum CardEntrySource: Sendable, Hashable {
 /// Digits only — no formatting characters are ever stored, so the value that goes
 /// on the wire needs no cleaning step. Formatting is a display concern.
 package struct CardFormState: Sendable, Equatable {
+    /// The stored cards this checkout may offer, as the session listed them and
+    /// in the order it listed them, most recently used first.
+    ///
+    /// Held beside the selection rather than read from the session snapshot,
+    /// because removing one changes both at once: the row goes, and if it was
+    /// the selected row the entry mode goes with it. Splitting that across two
+    /// owners is how a sheet ends up selecting a card it no longer shows.
+    package var savedCards: [SavedCard] = []
     package var source: CardEntrySource = .newCard
     package private(set) var panDigits = ""
     /// MMYY, exactly as Android stores it.
@@ -46,8 +54,9 @@ package struct CardFormState: Sendable, Equatable {
 
     package static let maxExpiryDigits = 4
 
-    package init(source: CardEntrySource = .newCard) {
+    package init(source: CardEntrySource = .newCard, savedCards: [SavedCard] = []) {
         self.source = source
+        self.savedCards = savedCards
     }
 
     // MARK: - Derived
@@ -136,6 +145,8 @@ package enum CardFormEvent: Sendable, Equatable {
     case nameChanged(String)
     case saveCardToggled(Bool)
     case sourceSelected(CardEntrySource)
+    /// A stored card was deleted server-side and must leave the picker.
+    case savedCardRemoved(uuid: String)
     case paySubmitted
     /// A card payment was declined. Clears the CVV.
     case declined(message: String)
@@ -179,6 +190,19 @@ package enum CardFormReducer {
             state.clearError()
             // Switching entry mode must not carry a CVV across.
             state.setCVV("")
+
+        case .savedCardRemoved(let uuid):
+            // Whatever the banner was saying is now about a card that is gone,
+            // and a failed removal followed by a successful one must not leave
+            // its message standing.
+            state.clearError()
+            state.savedCards.removeAll { $0.id == uuid }
+            // Removing a card nobody had picked changes nothing else. Removing
+            // the picked one is the same transition as picking "Use a new card"
+            // by hand, CVV clearing included: the digits on the form belong to a
+            // card that no longer exists.
+            guard case .saved(let card) = state.source, card.id == uuid else { return }
+            reduce(state: &state, event: .sourceSelected(.newCard))
 
         case .paySubmitted:
             // PCI DSS 3.3.1: sensitive authentication data must not be retained

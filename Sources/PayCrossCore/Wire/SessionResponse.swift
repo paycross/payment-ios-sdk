@@ -39,6 +39,7 @@ package struct SessionData: Codable, Sendable, Hashable {
     package let merchantCountry: String?
     package let saveCardConfig: SaveCardConfig?
     package let savedCards: [WireSavedCard]?
+    package let savedCardsConfig: SavedCardsConfig?
     package let wallets: WalletsAvailability?
     // Decoded for the wire contract and deliberately unread: no source file
     // consumes this after the gate stopped checking it. Kept because the
@@ -53,12 +54,23 @@ package struct SessionData: Codable, Sendable, Hashable {
         case merchantCountry = "merchant_country"
         case saveCardConfig = "save_card_config"
         case savedCards = "saved_cards"
+        case savedCardsConfig = "saved_cards_config"
         case accountFunding = "account_funding"
         case locale, wallets
     }
 
     /// The save-card checkbox appears only when the server configured it.
     package var allowsSavingCard: Bool { saveCardConfig != nil }
+
+    /// Whether the sheet may offer to delete a stored card. Off unless the
+    /// session says otherwise, so a session minted before the backend shipped
+    /// the block shows no delete affordance rather than one whose endpoint may
+    /// not be routed yet.
+    package var allowsSavedCardRemoval: Bool { savedCardsConfig?.allowRemoval ?? false }
+
+    /// Whether to open with the most recently used stored card already picked.
+    /// A merchant opt-in, and off by default.
+    package var preselectsSavedCard: Bool { savedCardsConfig?.preselect ?? false }
 
     package init(
         locale: String? = nil,
@@ -68,6 +80,7 @@ package struct SessionData: Codable, Sendable, Hashable {
         merchantCountry: String? = nil,
         saveCardConfig: SaveCardConfig? = nil,
         savedCards: [WireSavedCard]? = nil,
+        savedCardsConfig: SavedCardsConfig? = nil,
         wallets: WalletsAvailability? = nil,
         accountFunding: Bool? = nil
     ) {
@@ -78,6 +91,7 @@ package struct SessionData: Codable, Sendable, Hashable {
         self.merchantCountry = merchantCountry
         self.saveCardConfig = saveCardConfig
         self.savedCards = savedCards
+        self.savedCardsConfig = savedCardsConfig
         self.wallets = wallets
         self.accountFunding = accountFunding
     }
@@ -105,6 +119,13 @@ package struct SessionData: Codable, Sendable, Hashable {
         merchantCountry = try container.decodeIfPresent(String.self, forKey: .merchantCountry)
         saveCardConfig = try container.decodeIfPresent(SaveCardConfig.self, forKey: .saveCardConfig)
         savedCards = try container.decodeIfPresent([WireSavedCard].self, forKey: .savedCards)
+        // Read leniently for the same reason as `wallets`, with the opposite
+        // risk: both flags default to off, so losing the block costs only the
+        // two affordances it enables, while throwing would take the field
+        // groups and the saved cards down with it.
+        savedCardsConfig = (try? container.decodeIfPresent(
+            SavedCardsConfig.self, forKey: .savedCardsConfig
+        )) ?? nil
         wallets = (try? container.decodeIfPresent(WalletsAvailability.self, forKey: .wallets)) ?? nil
         accountFunding = container.decodeLenientBoolIfPresent(forKey: .accountFunding)
     }
@@ -175,6 +196,36 @@ package struct WalletsAvailability: Codable, Sendable, Hashable {
 
         applePay = container.decodeLenientBoolIfPresent(forKey: .applePay)
         googlePay = container.decodeLenientBoolIfPresent(forKey: .googlePay)
+    }
+}
+
+/// What the merchant asked this checkout to do with the stored cards it lists.
+///
+/// A sibling of `saved_cards` rather than a field on it, because the wire keeps
+/// `saved_cards` a flat array and there is nowhere on a list to hang a flag.
+/// Both members default to false: an absent key, an absent block and an
+/// unreadable value all mean "the merchant did not ask for this".
+package struct SavedCardsConfig: Codable, Sendable, Hashable {
+    /// Whether the sheet offers to delete a stored card.
+    package let allowRemoval: Bool
+    /// Whether the sheet opens with the most recently used card already picked.
+    package let preselect: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case allowRemoval = "allow_removal"
+        case preselect
+    }
+
+    package init(allowRemoval: Bool = false, preselect: Bool = false) {
+        self.allowRemoval = allowRemoval
+        self.preselect = preselect
+    }
+
+    package init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        allowRemoval = container.decodeLenientBoolIfPresent(forKey: .allowRemoval) ?? false
+        preselect = container.decodeLenientBoolIfPresent(forKey: .preselect) ?? false
     }
 }
 

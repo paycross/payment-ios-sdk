@@ -118,7 +118,8 @@ package enum PaymentFlowReducer {
             let result = PaymentResult.succeeded(
                 transactionID: status.transactionID,
                 status: status.status,
-                amount: amount
+                amount: amount,
+                savedCardToken: status.savedToken
             )
             state.result = result
             return [.stopPolling, .dismiss3DS, .finish(result)]

@@ -21,6 +21,10 @@ package enum PayCrossError: Error, Sendable, Equatable {
     case http(status: Int, body: String?)
     /// The session JWT was rejected.
     case sessionExpired
+    /// The server has no such resource for this session. On a saved card that is
+    /// the ownership check failing — the card is not this session's customer's —
+    /// so there is nothing to retry.
+    case notFound
     /// The response body did not decode.
     case decoding(String)
 
@@ -90,6 +94,18 @@ package struct PayCrossAPIClient: Sendable {
         try await perform(makeRequest(path: ["status", transactionID], method: "GET"))
     }
 
+    /// `DELETE saved-cards/{uuid}` — drops a stored card from the customer's wallet.
+    ///
+    /// Carries the same session bearer as the session fetch; the token's
+    /// `customer` claim is what the server scopes the deletion to. Answers 204
+    /// whether or not the card was still active, so removing one twice is not an
+    /// error, and returns nothing worth decoding either way.
+    package func deleteSavedCard(uuid: String, sessionToken: String) async throws {
+        var request = makeRequest(path: ["saved-cards", uuid], method: "DELETE")
+        request.setValue("Bearer \(sessionToken)", forHTTPHeaderField: "Authorization")
+        try await performNoContent(request)
+    }
+
     package func newIdempotencyKey() -> String { makeIdempotencyKey() }
 
     // MARK: - Plumbing
@@ -113,30 +129,47 @@ package struct PayCrossAPIClient: Sendable {
         return request
     }
 
-    private func perform<T: Decodable>(_ request: URLRequest) async throws -> T {
-        let data: Data
-        let response: HTTPURLResponse
+    private func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         do {
-            (data, response) = try await transport.send(request)
+            return try await transport.send(request)
         } catch let error as PayCrossError {
             throw error
         } catch {
             throw PayCrossError.transport(error.localizedDescription)
         }
+    }
 
+    private func check(_ response: HTTPURLResponse, body: Data) throws {
         if response.statusCode == 401 { throw PayCrossError.sessionExpired }
         guard (200..<300).contains(response.statusCode) else {
             throw PayCrossError.http(
                 status: response.statusCode,
-                body: String(data: data, encoding: .utf8)
+                body: String(data: body, encoding: .utf8)
             )
         }
+    }
+
+    private func perform<T: Decodable>(_ request: URLRequest) async throws -> T {
+        let (data, response) = try await send(request)
+        try check(response, body: data)
 
         do {
             return try JSONDecoder().decode(T.self, from: data)
         } catch {
             throw PayCrossError.decoding("\(T.self): \(error)")
         }
+    }
+
+    /// `perform`'s sibling for a call whose success is 204 and whose body,
+    /// if any, is not a value.
+    ///
+    /// 404 is mapped here and not in `check`, so it stays specific to a resource
+    /// the caller named. The status poll answers 404 while the row is still
+    /// being written, and reading that as "gone" would end a live payment.
+    private func performNoContent(_ request: URLRequest) async throws {
+        let (data, response) = try await send(request)
+        if response.statusCode == 404 { throw PayCrossError.notFound }
+        try check(response, body: data)
     }
 }
 

@@ -28,9 +28,17 @@ package struct StatusResponse: Codable, Sendable, Hashable {
     package let currency: String?
     package let action: ThreeDSAction?
     package let recovery: String?
+    /// The token for a card this payment stored, on a terminal status only.
+    ///
+    /// The wire also carries `used_token`, naming the stored card this payment
+    /// was taken from. It is deliberately not decoded: the sheet picked that
+    /// card, so the merchant already knows it, and the only new fact here is
+    /// the token that did not exist before this payment.
+    package let savedToken: String?
 
     enum CodingKeys: String, CodingKey {
         case transactionID = "transaction_id"
+        case savedToken = "saved_token"
         case status, amount, currency, action, recovery
     }
 
@@ -40,7 +48,8 @@ package struct StatusResponse: Codable, Sendable, Hashable {
         amount: Int64? = nil,
         currency: String? = nil,
         action: ThreeDSAction? = nil,
-        recovery: String? = nil
+        recovery: String? = nil,
+        savedToken: String? = nil
     ) {
         self.transactionID = transactionID
         self.status = status
@@ -48,6 +57,7 @@ package struct StatusResponse: Codable, Sendable, Hashable {
         self.currency = currency
         self.action = action
         self.recovery = recovery
+        self.savedToken = savedToken
     }
 }
 

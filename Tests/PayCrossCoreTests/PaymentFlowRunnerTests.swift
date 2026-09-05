@@ -183,7 +183,8 @@ final class PaymentFlowRunnerTests: XCTestCase {
 
         XCTAssertEqual(outcome, .finished(.succeeded(
             transactionID: "t1", status: "success",
-            amount: Amount(minorUnits: 1000, currencyCode: "EUR")
+            amount: Amount(minorUnits: 1000, currencyCode: "EUR"),
+            savedCardToken: nil
         )))
         let statusCount = await transport.statusCount
         XCTAssertEqual(statusCount, 2)
