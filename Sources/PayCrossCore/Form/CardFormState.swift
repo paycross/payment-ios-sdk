@@ -192,6 +192,10 @@ package enum CardFormReducer {
             state.setCVV("")
 
         case .savedCardRemoved(let uuid):
+            // Whatever the banner was saying is now about a card that is gone,
+            // and a failed removal followed by a successful one must not leave
+            // its message standing.
+            state.clearError()
             state.savedCards.removeAll { $0.id == uuid }
             // Removing a card nobody had picked changes nothing else. Removing
             // the picked one is the same transition as picking "Use a new card"

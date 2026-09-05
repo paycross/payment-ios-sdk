@@ -34,10 +34,18 @@ final class LocalizedTests: XCTestCase {
             "paycross_remove_card_title",
             "paycross_remove_card_message",
             "paycross_remove_card_confirm",
-            "paycross_remove_card_failed"
+            "paycross_remove_card_failed",
+            "paycross_session_expired"
         ] {
             XCTAssertNotEqual(L(key, "MISSING"), "MISSING", "\(key) is not in the strings file")
         }
+    }
+
+    /// The delete button's label interpolates the row it belongs to, so an
+    /// override that drops the `%@` silently unnames every trash on the screen.
+    func testTheRemoveCardLabelKeepsItsPlaceholder() {
+        let label = String(format: L("paycross_remove_card", "MISSING"), "Visa •••• 1111")
+        XCTAssertEqual(label, "Remove card, Visa •••• 1111")
     }
 
     func testUnknownKeyFallsBackToTheEnglishLiteral() {

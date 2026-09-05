@@ -21,10 +21,10 @@ struct CardFormView: View {
     let onPay: () -> Void
     var showsApplePayButton: Bool = false
     var onApplePay: () -> Void = {}
-    /// Called once the shopper has confirmed the removal. The card leaves the
-    /// picker only after the server has taken it, so this reports the intent
-    /// rather than performing it.
-    var onRemoveCard: (SavedCard) -> Void = { _ in }
+    /// Called when the shopper presses a row's trash. Nothing is deleted here:
+    /// the sheet confirms first, then calls the server, and the row goes only
+    /// once the server has taken the card.
+    var onRemoveRequested: (SavedCard) -> Void = { _ in }
 
     private var canPay: Bool { state.canSubmit() && !isLoading }
 
@@ -67,8 +67,9 @@ struct CardFormView: View {
                             cards: state.savedCards,
                             selection: state.source,
                             allowsRemoval: allowsCardRemoval,
+                            isPaying: isLoading,
                             onSelect: { send(.sourceSelected($0)) },
-                            onRemove: onRemoveCard
+                            onRemoveRequested: onRemoveRequested
                         )
                     }
 
@@ -271,114 +272,6 @@ private struct BrandBadge: View {
             .font(.caption.weight(.semibold))
             .foregroundStyle(.secondary)
             .accessibilityIdentifier("brand")
-    }
-}
-
-private struct SavedCardPicker: View {
-    let cards: [SavedCard]
-    let selection: CardEntrySource
-    let allowsRemoval: Bool
-    let onSelect: (CardEntrySource) -> Void
-    let onRemove: (SavedCard) -> Void
-
-    /// The card the confirmation is asking about, and the flag that raises it.
-    /// One value rather than two, so the alert cannot be shown with no card
-    /// behind it or left naming a card it is no longer about.
-    @State private var pendingRemoval: SavedCard?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ForEach(cards) { card in
-                row(
-                    label: "\(card.brand.displayName) •••• \(card.last4)",
-                    detail: card.expiryLabel,
-                    identifier: "paycross.savedCard.\(card.id)",
-                    isSelected: selection == .saved(card),
-                    action: { onSelect(.saved(card)) },
-                    remove: allowsRemoval ? { pendingRemoval = card } : nil,
-                    removeIdentifier: "paycross.savedCard.\(card.id).delete"
-                )
-            }
-            row(
-                label: L("paycross_use_a_new_card", "Use a new card"),
-                detail: nil,
-                identifier: "paycross.savedCard.new",
-                isSelected: selection.isNewCard,
-                action: { onSelect(.newCard) }
-            )
-        }
-        // Deleting a stored card is not undoable from the sheet, and the trash
-        // sits a thumb's width from the row that selects the card.
-        .alert(
-            L("paycross_remove_card_title", "Remove this card?"),
-            isPresented: isConfirmingRemoval,
-            presenting: pendingRemoval
-        ) { card in
-            Button(L("paycross_remove_card_confirm", "Remove"), role: .destructive) {
-                onRemove(card)
-            }
-            Button(L("paycross_cancel", "Cancel"), role: .cancel) {}
-        } message: { _ in
-            Text(L(
-                "paycross_remove_card_message",
-                "It will no longer be offered for future payments."
-            ))
-        }
-    }
-
-    private var isConfirmingRemoval: Binding<Bool> {
-        Binding(
-            get: { pendingRemoval != nil },
-            set: { if !$0 { pendingRemoval = nil } }
-        )
-    }
-
-    private func row(
-        label: String,
-        detail: String?,
-        identifier: String,
-        isSelected: Bool,
-        action: @escaping () -> Void,
-        remove: (() -> Void)? = nil,
-        removeIdentifier: String = ""
-    ) -> some View {
-        // Siblings rather than a delete button nested inside the selection
-        // button: a tap landing on the wrong one of two overlapping controls
-        // either charges a card the shopper meant to delete or deletes one they
-        // meant to pay with.
-        HStack(spacing: 0) {
-            Button(action: action) {
-                HStack {
-                    Image(systemName: isSelected ? "largecircle.fill.circle" : "circle")
-                        .foregroundStyle(isSelected ? Color.accentColor : .secondary)
-                    Text(label)
-                    Spacer()
-                    if let detail {
-                        Text(detail).foregroundStyle(.secondary).font(.footnote)
-                    }
-                }
-                .padding(12)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityAddTraits(isSelected ? [.isSelected] : [])
-            .accessibilityIdentifier(identifier)
-
-            if let remove {
-                Button(action: remove) {
-                    Image(systemName: "trash")
-                        .foregroundStyle(.secondary)
-                        // The row is 44pt tall; the trash matches it, so the
-                        // target is a target rather than a glyph.
-                        .frame(minWidth: 44, minHeight: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(L("paycross_remove_card", "Remove card"))
-                .accessibilityIdentifier(removeIdentifier)
-            }
-        }
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10))
     }
 }
 

@@ -31,7 +31,7 @@ final class SavedCardRemovalTests: XCTestCase {
         XCTAssertTrue(model.allowsCardRemoval)
 
         model.removeSavedCard(try XCTUnwrap(model.form.savedCards.first))
-        await transport.hasBeenAsked(for: 2)
+        await model.removalTask?.value
 
         let request = await transport.sent[1]
         XCTAssertEqual(request.httpMethod, "DELETE")
@@ -44,8 +44,10 @@ final class SavedCardRemovalTests: XCTestCase {
             "Bearer header.payload.signature"
         )
 
-        let dropped = await settle { model.form.savedCards.map(\.id) == [self.mastercard] }
-        XCTAssertTrue(dropped, "the row must go once the server has taken the card")
+        XCTAssertEqual(
+            model.form.savedCards.map(\.id), [mastercard],
+            "the row must go once the server has taken the card"
+        )
         XCTAssertNil(model.form.inlineError)
     }
 
@@ -61,10 +63,12 @@ final class SavedCardRemovalTests: XCTestCase {
         await model.load()
 
         model.removeSavedCard(try XCTUnwrap(model.form.savedCards.first))
-        await transport.hasBeenAsked(for: 2)
+        await model.removalTask?.value
 
-        let banner = await settle { model.form.inlineError != nil }
-        XCTAssertTrue(banner, "a refused removal has to say so")
+        XCTAssertEqual(
+            model.form.inlineError, "Could not remove the card. Try again.",
+            "a refused removal has to say so, and offer the retry that may work"
+        )
         XCTAssertEqual(model.form.savedCards.map(\.id), [visa, mastercard])
     }
 
@@ -85,11 +89,11 @@ final class SavedCardRemovalTests: XCTestCase {
         model.pay()
         XCTAssertTrue(model.isLoading, "the payment has to be in flight for this to prove anything")
 
-        // The refusal is synchronous, so no task is ever started and what the
-        // payment does next cannot change the outcome. The yields only give an
-        // errant one the chance to prove otherwise.
+        // The refusal is synchronous, so what the payment does next cannot
+        // change the outcome.
         model.removeSavedCard(try XCTUnwrap(model.form.savedCards.first))
-        for _ in 0..<50 { await Task.yield() }
+        // Nil is the assertion: the guard returns before a task is ever made.
+        XCTAssertNil(model.removalTask, "no removal may even be started mid-payment")
 
         let sent = await transport.sent
         XCTAssertFalse(
@@ -111,6 +115,65 @@ final class SavedCardRemovalTests: XCTestCase {
 
         XCTAssertFalse(model.allowsCardRemoval)
         XCTAssertEqual(model.form.savedCards.count, 2, "the cards are still offered")
+    }
+
+    /// A card the server says is not this customer's is in the state the shopper
+    /// asked for. Telling them to try again asks them to repeat a request that
+    /// has been answered, against a row that could never go.
+    func testARemovalThatComesBack404DropsTheRowAnyway() async throws {
+        let transport = StubTransport(replies: [
+            .init(body: Data(sessionJSON(allowRemoval: true).utf8)),
+            .init(status: 404, body: Data(#"{"error":"not found"}"#.utf8))
+        ])
+        let model = makeModel(transport: transport)
+        await model.load()
+
+        model.removeSavedCard(try XCTUnwrap(model.form.savedCards.first))
+        await model.removalTask?.value
+
+        XCTAssertEqual(model.form.savedCards.map(\.id), [mastercard])
+        XCTAssertNil(model.form.inlineError, "nothing went wrong from here")
+    }
+
+    /// Nothing is retryable on a dead session, and the same token is about to
+    /// fail the payment itself. "Try again" would be the wrong instruction.
+    func testARemovalThatComesBack401ReportsTheSessionNotTheCard() async throws {
+        let transport = StubTransport(replies: [
+            .init(body: Data(sessionJSON(allowRemoval: true).utf8)),
+            .init(status: 401, body: Data())
+        ])
+        let model = makeModel(transport: transport)
+        await model.load()
+
+        model.removeSavedCard(try XCTUnwrap(model.form.savedCards.first))
+        await model.removalTask?.value
+
+        XCTAssertEqual(
+            model.form.inlineError, "This payment session has expired. Start again."
+        )
+        XCTAssertEqual(model.form.savedCards.count, 2, "the card is not the problem")
+    }
+
+    /// A removal that succeeds after one that failed must not leave the first
+    /// one's message standing over a form that is now fine.
+    func testASuccessfulRemovalClearsAnEarlierFailuresBanner() async throws {
+        let transport = StubTransport(replies: [
+            .init(body: Data(sessionJSON(allowRemoval: true).utf8)),
+            .init(status: 500, body: Data()),
+            .init(status: 204, body: Data())
+        ])
+        let model = makeModel(transport: transport)
+        await model.load()
+
+        model.removeSavedCard(try XCTUnwrap(model.form.savedCards.first))
+        await model.removalTask?.value
+        XCTAssertNotNil(model.form.inlineError)
+
+        model.removeSavedCard(try XCTUnwrap(model.form.savedCards.first))
+        await model.removalTask?.value
+
+        XCTAssertNil(model.form.inlineError, "the banner was about a card that is gone")
+        XCTAssertEqual(model.form.savedCards.map(\.id), [mastercard])
     }
 
     // MARK: - Preselection
@@ -206,22 +269,6 @@ final class SavedCardRemovalTests: XCTestCase {
             // open a socket to the live checkout API from a unit test.
             transport: transport
         )
-    }
-
-    /// Returns as soon as `condition` holds, or false once the ceiling passes.
-    ///
-    /// The removal applies to the form in a task that resumes after the DELETE,
-    /// so the request having been sent is not yet the state having changed. The
-    /// ceiling is generous because it costs nothing: this returns the instant the
-    /// condition is true, and a model that is genuinely broken still fails on the
-    /// caller's own assertion rather than on the clock.
-    private func settle(_ condition: () -> Bool) async -> Bool {
-        for _ in 0..<200 {
-            if condition() { return true }
-            await Task.yield()
-            try? await Task.sleep(for: .milliseconds(10))
-        }
-        return condition()
     }
 }
 #endif

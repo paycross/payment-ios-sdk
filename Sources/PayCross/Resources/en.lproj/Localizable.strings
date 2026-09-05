@@ -52,8 +52,9 @@
 /* Button above the numeric keypad that puts it away */
 "paycross_keyboard_done" = "Done";
 
-/* Accessibility label on the button that deletes a stored card */
-"paycross_remove_card" = "Remove card";
+/* VoiceOver label on the button that deletes a stored card. %@ is the row it
+   belongs to, e.g. "Visa •••• 1111", so the cards can be told apart */
+"paycross_remove_card" = "Remove card, %@";
 
 /* Title of the confirmation raised before a stored card is deleted */
 "paycross_remove_card_title" = "Remove this card?";
@@ -66,3 +67,6 @@
 
 /* Shown when the card could not be deleted */
 "paycross_remove_card_failed" = "Could not remove the card. Try again.";
+
+/* Shown when the session token is rejected and nothing more can be done with it */
+"paycross_session_expired" = "This payment session has expired. Start again.";

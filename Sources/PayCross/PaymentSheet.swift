@@ -109,6 +109,10 @@ final class PaymentSheetModel: ObservableObject {
     /// view because a 3DS challenge covers the toolbar, so the request also
     /// arrives from the challenge's own bar.
     @Published var isConfirmingCancel = false
+    /// The card the "Remove this card?" confirmation is asking about, and the
+    /// flag that raises it. One value rather than two, so the prompt cannot be
+    /// shown with no card behind it or left naming a card it is no longer about.
+    @Published var cardPendingRemoval: SavedCard?
 
     let claims: SessionClaims
 
@@ -177,6 +181,10 @@ final class PaymentSheetModel: ObservableObject {
     /// Ends the sheet once the session can no longer take a payment. Only ever
     /// armed while the form is re-armed after a retryable decline.
     private var sessionDeadlineTask: Task<Void, Never>?
+    /// The saved-card removal in flight, named so a test can await the request
+    /// and the state change it causes rather than a stretch of wall clock. Two
+    /// removals in a row each run to completion; only the handle is replaced.
+    private(set) var removalTask: Task<Void, Never>?
     /// The last transaction this sheet created, so a cancellation can name it.
     /// The server keeps its own record and a payment cancelled mid-authorization
     /// may still complete; without this the merchant has nothing to reconcile it by.
@@ -298,36 +306,75 @@ final class PaymentSheetModel: ObservableObject {
         }
     }
 
+    /// The shopper pressed a row's trash. Raises the confirmation; deletes nothing.
+    func requestRemoval(of card: SavedCard) {
+        cardPendingRemoval = card
+    }
+
+    /// The confirmation's answer. Named rather than left to the alert's own
+    /// dismissal, so the path a shopper takes to keep a card is a thing the
+    /// sheet does and not a side effect of a binding.
+    func cancelRemoval() {
+        cardPendingRemoval = nil
+    }
+
+    func confirmRemoval() {
+        guard let card = cardPendingRemoval else { return }
+        cardPendingRemoval = nil
+        removeSavedCard(card)
+    }
+
     /// Deletes a stored card, then drops it from the picker.
     ///
     /// Server first, and only then the row: a card that vanishes on the tap and
     /// comes back next session is a promise the sheet did not keep. A failure
     /// leaves the row exactly where it was and says so in the banner.
     func removeSavedCard(_ card: SavedCard) {
-        // Not while a payment is in flight. The picker stays live during
-        // authorization so the shopper can read what they chose, but deleting a
-        // card the server is in the middle of charging is not a state worth having.
+        // Belt to the view's braces, which takes the trash away while a payment
+        // runs. Deleting a card the server is in the middle of charging is not a
+        // state worth having, and a tap already in flight when the payment
+        // started would otherwise still land.
         guard !isLoading else { return }
 
-        Task { [weak self] in
+        removalTask = Task { [weak self] in
             guard let self else { return }
             do {
                 try await self.makeClient().deleteSavedCard(
                     uuid: card.id, sessionToken: self.sessionToken
                 )
-                CardFormReducer.reduce(
-                    state: &self.form, event: .savedCardRemoved(uuid: card.id)
-                )
+                self.drop(card)
+            } catch PayCrossError.notFound {
+                // The server says this card is not the session customer's, which
+                // is the state the shopper asked for. Showing "try again" would
+                // ask them to repeat a request that has already been answered,
+                // against a row that can never go.
+                self.drop(card)
+            } catch PayCrossError.sessionExpired {
+                // Nothing is retryable on a dead session, this least of all, and
+                // the same token is about to fail the payment itself. Say that
+                // rather than blaming the card.
+                self.show(L(
+                    "paycross_session_expired",
+                    "This payment session has expired. Start again."
+                ))
             } catch {
-                // Straight onto the form's banner rather than through the
-                // reducer: nothing about the card being entered changed, and a
-                // decline event here would clear a CVV the shopper still needs.
-                self.form.inlineError = L(
+                self.show(L(
                     "paycross_remove_card_failed",
                     "Could not remove the card. Try again."
-                )
+                ))
             }
         }
+    }
+
+    private func drop(_ card: SavedCard) {
+        CardFormReducer.reduce(state: &form, event: .savedCardRemoved(uuid: card.id))
+    }
+
+    /// Puts a message on the form's banner without going through the reducer:
+    /// nothing about the card being entered changed, and a decline-shaped event
+    /// would clear a CVV the shopper still needs.
+    private func show(_ message: String) {
+        form.inlineError = message
     }
 
     func awaitResult() async -> PaymentResult {
@@ -746,7 +793,7 @@ struct PaymentSheetView: View {
                         onPay: model.pay,
                         showsApplePayButton: model.showsApplePayButton,
                         onApplePay: { model.payWithApplePay() },
-                        onRemoveCard: { model.removeSavedCard($0) }
+                        onRemoveRequested: { model.requestRemoval(of: $0) }
                     )
                 }
             }
@@ -771,7 +818,33 @@ struct PaymentSheetView: View {
             } message: {
                 Text(L("paycross_cancel_payment_message", "Are you sure you want to cancel this payment?"))
             }
+            // Beside the cancel confirmation rather than inside the picker, for
+            // the same reason: deleting a stored card is not undoable from the
+            // sheet, and the trash sits a thumb's width from the row that
+            // selects the card.
+            .alert(
+                L("paycross_remove_card_title", "Remove this card?"),
+                isPresented: isConfirmingRemoval,
+                presenting: model.cardPendingRemoval
+            ) { _ in
+                Button(L("paycross_remove_card_confirm", "Remove"), role: .destructive) {
+                    model.confirmRemoval()
+                }
+                Button(L("paycross_cancel", "Cancel"), role: .cancel) { model.cancelRemoval() }
+            } message: { _ in
+                Text(L(
+                    "paycross_remove_card_message",
+                    "It will no longer be offered for future payments."
+                ))
+            }
         }
+    }
+
+    private var isConfirmingRemoval: Binding<Bool> {
+        Binding(
+            get: { model.cardPendingRemoval != nil },
+            set: { if !$0 { model.cardPendingRemoval = nil } }
+        )
     }
 }
 #endif
