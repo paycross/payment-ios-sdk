@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name             = 'PayCross'
-  s.version          = '0.4.0'
+  s.version          = '0.5.0'
   s.summary          = 'PayCross iOS payment SDK.'
   s.description      = <<-DESC
     Drop-in card payment sheet: card entry, saved cards, 3D Secure v2 and status
