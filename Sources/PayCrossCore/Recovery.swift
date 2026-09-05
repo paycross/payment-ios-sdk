@@ -16,10 +16,13 @@ public enum Recovery: Sendable, Hashable {
     /// The outcome was never observed. Check the transaction's status before
     /// re-collecting.
     ///
-    /// Produced when the status poll runs out of time. The payment may have
-    /// succeeded and shifted liability, so the failure carries a transaction id
-    /// and nothing else about it should be assumed. Not retryable: this is the
-    /// one case where a retry can charge a shopper twice.
+    /// Never carried by a `.failed` result: see `PaymentResult.pending`. Parsing
+    /// it off the wire is what this case is for — the server does send
+    /// `verify_before_retry`, and a value the SDK cannot name would fall to
+    /// `unrecognized` and read as "upgrade the SDK" instead of "nobody knows".
+    /// The SDK turns it into `.pending(reason: .serverVerify)`, because
+    /// reporting an unobserved outcome as a decline is what invited a merchant to
+    /// charge a shopper twice. Not retryable, for that same reason.
     case verifyBeforeRetry
     /// A value this SDK version does not know. Treated as terminal.
     case unrecognized(String)

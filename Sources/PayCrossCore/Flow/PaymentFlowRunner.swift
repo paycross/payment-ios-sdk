@@ -205,7 +205,7 @@ package actor PaymentFlowRunner {
 
         let effects = PaymentFlowReducer.reduce(state: &state, event: .pollDeadlineReached)
         return await apply(effects)
-            ?? .finished(.failed(transactionID: transactionID, recovery: .verifyBeforeRetry))
+            ?? .finished(.pending(transactionID: transactionID, reason: .pollTimeout))
     }
 
     /// Winds the run down when the caller cancels.

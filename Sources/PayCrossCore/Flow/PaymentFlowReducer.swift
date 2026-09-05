@@ -86,12 +86,11 @@ package enum PaymentFlowReducer {
             state.isPolling = false
             // The poll ran out without ever seeing an outcome, and a full network
             // loss is indistinguishable from a blip the loop was right to ignore.
-            // The payment may have succeeded and shifted liability, so this must
-            // not come back as something the merchant may retry: the transaction
-            // id is here to resolve it out of band.
-            let result = PaymentResult.failed(
+            // The payment may have succeeded and shifted liability, so this is not
+            // a failure at all: the transaction id is here to resolve it out of band.
+            let result = PaymentResult.pending(
                 transactionID: state.transactionID,
-                recovery: .verifyBeforeRetry
+                reason: .pollTimeout
             )
             state.result = result
             return [.stopPolling, .finish(result)]
@@ -128,6 +127,23 @@ package enum PaymentFlowReducer {
             let recovery = Recovery(apiValue: status.recovery)
             state.isPolling = false
             state.pendingThreeDS = nil
+
+            // Ahead of the retryable branch on purpose. `verifyBeforeRetry` is not
+            // on the retry whitelist, so today both orderings behave the same — but
+            // that makes the one outcome which can charge a shopper twice depend on
+            // a list kept in another file, where a one-line edit would silently
+            // re-arm the form on a payment that may already have succeeded. The
+            // server has no verdict here, which is the same unknown the poll
+            // deadline produces and has to reach the merchant the same way:
+            // delivered as a decline it reads as "collect again".
+            if case .verifyBeforeRetry = recovery {
+                let result = PaymentResult.pending(
+                    transactionID: status.transactionID,
+                    reason: .serverVerify
+                )
+                state.result = result
+                return [.stopPolling, .dismiss3DS, .finish(result)]
+            }
 
             if recovery.isRetryable {
                 // Only while the session can still take a payment. Nothing else
