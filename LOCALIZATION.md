@@ -62,10 +62,8 @@ cannot both pick the wrong words and misprint the price.
 `Locale.current.identifier` and getting `fr_FR` gets French words and French
 digits rather than one of each.
 
-That check is syntax only. It cannot tell a language that exists from one that
-does not, so a well-formed tag naming a language the SDK has no words for — say
-`frr`, which is Northern Frisian and is probably a typo for `fr` — gives English
-words and is still what the amount is formatted in.
+A well-formed tag for a language the SDK ships no strings for, such as `frr`,
+gives English words and still formats the amount as itself.
 
 Foundation writes currency for every locale, not just the two the SDK has words
 for, and a shopper who cannot read the labels can still read the price. So:

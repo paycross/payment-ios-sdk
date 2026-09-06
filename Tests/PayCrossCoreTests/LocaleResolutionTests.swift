@@ -229,13 +229,13 @@ final class LocaleResolutionTests: XCTestCase {
         XCTAssertEqual(resolved.formattingTag, "de-DE")
     }
 
-    /// **The limit of a syntax check, pinned so nobody assumes otherwise.**
-    /// `frr` is Northern Frisian: three letters, perfectly well formed, and
-    /// almost certainly a typo for `fr`. Nothing syntactic separates it from
-    /// `de`, so it is passed over for the *words* — the SDK ships no Frisian —
-    /// but it is still what the amount is formatted in. Making this fall through
-    /// as well needs a list of real languages, not a shape rule.
-    func testAWellFormedTagNamingNoShippedLanguageStillFormats() {
+    /// The two clamps are different, and this is the case that shows it. `frr`
+    /// is Northern Frisian: a real language, a well-formed tag, and one the SDK
+    /// ships no strings for. So the words fall through to English while the
+    /// amount is formatted as Frisian, which is exactly the point of leaving
+    /// formatting unclamped — Foundation has number formats for far more
+    /// languages than this SDK has words.
+    func testAWellFormedTagWeShipNoStringsForStillFormatsTheAmount() {
         let resolved = LocaleResolution.resolve(override: "frr", device: ["de-DE"])
         XCTAssertEqual(resolved.language, "en", "the SDK ships no Frisian")
         XCTAssertEqual(resolved.formattingTag, "frr")
