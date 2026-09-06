@@ -95,6 +95,16 @@ final class LocaleResolutionTests: XCTestCase {
         XCTAssertEqual(language(override: "fr_CA"), "fr")
     }
 
+    /// A merchant reading `Locale.current.identifier` straight into `locale:`
+    /// hands over `fr_FR`. It has to behave as `fr-FR` on both halves at once,
+    /// or the words come out French and the price comes out of the fallback.
+    func testAPOSIXStyleTagBehavesAsItsHyphenatedForm() {
+        let underscored = LocaleResolution.resolve(override: "fr_FR")
+        XCTAssertEqual(underscored, LocaleResolution.resolve(override: "fr-FR"))
+        XCTAssertEqual(underscored.language, "fr")
+        XCTAssertEqual(underscored.formattingTag, "fr-FR")
+    }
+
     func testMatchingIgnoresCase() {
         XCTAssertEqual(language(override: "FR-ca"), "fr")
     }
@@ -171,7 +181,10 @@ final class LocaleResolutionTests: XCTestCase {
     /// a wrong price format. A candidate that is not shaped like a language tag
     /// is passed over for formatting, and the next one supplies it.
     func testAMalformedCandidateDoesNotFormatTheAmount() {
-        for typo in ["f-r", "f", "frenchy", "fr!", "fr-", "-fr", "fr--CA", "123", "fr-CAAAAAAAAA"] {
+        for typo in [
+            "français", "f-r", "f", "frenchy", "fr!", "fr-", "-fr", "fr--CA", "123",
+            "fr-CAAAAAAAAA"
+        ] {
             XCTAssertEqual(
                 formatting(override: typo, device: ["de-DE"]), "de-DE",
                 "\(typo.debugDescription) is not shaped like a language tag"
@@ -190,6 +203,21 @@ final class LocaleResolutionTests: XCTestCase {
 
     func testWhenNoCandidateIsWellFormedTheAmountIsEnglish() {
         XCTAssertEqual(formatting(override: "f-r", session: "!!", device: ["-"]), "en")
+    }
+
+    /// The shape of typo this rule is for: a merchant who wrote the language's
+    /// name where its tag belongs. It picks neither the words nor the number
+    /// format, and the device supplies both.
+    func testALanguageNameInsteadOfATagPicksNeitherTheWordsNorTheFormat() {
+        let resolved = LocaleResolution.resolve(override: "français", device: ["de-DE"])
+        XCTAssertEqual(resolved.language, "en")
+        XCTAssertEqual(resolved.formattingTag, "de-DE")
+    }
+
+    func testASingleLetterIsNotATag() {
+        let resolved = LocaleResolution.resolve(override: "f", device: ["de-DE"])
+        XCTAssertEqual(resolved.language, "en")
+        XCTAssertEqual(resolved.formattingTag, "de-DE")
     }
 
     /// The words are more forgiving than the amount, on purpose. `fr-` is a typo

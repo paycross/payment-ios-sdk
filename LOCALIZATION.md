@@ -54,9 +54,13 @@ The amount is **not** clamped to the two languages the SDK ships. It is
 formatted in the first locale anybody supplied — the override, else the session,
 else the device's first preference — with its region intact, **provided that
 candidate is shaped like a language tag**: two or three letters, then any number
-of short alphanumeric subtags. One that is not, `f-r` or `fr-` or `frenchy`, is
-passed over and the next candidate formats the amount instead, so a typo cannot
-both pick the wrong words and misprint the price.
+of short alphanumeric subtags. One that is not — `français`, `f-r`, `fr-`, `f` —
+is passed over and the next candidate formats the amount instead, so a typo
+cannot both pick the wrong words and misprint the price.
+
+`_` is read as `-` throughout, on both halves, so a merchant handing over
+`Locale.current.identifier` and getting `fr_FR` gets French words and French
+digits rather than one of each.
 
 That check is syntax only. It cannot tell a language that exists from one that
 does not, so a well-formed tag naming a language the SDK has no words for — say
