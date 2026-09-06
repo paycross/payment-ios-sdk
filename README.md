@@ -251,49 +251,58 @@ not offer a way to turn it off.
   reading the clock, so year-boundary cases are testable.
 - **`CardBrand.maxPANLength`** is 15 for Amex; Android bounds every PAN at 19.
 
-## Strings
+## Strings and languages
 
-The sheet ships English, in the SDK's own bundle. Every user-visible string is
-looked up by key — the merchant's bundle first, ours second — so defining one of
-these keys in your app's `Localizable.strings` replaces our wording for that one
-label, and defining none of them leaves the sheet as it comes. Every key is
-prefixed `paycross_`, so nothing your app already names can collide with one:
-an override happens because you asked for it, never by accident. Localizing the
-sheet into another language is the same mechanism: supply the keys you want, in
-your app's `.lproj` for that language.
+The sheet ships **English and French**. Every user-visible string is looked up by
+key — the merchant's bundle first, ours second — so defining one of these keys in
+your app's `Localizable.strings` replaces our wording for that one label, and
+defining none of them leaves the sheet as it comes. Every key is prefixed
+`paycross_`, so nothing your app already names can collide with one: an override
+happens because you asked for it, never by accident.
 
-```
-"paycross_or_pay_with_card"         = "or pay with card";
-"paycross_cardholder_name"          = "Cardholder Name";
-"paycross_name_on_card"             = "NAME ON CARD";
-"paycross_card_number"              = "Card Number";
-"paycross_expiry_label"             = "MM/YY";
-"paycross_cvv"                      = "CVV";
-"paycross_save_this_card"           = "Save this card";
-"paycross_use_a_new_card"           = "Use a new card";
-"paycross_total"                    = "Total";
-"paycross_pay_amount"               = "Pay %@";
-"paycross_payment"                  = "Payment";
-"paycross_cancel"                   = "Cancel";
-"paycross_cancel_payment_title"     = "Cancel Payment?";
-"paycross_cancel_payment_yes"       = "Yes, Cancel";
-"paycross_cancel_payment_continue"  = "Continue Payment";
-"paycross_cancel_payment_message"   = "Are you sure you want to cancel this payment?";
-"paycross_apple_pay_not_configured" = "Apple Pay is not configured for this merchant.";
-"paycross_keyboard_done"            = "Done";
-"paycross_remove_card"              = "Remove card, %@";
-"paycross_remove_card_title"        = "Remove this card?";
-"paycross_remove_card_message"      = "It will no longer be offered for future payments.";
-"paycross_remove_card_confirm"      = "Remove";
-"paycross_remove_card_failed"       = "Could not remove the card. Try again.";
-"paycross_session_expired"          = "This payment session has expired. Start again.";
+| Language | Tag |
+|---|---|
+| English | `en` |
+| French | `fr` |
+
+### Which language a shopper sees
+
+Three sources, in order of preference:
+
+1. `PayCrossAPI.configure(locale:)`
+2. The session's `locale`, as the server sent it
+3. The shopper's device preferences
+
+They are matched one candidate at a time — exact tag first, then primary subtag,
+so `fr-CA` is French — and the first naming a language the SDK ships wins. A
+candidate it cannot speak is passed over rather than ending the search, so
+`locale: "de"` falls through to the session's language and then the device's.
+English when nothing matches. Nothing here throws.
+
+```swift
+PayCrossAPI.configure(environment: .sandbox, locale: "fr")
 ```
 
-`paycross_pay_amount` interpolates the formatted amount and
-`paycross_remove_card` the row the delete button belongs to, so an override of
-either has to keep its `%@`. The placeholders shown inside the card number and expiry fields,
-and the dash standing in for an unmade selection, are shape hints rather than
-copy, and are not overridable.
+**The amount is not clamped to those two languages.** It is formatted in the
+first tag the override or the session asks for, region intact, because Foundation
+writes currency for every locale: `de-AT` gives Austrian digits under English
+labels, and an `fr-CH` session gives French words with Swiss-French digits. A tag
+that is not shaped like one is passed over here too, so a typo cannot misprint a
+price.
+
+When neither asks for anything the amount is formatted with the shopper's own
+`Locale`, exactly as it was before the SDK spoke a second language. That carries
+their Region and format settings, which the device's language list does not: an
+`en_DE` phone shows `12,34 €` under English labels.
+
+**An explicit locale does not turn string overrides off.** The two answer
+different questions — which language, and which words — and your bundle is
+searched first whatever the sheet resolved to. Your overrides come out in the
+**sheet's** language: an app shipping English and French wording gives the French
+to a French sheet even on an English phone.
+
+[`LOCALIZATION.md`](LOCALIZATION.md) lists every key, what it paints, and which
+of them carry a `%@` an override must keep.
 
 ## Apple Pay
 

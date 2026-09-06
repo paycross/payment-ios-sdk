@@ -1,100 +1,100 @@
 /* Separator between the Apple Pay button and the card fields */
-"paycross_or_pay_with_card" = "Or pay with card";
+"paycross_or_pay_with_card" = "Ou payer par carte";
 
 /* Label above the cardholder name field */
-"paycross_cardholder_name" = "Cardholder Name";
+"paycross_cardholder_name" = "Nom du titulaire";
 
 /* Placeholder inside the cardholder name field */
-"paycross_name_on_card" = "NAME ON CARD";
+"paycross_name_on_card" = "VOTRE NOM ICI";
 
 /* Label above the card number field */
-"paycross_card_number" = "Card Number";
+"paycross_card_number" = "Numéro de carte";
 
 /* Label above the expiry field, showing the expected shape.
    The field itself still takes MM/YY digits in every language. */
-"paycross_expiry_label" = "MM/YY";
+"paycross_expiry_label" = "MM/AA";
 
 /* Label above the card security code field */
 "paycross_cvv" = "CVV";
 
 /* Toggle offering to store the card for a later payment */
-"paycross_save_this_card" = "Save card for future use";
+"paycross_save_this_card" = "Enregistrer la carte pour une utilisation future";
 
 /* Row that switches from a stored card back to card entry */
-"paycross_use_a_new_card" = "Use a new card";
+"paycross_use_a_new_card" = "Utiliser une nouvelle carte";
 
 /* Caption above the amount being paid */
 "paycross_total" = "Total";
 
-/* Pay button. %@ is the formatted amount, e.g. "Pay €12.00" */
-"paycross_pay_amount" = "Pay %@";
+/* Pay button. %@ is the formatted amount, e.g. "Payer 12,00 €" */
+"paycross_pay_amount" = "Payer %@";
 
 /* Title of the payment sheet, and of the 3-D Secure challenge over it */
-"paycross_payment" = "Payment";
+"paycross_payment" = "Paiement";
 
 /* Button that starts the cancel confirmation, and the one on the challenge */
-"paycross_cancel" = "Cancel";
+"paycross_cancel" = "Annuler";
 
 /* Title of the cancel confirmation */
-"paycross_cancel_payment_title" = "Cancel Payment?";
+"paycross_cancel_payment_title" = "Annuler le paiement ?";
 
 /* Confirms the cancellation */
-"paycross_cancel_payment_yes" = "Yes, Cancel";
+"paycross_cancel_payment_yes" = "Oui, annuler";
 
 /* Dismisses the cancel confirmation and keeps paying */
-"paycross_cancel_payment_continue" = "Continue Payment";
+"paycross_cancel_payment_continue" = "Continuer le paiement";
 
 /* Body of the cancel confirmation */
-"paycross_cancel_payment_message" = "Are you sure you want to cancel this payment?";
+"paycross_cancel_payment_message" = "Voulez-vous vraiment annuler ce paiement ?";
 
 /* Shown when the merchant has no Apple Pay merchant identifier configured */
-"paycross_apple_pay_not_configured" = "Apple Pay is not configured for this merchant.";
+"paycross_apple_pay_not_configured" = "Apple Pay n'est pas configuré pour ce commerçant.";
 
 /* Button above the numeric keypad that puts it away */
-"paycross_keyboard_done" = "Done";
+"paycross_keyboard_done" = "Terminé";
 
 /* VoiceOver label on the button that deletes a stored card. %@ is the row it
    belongs to, e.g. "Visa •••• 1111", so the cards can be told apart */
-"paycross_remove_card" = "Remove card, %@";
+"paycross_remove_card" = "Supprimer la carte, %@";
 
 /* Title of the confirmation raised before a stored card is deleted */
-"paycross_remove_card_title" = "Remove this card?";
+"paycross_remove_card_title" = "Supprimer cette carte ?";
 
 /* Body of the delete confirmation. %@ is the row being deleted */
-"paycross_remove_card_message" = "%@ will no longer be offered for future payments.";
+"paycross_remove_card_message" = "La carte %@ ne sera plus proposée pour vos prochains paiements.";
 
 /* Confirms the deletion */
-"paycross_remove_card_confirm" = "Remove";
+"paycross_remove_card_confirm" = "Supprimer";
 
 /* Shown when the card could not be deleted */
-"paycross_remove_card_failed" = "Could not remove the card. Try again.";
+"paycross_remove_card_failed" = "Impossible de supprimer la carte. Veuillez réessayer.";
 
 /* Shown when the session token is rejected and nothing more can be done with it */
-"paycross_session_expired" = "This payment session has expired. Start again.";
+"paycross_session_expired" = "Votre session de paiement a expiré. Veuillez recommencer.";
 
 /* Banner on the re-armed form after a decline the shopper may retry */
-"paycross_error_payment_failed" = "Payment failed. Please try again.";
+"paycross_error_payment_failed" = "Le paiement a échoué. Veuillez réessayer.";
 
 /* Banner when the submission never reached the server */
-"paycross_error_network" = "Network error. Please try again.";
+"paycross_error_network" = "Erreur réseau. Veuillez réessayer.";
 
 /* Banner when the server refused the submission and sent no sentence of its own */
-"paycross_error_submission_failed" = "Payment submission failed";
+"paycross_error_submission_failed" = "Échec de l'envoi du paiement";
 
 /* Shown when a second Apple Pay sheet is asked for while one is open */
-"paycross_error_apple_pay_busy" = "An Apple Pay sheet is already open.";
+"paycross_error_apple_pay_busy" = "Une fenêtre Apple Pay est déjà ouverte.";
 
 /* Integrator-facing. Apple's sheet refused to present. %@ is the merchant
    identifier the SDK asked with */
-"paycross_error_apple_pay_presentation" = "Apple Pay could not be presented for %@. Check the app's Apple Pay entitlement and the merchant identifier.";
+"paycross_error_apple_pay_presentation" = "Apple Pay n'a pas pu être affiché pour %@. Vérifiez le droit d'accès Apple Pay de l'application et l'identifiant marchand.";
 
 /* Shown when Apple Pay hands back a payment token the SDK cannot parse */
-"paycross_error_apple_pay_token" = "Apple Pay returned a token this SDK could not read.";
+"paycross_error_apple_pay_token" = "Apple Pay a renvoyé un jeton illisible par ce SDK.";
 
 /* Client-side validation of a server-driven field. %@ is the field's label,
    or its name when the server sent none. A message the server sent with the
    field wins over this one */
-"paycross_field_required" = "%@ is required";
+"paycross_field_required" = "Champ obligatoire : %@";
 
 /* The same field failed the server's pattern. %@ is the same label */
-"paycross_field_invalid" = "%@ is invalid";
+"paycross_field_invalid" = "Champ non valide : %@";

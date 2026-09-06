@@ -21,13 +21,15 @@ public enum PayCrossAPI {
         environment: PayCrossEnvironment,
         testCardPrefill: TestCardPrefill? = nil,
         applePayMerchantIdentifier: String? = nil,
-        appearance: PayCrossAppearance? = nil
+        appearance: PayCrossAppearance? = nil,
+        locale: String? = nil
     ) {
         state.set(Configuration(
             environment: environment,
             testCardPrefill: testCardPrefill,
             applePayMerchantIdentifier: applePayMerchantIdentifier,
-            appearance: appearance
+            appearance: appearance,
+            locale: locale
         ))
     }
 
@@ -59,6 +61,20 @@ public struct Configuration: Sendable {
     /// draws, so an appearance that names one colour changes one colour.
     public let appearance: PayCrossAppearance?
 
+    /// The language the sheet should speak, as a BCP-47 tag such as `fr` or
+    /// `fr-CA`.
+    ///
+    /// Nil means the sheet decides: the session's own `locale` if the server
+    /// sent one, else the shopper's device, else English. Set it only when the
+    /// merchant's app has already asked the shopper what language they read in
+    /// and wants the sheet to agree.
+    ///
+    /// A tag the SDK ships no strings for is passed over rather than ending the
+    /// search, so asking for a language the sheet does not speak leaves the
+    /// session and the device their turn at it. The amount is a separate answer
+    /// and is not clamped to what the SDK ships: see `LOCALIZATION.md`.
+    public let locale: String?
+
     /// Defaulted rather than left to the synthesised memberwise initialiser, so
     /// that adding a field here does not break every call site that never had
     /// an opinion about it.
@@ -66,12 +82,14 @@ public struct Configuration: Sendable {
         environment: PayCrossEnvironment,
         testCardPrefill: TestCardPrefill? = nil,
         applePayMerchantIdentifier: String? = nil,
-        appearance: PayCrossAppearance? = nil
+        appearance: PayCrossAppearance? = nil,
+        locale: String? = nil
     ) {
         self.environment = environment
         self.testCardPrefill = testCardPrefill
         self.applePayMerchantIdentifier = applePayMerchantIdentifier
         self.appearance = appearance
+        self.locale = locale
     }
 
     /// Prefill is ignored in production, matching `effectiveTestPrefill()` on Android.

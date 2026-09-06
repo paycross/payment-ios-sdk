@@ -27,7 +27,7 @@ struct SavedCardPicker: View {
         VStack(alignment: .leading, spacing: 8) {
             ForEach(cards) { card in
                 row(
-                    label: "\(card.brand.displayName) •••• \(card.last4)",
+                    label: card.rowTitle,
                     detail: card.expiryLabel,
                     identifier: "paycross.savedCard.\(card.id)",
                     isSelected: selection == .saved(card),
@@ -98,7 +98,7 @@ struct SavedCardPicker: View {
                 // is otherwise the same control to VoiceOver, on a screen whose
                 // whole point is telling the cards apart.
                 .accessibilityLabel(
-                    String(format: L("paycross_remove_card", "Remove card, %@"), label)
+                    L("paycross_remove_card", "Remove card, %@", label)
                 )
                 .accessibilityIdentifier(removeIdentifier)
             }

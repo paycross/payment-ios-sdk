@@ -56,9 +56,18 @@ struct CardFormView: View {
                         // than they read a gap.
                         HStack {
                             VStack { Divider() }
-                            Text(L("paycross_or_pay_with_card", "or pay with card"))
+                            Text(L("paycross_or_pay_with_card", "Or pay with card"))
                                 .font(style.font(.footnote))
                                 .foregroundStyle(style.foreground(\.textSecondary, default: .secondary))
+                                // The rules give, not the caption. English sits
+                                // two characters inside the width this row has,
+                                // so "Ou payer par carte" wrapped mid-phrase
+                                // between two lines that had room to spare.
+                                // Priority rather than fixedSize: the dividers
+                                // still shrink first, but once they are gone the
+                                // caption wraps instead of running off a sheet
+                                // it can no longer fit on at accessibility sizes.
+                                .layoutPriority(1)
                             VStack { Divider() }
                         }
                     }
@@ -89,7 +98,7 @@ struct CardFormView: View {
                     }
 
                     if allowsSaving && state.source.isNewCard {
-                        Toggle(L("paycross_save_this_card", "Save this card"), isOn: saveCardBinding)
+                        Toggle(L("paycross_save_this_card", "Save card for future use"), isOn: saveCardBinding)
                             .font(style.font(.subheadline))
                     }
                 }
@@ -216,6 +225,9 @@ struct CardFormView: View {
 
 private struct AmountHeader: View {
     @Environment(\.payCrossAppearance) private var style
+    /// Set by the sheet from the language it resolved, so the amount and the
+    /// words around it agree on where the comma goes.
+    @Environment(\.locale) private var locale
     let amount: Amount
 
     var body: some View {
@@ -224,7 +236,7 @@ private struct AmountHeader: View {
                 .font(style.font(.footnote, weight: .medium))
                 .foregroundStyle(style.foreground(\.textSecondary, default: .secondary))
                 .textCase(.uppercase)
-            Text(Amounts.formatted(amount))
+            Text(Amounts.formatted(amount, locale: locale))
                 .font(style.font(.largeTitle, weight: .semibold))
                 .monospacedDigit()
                 .accessibilityIdentifier("amount")
@@ -306,6 +318,8 @@ private struct ErrorBanner: View {
 
 private struct PayButton: View {
     @Environment(\.payCrossAppearance) private var style
+    /// Same reason as `AmountHeader`: the button reads `Payer 12,00 €`.
+    @Environment(\.locale) private var locale
     let amount: Amount
     let isLoading: Bool
     let isEnabled: Bool
@@ -339,7 +353,10 @@ private struct PayButton: View {
                 if isLoading {
                     ProgressView().tint(labelColor)
                 } else {
-                    Text(String(format: L("paycross_pay_amount", "Pay %@"), Amounts.formatted(amount)))
+                    Text(L(
+                        "paycross_pay_amount", "Pay %@",
+                        Amounts.formatted(amount, locale: locale)
+                    ))
                         .font(style.font(.headline))
                 }
             }

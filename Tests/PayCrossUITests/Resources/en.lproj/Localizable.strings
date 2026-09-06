@@ -1,2 +1,6 @@
 /* Stands in for a merchant app that has deliberately reworded a label. */
 "paycross_card_number" = "Kartennummer";
+
+/* Stands in for a merchant who typed the wrong placeholder into an override of
+   a key that carries one. %d is not %@, and nothing may read a vararg for it. */
+"paycross_remove_card_message" = "%d wird nicht mehr angeboten.";

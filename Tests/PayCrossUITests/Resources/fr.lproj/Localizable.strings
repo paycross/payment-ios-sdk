@@ -1,0 +1,4 @@
+/* Stands in for a merchant app that ships French of its own and has reworded
+   this label in both languages. The sheet must take THIS one when it resolved
+   to French, whatever language the device is set to. */
+"paycross_card_number" = "Numéro de la carte bancaire";

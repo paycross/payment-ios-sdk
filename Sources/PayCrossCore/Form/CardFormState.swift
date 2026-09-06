@@ -13,6 +13,20 @@ package struct SavedCard: Sendable, Hashable, Identifiable {
         self.last4 = last4
         self.expiryLabel = expiryLabel
     }
+
+    /// How this card is named wherever a shopper has to tell it from another:
+    /// the picker row, the delete button's VoiceOver label, and the sentence in
+    /// the delete confirmation. One composition, so the alert cannot name a card
+    /// differently from the row it was raised on.
+    ///
+    /// Carries no SDK copy: a brand name is a proper noun, which is why it is
+    /// not translated, and the rest is bullets and digits. `CardBrand.unknown`
+    /// is the exception — its `displayName` is the word `Card`, which now lands
+    /// inside a French sentence in the delete confirmation. Whether that
+    /// deserves its own key is the copy owner's call, not this file's.
+    package var rowTitle: String {
+        "\(brand.displayName) •••• \(last4)"
+    }
 }
 
 /// Whether the shopper is entering a new card or re-confirming a saved one.

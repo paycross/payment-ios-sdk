@@ -66,17 +66,26 @@ package actor PaymentFlowRunner {
     /// id off the runner at that point. This hands it over as soon as it exists.
     private let onTransactionID: @Sendable (String) async -> Void
 
+    /// The sentences this run puts in front of a shopper.
+    ///
+    /// Plain `String`s rather than a lookup closure: this is an actor, and a
+    /// closure that captured a `Bundle` could not cross into it. The sheet
+    /// resolves them on the main actor before the run starts.
+    private let messages: FlowMessages
+
     package init(
         client: PayCrossAPIClient,
         presenter: any ThreeDSPresenting,
         scheduler: any FlowScheduler = ContinuousScheduler(),
         claims: SessionClaims? = nil,
+        messages: FlowMessages = .english,
         onTransactionID: @escaping @Sendable (String) async -> Void = { _ in }
     ) {
         self.client = client
         self.presenter = presenter
         self.scheduler = scheduler
         self.state = PaymentFlowState(claims: claims)
+        self.messages = messages
         self.onTransactionID = onTransactionID
     }
 
@@ -130,7 +139,7 @@ package actor PaymentFlowRunner {
                 // Android does not retry a transport or HTTP failure here: the
                 // request may already have been received.
                 if case .transport = error {
-                    return .failure("Network error. Please try again.")
+                    return .failure(messages.networkError)
                 }
                 // The server's own message is kept as a diagnostic rather than
                 // collapsed to a generic string. Swallowing it is why an SDK
@@ -138,9 +147,9 @@ package actor PaymentFlowRunner {
                 // "missing browser_info.ip_address" -- looked like a plain
                 // decline for its entire development.
                 lastServerDiagnostic = error.serverMessage
-                return .failure("Payment submission failed")
+                return .failure(messages.submissionFailed)
             } catch {
-                return .failure("Network error. Please try again.")
+                return .failure(messages.networkError)
             }
 
             if response.success == true, let transactionID = response.transactionID {
@@ -148,7 +157,7 @@ package actor PaymentFlowRunner {
             }
 
             guard let retryAfter = response.retryAfter else {
-                return .failure(response.error ?? "Payment submission failed")
+                return .failure(response.error ?? messages.submissionFailed)
             }
 
             // retry_after is server-controlled and uncapped, so this is the longest
@@ -161,7 +170,7 @@ package actor PaymentFlowRunner {
             }
         }
 
-        return .failure("Payment submission failed")
+        return .failure(messages.submissionFailed)
     }
 
     // MARK: - Poll
@@ -183,7 +192,8 @@ package actor PaymentFlowRunner {
                 let status = try await client.status(transactionID: transactionID)
                 let effects = PaymentFlowReducer.reduce(
                     state: &state,
-                    event: .statusReceived(status)
+                    event: .statusReceived(status),
+                    messages: messages
                 )
                 if let outcome = await apply(effects) {
                     return outcome
@@ -203,7 +213,9 @@ package actor PaymentFlowRunner {
             }
         }
 
-        let effects = PaymentFlowReducer.reduce(state: &state, event: .pollDeadlineReached)
+        let effects = PaymentFlowReducer.reduce(
+            state: &state, event: .pollDeadlineReached, messages: messages
+        )
         return await apply(effects)
             ?? .finished(.pending(transactionID: transactionID, reason: .pollTimeout))
     }
@@ -229,7 +241,9 @@ package actor PaymentFlowRunner {
     /// the protocol's contract stays honest, and the reducer's effects are
     /// applied rather than discarded — that is what dismisses the web view.
     private func threeDSResolved(_ outcome: ThreeDSOutcome) async {
-        let effects = PaymentFlowReducer.reduce(state: &state, event: .threeDSCompleted)
+        let effects = PaymentFlowReducer.reduce(
+            state: &state, event: .threeDSCompleted, messages: messages
+        )
         _ = await apply(effects)
     }
 
@@ -274,7 +288,7 @@ package actor PaymentFlowRunner {
             case .stopPolling:
                 state.isPolling = false
                 if outcome == nil {
-                    outcome = .reArmForm(message: state.inlineError ?? "Payment failed. Please try again.")
+                    outcome = .reArmForm(message: state.inlineError ?? messages.paymentFailed)
                 }
             }
         }

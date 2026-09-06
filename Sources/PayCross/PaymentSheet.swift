@@ -51,6 +51,14 @@ public final class PaymentSheet {
             return .failed(transactionID: nil, recovery: .restart)
         }
 
+        // Everything that can be known without the network. The session's own
+        // `locale` is the only rung that can still move this, and the model
+        // installs it again the moment the fetch returns.
+        SheetLanguage.install(LocaleResolution.resolve(
+            override: configuration.locale,
+            device: Locale.preferredLanguages
+        ))
+
         let model = PaymentSheetModel(
             sessionToken: sessionToken,
             claims: claims,
@@ -70,6 +78,14 @@ public final class PaymentSheet {
 
         let result = await model.awaitResult()
         await host.dismissSelf()
+        // The sheet is off screen and nothing of ours reads a string again, so
+        // the language stops being installed rather than waiting to be replaced.
+        //
+        // One sheet at a time is assumed here, not enforced: two presentations
+        // that somehow overlapped would have the first to finish reset the
+        // language under the second. UIKit declines the second presentation, so
+        // that sheet is already broken before its words are.
+        SheetLanguage.reset()
         return result
     }
 }
@@ -116,6 +132,18 @@ final class PaymentSheetModel: ObservableObject {
     /// The appearance the contrast warnings were last written for, so a session
     /// re-read does not repeat them.
     private var warnedAppearance: ResolvedAppearance?
+    /// The locale the amount is formatted in, kept in step with the language the
+    /// sheet resolved. Published because the session can move it after the form
+    /// has already drawn once.
+    @Published private(set) var formattingLocale: Locale = SheetLanguage.locale
+    /// The language the sheet is drawing in.
+    ///
+    /// Published for the repaint rather than read anywhere: `L` reads
+    /// `SheetLanguage`, which is not observable, so a session that moves the
+    /// language without moving the formatting locale — `configure(locale: "de")`
+    /// over an `fr` session does exactly that — would otherwise repaint only
+    /// because `load()` happens to set `isPreparing` on every branch.
+    @Published private(set) var languageTag: String = SheetLanguage.tag
     @Published var fieldValues: [String: [String: String]] = [:]
     @Published private(set) var fieldErrors: [FieldGroupError] = []
     /// Drives the "Cancel Payment?" confirmation. On the model rather than in the
@@ -290,6 +318,10 @@ final class PaymentSheetModel: ObservableObject {
         let response = try? await makeClient()
             .session(id: claims.sessionID, sessionToken: sessionToken)
 
+        // Ahead of the switch on purpose: the `.resume` branch builds a runner,
+        // and a runner is handed its sentences at construction.
+        installLanguage(session: response?.data?.locale)
+
         switch SessionResolver.resolve(response, claims: claims) {
         case .finish(let result):
             isPreparing = false
@@ -312,6 +344,38 @@ final class PaymentSheetModel: ObservableObject {
             applySessionData(data)
             isPreparing = false
         }
+    }
+
+    /// Re-resolves the sheet's language now that the session has answered.
+    ///
+    /// `PaymentSheet.present` installed what could be known without the network.
+    /// The session is a new candidate in the middle of the list, so it can move
+    /// the answer whatever the merchant set: an override the SDK ships no
+    /// strings for is passed over, and the session's language is then the next
+    /// one asked.
+    private func installLanguage(session sessionLocale: String?) {
+        SheetLanguage.install(LocaleResolution.resolve(
+            override: configuration.locale,
+            session: sessionLocale,
+            device: Locale.preferredLanguages
+        ))
+        formattingLocale = SheetLanguage.locale
+        languageTag = SheetLanguage.tag
+    }
+
+    /// The sentences Core shows, resolved here because Core cannot resolve them.
+    ///
+    /// Built fresh at each use rather than cached: it is five dictionary reads,
+    /// and a cached copy would be the one thing on the sheet still speaking the
+    /// language the session had before it was read.
+    var flowMessages: FlowMessages {
+        FlowMessages(
+            paymentFailed: L("paycross_error_payment_failed", "Payment failed. Please try again."),
+            networkError: L("paycross_error_network", "Network error. Please try again."),
+            submissionFailed: L("paycross_error_submission_failed", "Payment submission failed"),
+            fieldRequired: L("paycross_field_required", "%@ is required"),
+            fieldInvalid: L("paycross_field_invalid", "%@ is invalid")
+        )
     }
 
     private func applySessionData(_ data: SessionData?) {
@@ -445,7 +509,9 @@ final class PaymentSheetModel: ObservableObject {
 
         // Server-driven fields are validated here, not in the form reducer: only
         // visible fields count, and visibility depends on sibling values.
-        fieldErrors = FieldGroupLogic.validate(groups: fieldGroups, values: fieldValues)
+        fieldErrors = FieldGroupLogic.validate(
+            groups: fieldGroups, values: fieldValues, messages: flowMessages
+        )
         guard fieldErrors.isEmpty else { return }
 
         isLoading = true
@@ -490,7 +556,9 @@ final class PaymentSheetModel: ObservableObject {
         // ahead of the wallet branch, so a payment that fails them after Face ID
         // has spent the shopper's authorisation on a rejection they could have
         // been shown first.
-        fieldErrors = FieldGroupLogic.validate(groups: fieldGroups, values: fieldValues)
+        fieldErrors = FieldGroupLogic.validate(
+            groups: fieldGroups, values: fieldValues, messages: flowMessages
+        )
         guard fieldErrors.isEmpty else { return }
 
         let spec = ApplePayRequestSpec.make(
@@ -607,6 +675,7 @@ final class PaymentSheetModel: ObservableObject {
             // an unanswered challenge from looking like an answered one.
             presenter: threeDSPresenter ?? ThreeDSPresenterStub(),
             claims: claims,
+            messages: flowMessages,
             onTransactionID: { [weak self] id in
                 await MainActor.run { self?.lastTransactionID = id }
             }
@@ -844,6 +913,10 @@ struct PaymentSheetView: View {
             }
             .task { await model.load() }
             .environment(\.payCrossAppearance, model.appearance)
+            // The amount is the one string the sheet builds rather than looks
+            // up, and `Payer €12.00` reads as a bug. SwiftUI's own formatting
+            // follows this too.
+            .environment(\.locale, model.formattingLocale)
             .payCrossTint(model.appearance.color(\.brand))
             .payCrossSheetChrome(model.appearance)
             .navigationTitle(L("paycross_payment", "Payment"))
@@ -879,10 +952,11 @@ struct PaymentSheetView: View {
                     model.confirmRemoval()
                 }
                 Button(L("paycross_cancel", "Cancel"), role: .cancel) { model.cancelRemoval() }
-            } message: { _ in
+            } message: { card in
                 Text(L(
                     "paycross_remove_card_message",
-                    "It will no longer be offered for future payments."
+                    "%@ will no longer be offered for future payments.",
+                    card.rowTitle
                 ))
             }
         }

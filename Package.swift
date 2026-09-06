@@ -34,8 +34,11 @@ let package = Package(
         .testTarget(
             name: "PayCrossUITests",
             dependencies: ["PayCross", "PayCrossCore", "DemoHarnessCore", "DemoHarnessUI"],
-            // An en.lproj of its own, so a test can pass its Bundle.module to L
-            // as the merchant app and watch the override land.
+            // en.lproj and fr.lproj of its own, so a test can pass its
+            // Bundle.module to L as the merchant app and watch the override
+            // land. Both are load-bearing: the French one is how the sheet
+            // proves an override comes out in the language IT resolved to,
+            // rather than in whatever the device is set to.
             resources: [.process("Resources")],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),

@@ -141,7 +141,8 @@ final class PaymentFlowRunnerTests: XCTestCase {
     private func makeRunner(
         transport: ScriptedTransport,
         scheduler: any FlowScheduler,
-        presenter: any ThreeDSPresenting
+        presenter: any ThreeDSPresenting,
+        messages: FlowMessages = .english
     ) -> PaymentFlowRunner {
         PaymentFlowRunner(
             client: PayCrossAPIClient(baseURL: baseURL, transport: transport, userAgent: "test"),
@@ -150,8 +151,56 @@ final class PaymentFlowRunnerTests: XCTestCase {
             claims: SessionClaims(
                 sessionID: "s", merchantID: "m", customerID: "c", brandingID: nil,
                 amount: Amount(minorUnits: 1000, currencyCode: "EUR"), expiresAt: nil
-            )
+            ),
+            messages: messages
         )
+    }
+
+    // MARK: - The sheet's own words
+
+    /// Core has no `L(...)`, so every sentence a shopper reads out of the runner
+    /// arrives as one of these. If a literal creeps back into the runner it will
+    /// be English on a French sheet, which these two catch.
+    private var frenchMessages: FlowMessages {
+        FlowMessages(
+            paymentFailed: "Le paiement a échoué. Veuillez réessayer.",
+            networkError: "Erreur réseau. Veuillez réessayer.",
+            submissionFailed: "Échec de l'envoi du paiement"
+        )
+    }
+
+    func testSubmitFailureSpeaksTheLanguageTheSheetResolved() async {
+        let replies = Array(
+            repeating: ScriptedTransport.Reply(json: #"{"success":false,"retry_after":1}"#),
+            count: 10
+        )
+        let runner = makeRunner(
+            transport: ScriptedTransport(submit: replies),
+            scheduler: VirtualScheduler(),
+            presenter: RecordingPresenter(),
+            messages: frenchMessages
+        )
+
+        let outcome = await runner.run(sampleRequest)
+
+        XCTAssertEqual(outcome, .reArmForm(message: "Échec de l'envoi du paiement"))
+    }
+
+    func testARetryableDeclineSpeaksTheLanguageTheSheetResolved() async {
+        let transport = ScriptedTransport(
+            submit: [.init(json: #"{"success":true,"transaction_id":"t1"}"#)],
+            status: [.init(json: #"{"transaction_id":"t1","status":"failed","recovery":"retry"}"#)]
+        )
+        let runner = makeRunner(
+            transport: transport,
+            scheduler: VirtualScheduler(),
+            presenter: RecordingPresenter(),
+            messages: frenchMessages
+        )
+
+        let outcome = await runner.run(sampleRequest)
+
+        XCTAssertEqual(outcome, .reArmForm(message: "Le paiement a échoué. Veuillez réessayer."))
     }
 
     private var sampleRequest: SubmitCardRequest {
