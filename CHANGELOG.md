@@ -7,6 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — source-incompatible, and the next release is a MINOR bump
+
+- `PayCrossAPI.configure` gains a fifth parameter, `locale: String?`, defaulted
+  to nil and added last, so a call that uses argument labels keeps compiling
+  untouched. What does not: a reference to `configure` as a function value, and
+  anything binding `Configuration` positionally, which now carries a `locale` of
+  its own. The same break 0.6.0 took for `appearance`.
+
+### Added
+
+- **French.** The sheet ships `fr` alongside `en`, 32 keys each. See
+  [`LOCALIZATION.md`](LOCALIZATION.md) for every key, what it paints, and which
+  carry a `%@`.
+- **A rule for which language a shopper sees.** `configure(locale:)`, then the
+  session's `locale`, then the device, then English. The first rung that gives an
+  answer decides: an explicit `locale: "de"` resolves to English rather than
+  dropping through to a French device. Exact tag first, then primary subtag
+  (`fr-CA` → `fr`); case-insensitive; `_` accepted for `-`; nothing throws.
+- The three Apple Pay failure messages, the three flow errors and the two
+  field-validation fallbacks are now keys rather than literals, so all eight are
+  translatable and overridable like the rest.
+
+### Changed
+
+- The amount follows the **resolved language** rather than the device's region.
+  A French sheet reads `Payer 25,99 €`. An English sheet on a device set to a
+  comma-decimal region now reads `Pay €25.99` where it previously followed the
+  region.
+- Three English values change. The keys do not — keys are public API through the
+  string override.
+  - `paycross_save_this_card`: `Save this card` → `Save card for future use`,
+    matching Android and the hosted checkout page. The key still reads
+    `save_this_card`; it is not renamed.
+  - `paycross_or_pay_with_card`: `or pay with card` → `Or pay with card`. It is a
+    standalone caption between two rules, and both other surfaces use sentence
+    case. The caption no longer wraps: the divider lines give instead.
+  - `paycross_remove_card_message`: `It will no longer be offered for future
+    payments.` → `%@ will no longer be offered for future payments.`, naming the
+    card being removed.
+- **`paycross_remove_card_message` now takes a format argument where it had
+  none.** A merchant overriding that key must include a `%@`, or the alert will
+  not say which card it is about to remove.
+- iOS captions the amount with `paycross_total` and Android does not. The two
+  sheets are deliberately asymmetric here.
+
+### Internal
+
+- `PayCrossCore` no longer hard-codes the sentences it shows. `FlowMessages`
+  carries them in, defaulted to the English the SDK already shipped, so the
+  runner's actor isolation holds and every Core test still asserts prose.
+
 ## [0.6.0] - 2026-09-06
 
 ### Changed — source-incompatible, and the next release is a MINOR bump
