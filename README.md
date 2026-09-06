@@ -95,6 +95,105 @@ status to read one from. It is a handle on the stored card for a later payment,
 useless anywhere but your own account, and it is the only place the token
 appears: nothing else in the flow reports it.
 
+## Appearance
+
+The sheet takes a `PayCrossAppearance` at configure time. Everything on it is
+optional, and a role left unset keeps the system colour the sheet already
+draws, so an appearance that names one colour changes one colour.
+
+```swift
+PayCrossAPI.configure(
+    environment: .production,
+    appearance: PayCrossAppearance(
+        light: PayCrossColors(brand: PayCrossColor(hex: "#1E88E5")),
+        dark: PayCrossColors(brand: PayCrossColor(hex: "#64B5F6")),
+        shapes: PayCrossShapes(cornerRadius: 16, buttonCornerRadius: 28)
+    )
+)
+```
+
+One brand colour and nothing else is a one-liner:
+
+```swift
+PayCrossAPI.configure(
+    environment: .production,
+    appearance: .brand(PayCrossColor(hex: "#1E88E5")!)
+)
+```
+
+### Precedence
+
+Per role: **the appearance set in code wins, then the brand colour the merchant
+set in the back office, then the platform default.** The server publishes a
+brand colour only, and it applies to both appearances, because the branding
+record holds no light/dark variants. So an integration that passes no
+appearance at all still comes up in the merchant's own colour, and one that
+sets `brand` overrides it.
+
+A role set in one appearance and not the other is used in both. A partial
+palette is a merchant changing one colour, not asking for the other appearance
+to fall back to the system's.
+
+### Roles
+
+| Role | Where it lands |
+|---|---|
+| `brand` | Pay button fill, the selected stored-card radio, the sheet's tint |
+| `onBrand` | Text and spinner on the Pay button. Unset derives it from `brand` |
+| `surface` | The sheet's own background, and the 3DS challenge's |
+| `component` | Inputs, stored-card rows, field groups |
+| `componentBorder` | Their borders, drawn only when `borderWidth` is set |
+| `text` | Primary text, including the card number and CVC |
+| `textSecondary` | Field labels, the total's caption, card expiry, the brand badge |
+| `placeholder` | Placeholder text in the card number, expiry and CVC fields |
+| `icon` | The picker's radio and trash symbols |
+| `error` | The error banner and field validation messages |
+
+`onBrand` is computed from `brand`'s own luminance rather than from the
+appearance: black above the WCAG crossover and white below it, which is the
+same rule the Android SDK applies, so one brand colour reads the same on both
+platforms. Set it yourself and the SDK does not argue.
+
+### Theme mode
+
+`themeMode` is `.system`, `.light` or `.dark`. A pinned mode applies to the
+payment sheet's own window and to nothing else: the host app's appearance is
+never touched.
+
+### Shapes and the Pay button
+
+`PayCrossShapes` carries `cornerRadius` (inputs, rows, groups, the error
+banner; default 10), `buttonCornerRadius` (the Pay button and the Apple Pay
+button; falls back to `cornerRadius`, then 12 and 10 respectively) and
+`borderWidth`, which is null by default because the sheet draws no borders
+today.
+
+`PayCrossPrimaryButton` overrides the Pay button on its own: `background`,
+`textColor`, `disabledBackground`, `disabledTextColor`, `cornerRadius` and
+`height`. A merchant who overrides the fill and not the label gets the contrast
+rule applied to the fill they chose, not to the brand they did not use.
+
+### Type size
+
+`PayCrossTypography(sizeScaleFactor:)` multiplies every font size on top of
+Dynamic Type rather than instead of it. It is clamped to **0.8...1.3**. At the
+default factor Dynamic Type behaves exactly as it always has, including changes
+made while the sheet is open; with a factor set, the size is resolved when the
+sheet is presented and a Dynamic Type change made mid-payment is picked up on
+the next presentation. A font family is not exposed in this release.
+
+### Fixed by design
+
+Not themable, and not by omission: the sheet's layout, spacing and insets; the
+card-input internals; the Apple Pay button's colours, label and type, which are
+Apple's to specify and a rejection to imitate; the 3DS page, which is the
+issuer's own content; and the error copy, which is overridable as
+[strings](#strings) rather than as appearance.
+
+Deferred rather than refused: a merchant logo in the sheet, and a font family.
+Both are the next appearance release, and the logo is a layout change rather
+than a colour one.
+
 ## Saved cards
 
 Which stored cards the sheet offers, and what it may do with them, is decided by

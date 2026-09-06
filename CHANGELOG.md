@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — source-incompatible, and the next release is a MINOR bump
+
+- `PayCrossAPI.configure` gains a fourth parameter, `appearance:
+  PayCrossAppearance?`, defaulted to nil and added last, so a call that uses
+  argument labels keeps compiling untouched. What does not: a reference to
+  `configure` as a function value, and anything binding `Configuration`
+  positionally, which now carries an `appearance` of its own.
+
+### Added
+
+- `PayCrossAppearance`: colours per appearance, a theme mode, corner radii, a
+  border width, Pay button overrides and a type size factor. Ten colour roles —
+  `brand`, `onBrand`, `surface`, `component`, `componentBorder`, `text`,
+  `textSecondary`, `placeholder`, `icon`, `error` — each nullable, each falling
+  back to the system colour the sheet already drew, so an appearance that names
+  one colour changes one colour and an empty one changes nothing.
+  `PayCrossAppearance.brand(_:)` is the whole thing for a merchant who only
+  wants their own accent.
+- The brand colour a merchant sets in the PayCross back office now reaches the
+  sheet with the session, as a `branding` block on the session data, and is
+  used as the default `brand` in both appearances. Precedence per role is: the
+  appearance set in code, then the server's brand colour, then the platform.
+  An integration that passes no appearance at all comes up in the merchant's
+  own colour. Sessions minted before the backend shipped the block carry none,
+  and a colour the SDK cannot read costs the accent and nothing else.
+- `themeMode` pins the sheet to light or dark against the device. It applies to
+  the payment sheet's own window; the host app's appearance is never touched.
+- `PayCrossColor`, a platform-free ARGB colour with a `#RGB` / `#RRGGBB` /
+  `#AARRGGBB` initialiser. It lives in `PayCrossCore` so the rules that decide
+  what the sheet draws are tested on Linux rather than only on a simulator.
+- A debug-build warning when a resolved brand or Pay button pair falls under the
+  4.5:1 contrast minimum. Reported, never corrected, and never in a release
+  build.
+
+### Fixed
+
+- The Pay button drew its label and its spinner in white over the app's accent
+  colour, so on a light accent the amount vanished on the one control the
+  shopper has to press. The label now follows the fill's own luminance, by the
+  same rule the Android SDK applies, and answers light and dark separately when
+  the accent differs between them.
+
 ## [0.5.0] - 2026-09-05
 
 ### Changed — source-incompatible, and the next release is a MINOR bump
