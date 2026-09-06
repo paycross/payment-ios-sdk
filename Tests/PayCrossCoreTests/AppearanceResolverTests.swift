@@ -62,4 +62,245 @@ final class AppearanceResolverTests: XCTestCase {
             0.2159, accuracy: 0.0005
         )
     }
+
+    // MARK: - Hex
+
+    func testParsesSixDigitHex() {
+        XCTAssertEqual(PayCrossColor(hex: "#1E88E5"), PayCrossColor(argb: 0xFF1E_88E5))
+    }
+
+    func testParsesHexWithoutTheHashAndInEitherCase() {
+        XCTAssertEqual(PayCrossColor(hex: "1e88e5"), PayCrossColor(argb: 0xFF1E_88E5))
+        XCTAssertEqual(PayCrossColor(hex: "  #1E88E5 "), PayCrossColor(argb: 0xFF1E_88E5))
+    }
+
+    func testParsesThreeDigitHexByDoublingEachDigit() {
+        XCTAssertEqual(PayCrossColor(hex: "#1AF"), PayCrossColor(argb: 0xFF11_AAFF))
+    }
+
+    func testParsesEightDigitHexAsARGB() {
+        XCTAssertEqual(PayCrossColor(hex: "#801E88E5"), PayCrossColor(argb: 0x801E_88E5))
+    }
+
+    func testRejectsAnythingElse() {
+        XCTAssertNil(PayCrossColor(hex: ""))
+        XCTAssertNil(PayCrossColor(hex: "#"))
+        XCTAssertNil(PayCrossColor(hex: "#12345"))
+        XCTAssertNil(PayCrossColor(hex: "#GGGGGG"))
+        XCTAssertNil(PayCrossColor(hex: "rebeccapurple"))
+    }
+
+    // MARK: - Precedence
+
+    private static let code = PayCrossColor(argb: 0xFF11_2233)
+    private static let server = "#445566"
+
+    func testCodeBrandBeatsTheServerBrand() {
+        let resolved = AppearanceResolver.resolve(
+            appearance: .brand(Self.code), serverBrandColor: Self.server
+        )
+        XCTAssertEqual(resolved.light.brand, Self.code)
+        XCTAssertEqual(resolved.dark.brand, Self.code)
+    }
+
+    func testServerBrandIsUsedWhenCodeSetsNoneAndAppliesToBothAppearances() {
+        let resolved = AppearanceResolver.resolve(appearance: nil, serverBrandColor: Self.server)
+        XCTAssertEqual(resolved.light.brand, PayCrossColor(argb: 0xFF44_5566))
+        XCTAssertEqual(resolved.dark.brand, PayCrossColor(argb: 0xFF44_5566))
+    }
+
+    func testAMalformedServerBrandLeavesThePlatformDefault() {
+        let resolved = AppearanceResolver.resolve(appearance: nil, serverBrandColor: "not a colour")
+        XCTAssertNil(resolved.light.brand)
+    }
+
+    /// The whole point of the nullable roles: nothing set means nothing changes.
+    func testAnEmptyAppearanceLeavesEveryRoleToThePlatform() {
+        let resolved = AppearanceResolver.resolve(appearance: PayCrossAppearance())
+        for palette in [resolved.light, resolved.dark] {
+            XCTAssertNil(palette.brand)
+            XCTAssertNil(palette.onBrand)
+            XCTAssertNil(palette.surface)
+            XCTAssertNil(palette.component)
+            XCTAssertNil(palette.componentBorder)
+            XCTAssertNil(palette.text)
+            XCTAssertNil(palette.textSecondary)
+            XCTAssertNil(palette.placeholder)
+            XCTAssertNil(palette.icon)
+            XCTAssertNil(palette.error)
+            XCTAssertNil(palette.buttonBackground)
+            XCTAssertNil(palette.buttonLabel)
+        }
+        XCTAssertNil(resolved.cornerRadius)
+        XCTAssertNil(resolved.borderWidth)
+        XCTAssertEqual(resolved.themeMode, .system)
+        XCTAssertEqual(resolved.sizeScaleFactor, 1)
+    }
+
+    func testEachAppearanceKeepsItsOwnPalette() {
+        let resolved = AppearanceResolver.resolve(appearance: PayCrossAppearance(
+            light: PayCrossColors(surface: .white, text: .black),
+            dark: PayCrossColors(surface: .black, text: .white)
+        ))
+        XCTAssertEqual(resolved.light.surface, .white)
+        XCTAssertEqual(resolved.light.text, .black)
+        XCTAssertEqual(resolved.dark.surface, .black)
+        XCTAssertEqual(resolved.dark.text, .white)
+    }
+
+    /// The server brand is one colour for both appearances, because the
+    /// branding record holds no light/dark variants. A code palette still wins
+    /// per appearance.
+    func testACodeBrandInOneAppearanceOnlyLeavesTheOtherOnTheServerBrand() {
+        let resolved = AppearanceResolver.resolve(
+            appearance: PayCrossAppearance(dark: PayCrossColors(brand: Self.code)),
+            serverBrandColor: Self.server
+        )
+        XCTAssertEqual(resolved.light.brand, PayCrossColor(argb: 0xFF44_5566))
+        XCTAssertEqual(resolved.dark.brand, Self.code)
+    }
+
+    // MARK: - Derived onBrand
+
+    func testOnBrandIsDerivedFromTheBrandWhenUnset() {
+        let light = AppearanceResolver.resolve(appearance: .brand(PayCrossColor(argb: 0xFFFF_EB3B)))
+        XCTAssertEqual(light.light.onBrand, .black)
+
+        let dark = AppearanceResolver.resolve(appearance: .brand(PayCrossColor(argb: 0xFF67_50A4)))
+        XCTAssertEqual(dark.light.onBrand, .white)
+    }
+
+    func testAnExplicitOnBrandIsNotOverridden() {
+        let pink = PayCrossColor(argb: 0xFFFF_00FF)
+        let resolved = AppearanceResolver.resolve(appearance: PayCrossAppearance(
+            light: PayCrossColors(brand: PayCrossColor(argb: 0xFFFF_EB3B), onBrand: pink)
+        ))
+        XCTAssertEqual(resolved.light.onBrand, pink)
+    }
+
+    func testNoBrandMeansNoDerivedOnBrand() {
+        XCTAssertNil(AppearanceResolver.resolve(appearance: PayCrossAppearance()).light.onBrand)
+    }
+
+    // MARK: - Pay button
+
+    func testTheButtonFollowsTheBrandWhenItIsNotOverridden() {
+        let brand = PayCrossColor(argb: 0xFF67_50A4)
+        let resolved = AppearanceResolver.resolve(appearance: .brand(brand))
+        XCTAssertEqual(resolved.light.buttonBackground, brand)
+        XCTAssertEqual(resolved.light.buttonLabel, .white)
+    }
+
+    /// A merchant who overrode the fill and not the label gets the contrast
+    /// rule applied to the fill they chose, not to the brand they did not use.
+    func testAnOverriddenFillDerivesItsOwnLabel() {
+        let resolved = AppearanceResolver.resolve(appearance: PayCrossAppearance(
+            light: PayCrossColors(brand: PayCrossColor(argb: 0xFF67_50A4)),
+            primaryButton: PayCrossPrimaryButton(background: PayCrossColor(argb: 0xFFFF_EB3B))
+        ))
+        XCTAssertEqual(resolved.light.buttonBackground, PayCrossColor(argb: 0xFFFF_EB3B))
+        XCTAssertEqual(resolved.light.buttonLabel, .black)
+    }
+
+    func testAnOverriddenButtonLabelWins() {
+        let resolved = AppearanceResolver.resolve(appearance: PayCrossAppearance(
+            primaryButton: PayCrossPrimaryButton(
+                background: PayCrossColor(argb: 0xFFFF_EB3B), textColor: .white
+            )
+        ))
+        XCTAssertEqual(resolved.light.buttonLabel, .white)
+    }
+
+    func testTheDisabledPairIsOnlySetWhenTheMerchantSetIt() {
+        let untouched = AppearanceResolver.resolve(appearance: .brand(.black))
+        XCTAssertNil(untouched.light.buttonDisabledBackground)
+        XCTAssertNil(untouched.light.buttonDisabledLabel)
+
+        let overridden = AppearanceResolver.resolve(appearance: PayCrossAppearance(
+            primaryButton: PayCrossPrimaryButton(disabledBackground: .white)
+        ))
+        XCTAssertEqual(overridden.light.buttonDisabledBackground, .white)
+        XCTAssertEqual(overridden.light.buttonDisabledLabel, .black)
+    }
+
+    // MARK: - Shapes and mode
+
+    func testButtonRadiusFallsBackThroughShapesToTheGeneralRadius() {
+        let general = AppearanceResolver.resolve(appearance: PayCrossAppearance(
+            shapes: PayCrossShapes(cornerRadius: 16)
+        ))
+        XCTAssertEqual(general.cornerRadius, 16)
+        XCTAssertEqual(general.buttonCornerRadius, 16)
+
+        let button = AppearanceResolver.resolve(appearance: PayCrossAppearance(
+            shapes: PayCrossShapes(cornerRadius: 16, buttonCornerRadius: 28)
+        ))
+        XCTAssertEqual(button.buttonCornerRadius, 28)
+
+        let override = AppearanceResolver.resolve(appearance: PayCrossAppearance(
+            shapes: PayCrossShapes(cornerRadius: 16, buttonCornerRadius: 28),
+            primaryButton: PayCrossPrimaryButton(cornerRadius: 4)
+        ))
+        XCTAssertEqual(override.buttonCornerRadius, 4)
+    }
+
+    func testThemeModeCrossesUnchanged() {
+        for mode in ThemeMode.allCases {
+            let resolved = AppearanceResolver.resolve(
+                appearance: PayCrossAppearance(themeMode: mode)
+            )
+            XCTAssertEqual(resolved.themeMode, mode)
+        }
+    }
+
+    // MARK: - Size scale
+
+    func testScaleFactorIsClampedToTheDocumentedRange() {
+        XCTAssertEqual(AppearanceResolver.clamped(nil), 1)
+        XCTAssertEqual(AppearanceResolver.clamped(1.15), 1.15)
+        XCTAssertEqual(AppearanceResolver.clamped(0.8), 0.8)
+        XCTAssertEqual(AppearanceResolver.clamped(1.3), 1.3)
+        XCTAssertEqual(AppearanceResolver.clamped(0.1), 0.8)
+        XCTAssertEqual(AppearanceResolver.clamped(4), 1.3)
+        XCTAssertEqual(AppearanceResolver.clamped(-2), 0.8)
+        XCTAssertEqual(AppearanceResolver.clamped(.nan), 1)
+    }
+
+    func testScaleFactorReachesTheResolvedAppearanceClamped() {
+        let resolved = AppearanceResolver.resolve(appearance: PayCrossAppearance(
+            typography: PayCrossTypography(sizeScaleFactor: 9)
+        ))
+        XCTAssertEqual(resolved.sizeScaleFactor, 1.3)
+    }
+
+    // MARK: - Contrast warnings
+
+    func testAReadableBrandWarnsAboutNothing() {
+        let resolved = AppearanceResolver.resolve(appearance: .brand(PayCrossColor(argb: 0xFF67_50A4)))
+        XCTAssertEqual(AppearanceResolver.contrastWarnings(for: resolved), [])
+    }
+
+    func testAnUnreadableMerchantPairIsReported() {
+        let resolved = AppearanceResolver.resolve(appearance: PayCrossAppearance(
+            light: PayCrossColors(
+                brand: PayCrossColor(argb: 0xFFFF_EB3B), onBrand: .white
+            )
+        ))
+        let warnings = AppearanceResolver.contrastWarnings(for: resolved)
+        XCTAssertEqual(warnings.count, 1)
+        XCTAssertTrue(warnings[0].contains("light.brand"), warnings[0])
+    }
+
+    func testTheSamePairIsNotReportedTwice() {
+        let resolved = AppearanceResolver.resolve(appearance: PayCrossAppearance(
+            light: PayCrossColors(brand: PayCrossColor(argb: 0xFFFF_EB3B), onBrand: .white),
+            dark: PayCrossColors(brand: PayCrossColor(argb: 0xFFFF_EB3B), onBrand: .white)
+        ))
+        XCTAssertEqual(AppearanceResolver.contrastWarnings(for: resolved).count, 1)
+    }
+
+    func testContrastRatioMatchesTheWCAGExtremes() {
+        XCTAssertEqual(AppearanceResolver.contrastRatio(.black, .white), 21, accuracy: 0.01)
+        XCTAssertEqual(AppearanceResolver.contrastRatio(.white, .white), 1, accuracy: 0.01)
+    }
 }
