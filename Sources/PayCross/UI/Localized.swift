@@ -27,18 +27,25 @@ import PayCrossCore
 /// reworded ones in English, from the one API call that was supposed to settle
 /// the question.
 ///
-/// `merchant` is the bundle searched first, and exists so the tests can stand a
-/// bundle of their own in for the merchant's app.
+/// `merchant` names a bundle to search instead of the app's, and exists so the
+/// tests can stand one of their own in for the merchant's app. Nil is the real
+/// path: `Bundle.main`, whose `.lproj` for the sheet's language was resolved
+/// once when the language was installed rather than on every string of every
+/// repaint.
 @MainActor
-func L(_ key: String, _ fallback: String, merchant: Bundle = .main) -> String {
-    if let inSheetLanguage = merchant.path(forResource: SheetLanguage.tag, ofType: "lproj")
-        .flatMap(Bundle.init(path:)) {
+func L(_ key: String, _ fallback: String, merchant: Bundle? = nil) -> String {
+    let app = merchant ?? .main
+    let inSheetLanguage = merchant == nil
+        ? SheetLanguage.merchantBundle
+        : SheetLanguage.lproj(SheetLanguage.tag, in: app)
+
+    if let inSheetLanguage {
         let override = inSheetLanguage.localizedString(forKey: key, value: nil, table: nil)
         if override != key { return override }
     }
     // Whatever the merchant's app would resolve it to. Reached when they ship no
     // `.lproj` for the sheet's language, or ship one that does not name this key.
-    let override = merchant.localizedString(forKey: key, value: nil, table: nil)
+    let override = app.localizedString(forKey: key, value: nil, table: nil)
     if override != key { return override }
     return SheetLanguage.bundle.localizedString(forKey: key, value: fallback, table: nil)
 }
@@ -55,7 +62,7 @@ func L(
     _ key: String,
     _ fallback: String,
     _ argument: String,
-    merchant: Bundle = .main
+    merchant: Bundle? = nil
 ) -> String {
     Template.fill(L(key, fallback, merchant: merchant), with: argument)
 }
@@ -89,6 +96,15 @@ enum SheetLanguage {
     /// because by then the answer is the SDK's to give, not the device's.
     private(set) static var bundle: Bundle = sdkBundle
 
+    /// The merchant app's own `.lproj` for the sheet's language, or nil when
+    /// they ship none.
+    ///
+    /// Resolved here rather than inside `L` for the same reason `bundle` is:
+    /// `L` runs once per string per repaint, and a `path(forResource:)` plus a
+    /// `Bundle(path:)` on each of thirty labels is filesystem work to answer a
+    /// question that changes twice a payment.
+    private(set) static var merchantBundle: Bundle?
+
     /// The locale the amount is formatted in.
     ///
     /// Not derived from `tag`, and deliberately so: the SDK ships words for two
@@ -108,8 +124,8 @@ enum SheetLanguage {
     /// somebody can pay on.
     static func install(_ resolved: ResolvedLocale) {
         tag = resolved.language
-        bundle = sdkBundle.path(forResource: resolved.language, ofType: "lproj")
-            .flatMap(Bundle.init(path:)) ?? sdkBundle
+        bundle = lproj(resolved.language, in: sdkBundle) ?? sdkBundle
+        merchantBundle = lproj(resolved.language, in: .main)
         locale = resolved.formattingTag.map(Locale.init(identifier:)) ?? .current
     }
 
@@ -118,7 +134,17 @@ enum SheetLanguage {
     static func reset() {
         tag = LocaleResolution.defaultLanguage
         bundle = sdkBundle
+        merchantBundle = lproj(LocaleResolution.defaultLanguage, in: .main)
         locale = .current
+    }
+
+    /// One language's `.lproj` inside a bundle, or nil when it ships none.
+    ///
+    /// Internal rather than private: `L` uses it for the bundle a test stands in
+    /// for the merchant app, which is not `Bundle.main` and so is not the one
+    /// cached above.
+    static func lproj(_ language: String, in bundle: Bundle) -> Bundle? {
+        bundle.path(forResource: language, ofType: "lproj").flatMap(Bundle.init(path:))
     }
 }
 

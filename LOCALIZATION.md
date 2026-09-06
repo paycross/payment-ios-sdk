@@ -50,13 +50,22 @@ is dismissed.
 
 ## Amounts
 
-The amount is **not** clamped to the two languages the SDK ships. It is
-formatted in the first locale anybody supplied — the override, else the session,
-else the device's first preference — with its region intact, **provided that
-candidate is shaped like a language tag**: two or three letters, then any number
+The amount is formatted in the first tag somebody **asked for** — the override,
+then the session — with its region intact. It is **not** clamped to the two
+languages the SDK ships: Foundation writes currency for every locale, so a
+merchant asking for `de-AT` gets Austrian digits under English labels.
+
+A tag counts only if it is shaped like one: two or three letters, then any number
 of short alphanumeric subtags. One that is not — `français`, `f-r`, `fr-`, `f` —
-is passed over and the next candidate formats the amount instead, so a typo
-cannot both pick the wrong words and misprint the price.
+is passed over, so a typo cannot both pick the wrong words and misprint the
+price.
+
+**When neither the override nor the session asks for anything, the amount is
+formatted with the shopper's own `Locale`** — their Region setting and their
+explicit regional-format choices, which is what the SDK has always done. The
+device's *language* list is not used to rebuild one, because it carries neither
+of those: an `en_DE` phone shows `12,34 €` under English labels, and would have
+shown `€12.34` if the language tag had been used instead.
 
 `_` is read as `-` throughout, on both halves, so a merchant handing over
 `Locale.current.identifier` and getting `fr_FR` gets French words and French
@@ -65,15 +74,13 @@ digits rather than one of each.
 A well-formed tag for a language the SDK ships no strings for, such as `frr`,
 gives English words and still formats the amount as itself.
 
-Foundation writes currency for every locale, not just the two the SDK has words
-for, and a shopper who cannot read the labels can still read the price. So:
-
-| Override | Session | Device | Words | Amount |
-|---|---|---|---|---|
-| — | — | `de-DE` | English | `12,34 €` |
-| — | `fr-CH` | `en-US` | French | Swiss French |
-| `fr` | — | `en-US` | French | `12,34 €` |
-| — | — | — | English | `€12.34` |
+| Override | Session | Words | Amount |
+|---|---|---|---|
+| — | — | English or the device's | the shopper's own `Locale` |
+| — | `fr-CH` | French | Swiss French |
+| `fr` | — | French | French |
+| `de-AT` | — | English | Austrian |
+| `français` | `de-DE` | English | German |
 
 The region matters here where it does not for the words: `fr-CH` and `fr-FR` are
 one language and two number formats.

@@ -44,12 +44,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the device's. An app shipping English and French overrides now gives the French
   ones to a French sheet on an English phone, where before it gave the English
   ones and produced a half-translated sheet.
-  It is deliberately **not** clamped to the two languages the SDK ships:
-  Foundation writes currency for every locale, and a shopper who cannot read the
-  labels can still read the price. A German phone gets English words and
-  `12,34 €`; an `fr-CH` session gets French words and Swiss-French digits.
-  Previously the amount always followed `Locale.current`, so a merchant's
-  `locale:` and the session's language did not reach it at all.
 - Three English values change. The keys do not — keys are public API through the
   string override.
   - `paycross_save_this_card`: `Save this card` → `Save card for future use`,
