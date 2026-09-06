@@ -29,21 +29,22 @@ struct SavedCardPicker: View {
                 row(
                     label: card.rowTitle,
                     detail: card.expiryLabel,
-                    identifier: "paycross.savedCard.\(card.id)",
+                    identifier: PayCrossTestIdentifiers.savedCard(card.id),
                     isSelected: selection == .saved(card),
                     action: { onSelect(.saved(card)) },
                     remove: offersRemoval ? { onRemoveRequested(card) } : nil,
-                    removeIdentifier: "paycross.savedCard.\(card.id).delete"
+                    removeIdentifier: PayCrossTestIdentifiers.savedCardDelete(card.id)
                 )
             }
             row(
                 label: L("paycross_use_a_new_card", "Use a new card"),
                 detail: nil,
-                identifier: "paycross.savedCard.new",
+                identifier: PayCrossTestIdentifiers.useNewCard.rawValue,
                 isSelected: selection.isNewCard,
                 action: { onSelect(.newCard) }
             )
         }
+        .payCrossIdentifier(.savedCards)
     }
 
     private func row(

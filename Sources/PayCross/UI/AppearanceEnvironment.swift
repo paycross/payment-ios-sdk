@@ -114,11 +114,50 @@ struct DynamicPalette: Sendable {
 /// the sheet byte for byte where it was.
 struct AppearanceStyle: Sendable, Equatable {
     let resolved: ResolvedAppearance
+    /// The shopper's text-size setting as the sheet resolved it, which is what
+    /// the merchant's size factor is multiplied against. `.large` is the
+    /// system default and what a style built outside the sheet reads.
+    let typeSize: TypeSizeStep
     private let palette: DynamicPalette
+    /// Built with the style rather than per call, for the reason the palette
+    /// is: `font(_:)` reads it once per font per render and `NumericField`
+    /// reads it on every `updateUIView`, and it depends on nothing but
+    /// `typeSize`.
+    let scaledTraits: UITraitCollection
 
-    init(resolved: ResolvedAppearance) {
+    init(resolved: ResolvedAppearance, typeSize: TypeSizeStep = .large) {
         self.resolved = resolved
+        self.typeSize = typeSize
         palette = DynamicPalette(resolved)
+        scaledTraits = Self.traits(for: typeSize)
+    }
+
+    private init(
+        resolved: ResolvedAppearance, typeSize: TypeSizeStep, palette: DynamicPalette
+    ) {
+        self.resolved = resolved
+        self.typeSize = typeSize
+        self.palette = palette
+        scaledTraits = Self.traits(for: typeSize)
+    }
+
+    /// The traits a UIKit font resolves its size against: the shopper's
+    /// setting, held at the ceiling.
+    ///
+    /// Clamped here as well as at the sheet's root, because a style built
+    /// outside the sheet — a screenshot, a preview — has no root modifier over
+    /// it, and this is the one place the merchant's factor gets multiplied.
+    private static func traits(for typeSize: TypeSizeStep) -> UITraitCollection {
+        UITraitCollection(preferredContentSizeCategory: typeSize.clamped.contentSizeCategory)
+    }
+
+    /// The same appearance reading a different text size.
+    ///
+    /// The palette comes across rather than being rebuilt: it is fourteen
+    /// dynamic colours, this is called on every render, and none of them
+    /// depends on the type size.
+    func withTypeSize(_ step: TypeSizeStep) -> Self {
+        Self(resolved: resolved, typeSize: step, palette: palette)
     }
 
     /// What the sheet looks like when nobody has themed it.
@@ -129,7 +168,7 @@ struct AppearanceStyle: Sendable, Equatable {
     /// and comparing freshly built dynamic colours would report every style as
     /// different and re-render the sheet for nothing.
     static func == (one: AppearanceStyle, other: AppearanceStyle) -> Bool {
-        one.resolved == other.resolved
+        one.resolved == other.resolved && one.typeSize == other.typeSize
     }
 
     func uiColor(_ role: KeyPath<DynamicPalette, UIColor?>) -> UIColor? {
@@ -180,11 +219,13 @@ struct AppearanceStyle: Sendable, Equatable {
     /// A text style, multiplied by the merchant's scale factor.
     ///
     /// At the default factor this is the plain SwiftUI style, which keeps
-    /// Dynamic Type entirely as it was. A merchant who set a factor gets a font
-    /// built from the current Dynamic Type size times their factor, resolved
-    /// when the sheet is presented: the multiplication has to happen in points,
-    /// and a `Font` carrying a `UIFont` is the one form SwiftUI will not scale
-    /// a second time.
+    /// Dynamic Type entirely as it was — bounded by the sheet's own clamp, like
+    /// every other semantic font. A merchant who set a factor gets a font built
+    /// from the *clamped* Dynamic Type size times their factor: the
+    /// multiplication has to happen in points, and a `Font` carrying a `UIFont`
+    /// is the one form SwiftUI will not scale a second time, so resolving
+    /// against the device's raw size here would put the product outside the
+    /// clamp the shopper can see everywhere else.
     func font(_ style: Font.TextStyle, weight: Font.Weight? = nil) -> Font {
         let scale = resolved.sizeScaleFactor
         guard scale != 1 else {
@@ -192,7 +233,9 @@ struct AppearanceStyle: Sendable, Equatable {
             return weight.map { base.weight($0) } ?? base
         }
 
-        let size = UIFont.preferredFont(forTextStyle: Self.uiTextStyle(style)).pointSize
+        let size = UIFont.preferredFont(
+            forTextStyle: Self.uiTextStyle(style), compatibleWith: scaledTraits
+        ).pointSize
         return Font(UIFont.systemFont(ofSize: size * scale, weight: Self.uiWeight(weight)))
     }
 

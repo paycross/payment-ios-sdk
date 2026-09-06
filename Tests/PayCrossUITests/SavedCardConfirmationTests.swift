@@ -24,12 +24,11 @@ final class SavedCardConfirmationTests: XCTestCase {
 
     private let visa = "card_1"
     private let mastercard = "card_2"
-    private var windows: [UIWindow] = []
+    private let host = ViewHost()
 
-    override func tearDown() {
-        windows.forEach { $0.isHidden = true }
-        windows.removeAll()
-        super.tearDown()
+    override func tearDown() async throws {
+        host.release()
+        try await super.tearDown()
     }
 
     // MARK: - Pressing the trash
@@ -170,24 +169,6 @@ final class SavedCardConfirmationTests: XCTestCase {
         return try XCTUnwrap(image.pngData())
     }
 
-    private func host(_ view: some View) -> UIWindow {
-        let controller = UIHostingController(rootView: view)
-        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
-        if let scene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene }).first {
-            window.windowScene = scene
-        }
-        window.rootViewController = controller
-        window.isHidden = false
-        window.makeKeyAndVisible()
-        windows.append(window)
-
-        controller.view.frame = window.bounds
-        controller.view.setNeedsLayout()
-        controller.view.layoutIfNeeded()
-        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
-        return window
-    }
 
     private var sessionJSON: String {
         """

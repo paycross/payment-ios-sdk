@@ -136,3 +136,76 @@ jobs:
             exit 1
           fi
           echo "ok"
+
+      - name: Every published test identifier is applied
+        run: |
+          set -euo pipefail
+          status=0
+          source=Sources/PayCross/TestIdentifiers.swift
+          # Without this the loops below iterate zero times and the job goes
+          # green having checked nothing, which is worse than not checking.
+          test -f "$source" || {
+            echo "::error::$source is gone; this check would pass while checking nothing"
+            exit 1
+          }
+
+          names=$(grep -oE '^[[:space:]]*case [a-zA-Z]+ = "paycross\.' "$source" \
+            | awk '{print $2}')
+          count=$(printf '%s\n' "$names" | grep -c . || true)
+          # A floor, so a pattern that stops matching is caught rather than
+          # quietly reducing the check to nothing.
+          if [ "$count" -lt 25 ]; then
+            echo "::error::found $count identifiers in $source, expected at least 25"
+            exit 1
+          fi
+          echo "checking $count identifiers"
+
+          for name in $names; do
+            if ! grep -rqE "payCrossIdentifier\(\.$name\)|PayCrossTestIdentifiers\.$name\b" \
+                 --include='*.swift' Sources/PayCross --exclude=TestIdentifiers.swift; then
+              echo "::error::PayCrossTestIdentifiers.$name is published and applied nowhere."
+              status=1
+            fi
+          done
+
+          # The composed ones are not cases, so the loop above cannot see them.
+          helpers=$(grep -oE 'public static func [a-zA-Z]+\(' "$source" \
+            | awk '{print $4}' | tr -d '(')
+          if [ "$(printf '%s\n' "$helpers" | grep -c . || true)" -lt 4 ]; then
+            echo "::error::expected at least 4 composed identifier helpers"
+            exit 1
+          fi
+          for helper in $helpers; do
+            if ! grep -rqE "PayCrossTestIdentifiers\.$helper\(" \
+                 --include='*.swift' Sources/PayCross --exclude=TestIdentifiers.swift; then
+              echo "::error::PayCrossTestIdentifiers.$helper is published and applied nowhere."
+              status=1
+            fi
+          done
+          exit $status
+
+      - name: No identifier is set from a literal
+        run: |
+          set -euo pipefail
+          # Every one in the SDK comes from PayCrossTestIdentifiers, so a
+          # string here is either a name outside the namespace or a second copy
+          # of one in it. The demo harness is not part of the contract.
+          status=0
+          if grep -rnE 'accessibilityIdentifier[[:space:]]*(\(|=)[[:space:]]*"' \
+             --include='*.swift' Sources/PayCross; then
+            status=1
+          fi
+          # And the same thing wrapped onto the next line, which the pattern
+          # above cannot see. Only a continuation that *starts* with a quote is
+          # a literal; one starting with an expression is how the composed
+          # identifiers are written.
+          if grep -rn -A1 --include='*.swift' \
+               -E 'accessibilityIdentifier[[:space:]]*(\(|=)[[:space:]]*$' Sources/PayCross \
+             | grep -E '^.*-[0-9]+-[[:space:]]*"'; then
+            status=1
+          fi
+          if [ "$status" -ne 0 ]; then
+            echo "::error::set the identifier from PayCrossTestIdentifiers, not from a literal"
+            exit 1
+          fi
+          echo "ok"

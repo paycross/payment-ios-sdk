@@ -30,7 +30,7 @@ struct ApplePayButtonView: UIViewRepresentable {
         // On the control as well as on the SwiftUI node, which is where the
         // modifier in CardFormView puts it. Anything walking UIViews -- a UI
         // test, the demo harness -- finds nothing otherwise.
-        button.accessibilityIdentifier = "applePayButton"
+        button.accessibilityIdentifier = PayCrossTestIdentifiers.walletButton.rawValue
         button.addTarget(context.coordinator, action: #selector(Coordinator.tapped), for: .touchUpInside)
         return button
     }

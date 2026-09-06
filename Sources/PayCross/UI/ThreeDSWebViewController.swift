@@ -61,6 +61,7 @@ final class ThreeDSWebViewController: UIViewController {
             // Confines VoiceOver to the challenge. Without it the card form
             // underneath is still read out, and can still be operated.
             view.accessibilityViewIsModal = true
+            view.accessibilityIdentifier = PayCrossTestIdentifiers.threeDS.rawValue
             installCancelBar()
         } else {
             // Fingerprint: full bleed, and sent to the back by the presenter.
@@ -85,7 +86,7 @@ final class ThreeDSWebViewController: UIViewController {
         let cancel = UIBarButtonItem(
             title: L("paycross_cancel", "Cancel"), style: .plain, target: self, action: #selector(cancelTapped)
         )
-        cancel.accessibilityIdentifier = "threeDSCancel"
+        cancel.accessibilityIdentifier = PayCrossTestIdentifiers.threeDSCancel.rawValue
         // Titled like the sheet it stands in for, so answering the bank still
         // looks like the same payment rather than a screen of its own.
         let item = UINavigationItem(title: L("paycross_payment", "Payment"))

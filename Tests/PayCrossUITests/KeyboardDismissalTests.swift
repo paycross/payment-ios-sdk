@@ -15,12 +15,10 @@ import SwiftUI
 @MainActor
 final class KeyboardDismissalTests: XCTestCase {
 
-    /// Held for the duration of the test; a released window takes the hierarchy
-    /// under test with it.
-    private var windows: [UIWindow] = []
+    private let host = ViewHost()
 
     override func tearDown() async throws {
-        windows.removeAll()
+        host.release()
         try await super.tearDown()
     }
 
@@ -36,27 +34,7 @@ final class KeyboardDismissalTests: XCTestCase {
             fieldErrors: [],
             onPay: {}
         )
-        let controller = UIHostingController(rootView: NavigationStack { view })
-        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
-        // Attach to the live scene when there is one, so the fields can take
-        // first responder.
-        if let scene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene }).first {
-            window.windowScene = scene
-        }
-        window.rootViewController = controller
-        window.isHidden = false
-        window.makeKeyAndVisible()
-        controller.view.frame = window.bounds
-        controller.view.layoutIfNeeded()
-        RunLoop.current.run(until: Date().addingTimeInterval(0.3))
-        windows.append(window)
-        return window
-    }
-
-    private func textFields(in view: UIView) -> [UITextField] {
-        (view.subviews.compactMap { $0 as? UITextField })
-            + view.subviews.flatMap(textFields(in:))
+        return host(NavigationStack { view })
     }
 
     private func field(_ identifier: String, in window: UIWindow) throws -> UITextField {
@@ -72,7 +50,7 @@ final class KeyboardDismissalTests: XCTestCase {
             "\(field.accessibilityIdentifier ?? "field") raises a keypad with no accessory"
         )
         return try XCTUnwrap(
-            bar.items?.first { $0.accessibilityIdentifier == "keyboardDone" },
+            bar.items?.first { $0.accessibilityIdentifier == PayCrossTestIdentifiers.keyboardDone.rawValue },
             "the accessory carries no Done control"
         )
     }
@@ -82,7 +60,7 @@ final class KeyboardDismissalTests: XCTestCase {
     func testEveryNumericFieldCarriesADoneControl() throws {
         let window = hostForm()
 
-        for identifier in ["cardNumber", "expiry", "cvv"] {
+        for identifier in [PayCrossTestIdentifiers.cardNumber, .expiry, .cvv].map(\.rawValue) {
             let item = try doneItem(of: try field(identifier, in: window))
             XCTAssertEqual(item.title, "Done", "\(identifier)'s control must say what it does")
             XCTAssertNotNil(item.target)
@@ -95,7 +73,7 @@ final class KeyboardDismissalTests: XCTestCase {
         let saved = SavedCard(id: "u", brand: .visa, last4: "1111", expiryLabel: "12/30")
         let window = hostForm(savedCards: [saved])
 
-        let cvv = try field("cvv", in: window)
+        let cvv = try field(PayCrossTestIdentifiers.cvv.rawValue, in: window)
         XCTAssertEqual(try doneItem(of: cvv).title, "Done")
     }
 
@@ -103,7 +81,7 @@ final class KeyboardDismissalTests: XCTestCase {
 
     func testDoneResignsTheField() throws {
         let window = hostForm()
-        let cvv = try field("cvv", in: window)
+        let cvv = try field(PayCrossTestIdentifiers.cvv.rawValue, in: window)
 
         try XCTSkipUnless(cvv.becomeFirstResponder(), "the field could not take first responder")
         XCTAssertTrue(cvv.isFirstResponder)
@@ -121,7 +99,7 @@ final class KeyboardDismissalTests: XCTestCase {
     /// on its own rather than only through the button.
     func testDismissalResignsWhicheverFieldIsEditing() throws {
         let window = hostForm()
-        let pan = try field("cardNumber", in: window)
+        let pan = try field(PayCrossTestIdentifiers.cardNumber.rawValue, in: window)
 
         try XCTSkipUnless(pan.becomeFirstResponder(), "the field could not take first responder")
 
@@ -144,7 +122,7 @@ final class KeyboardDismissalTests: XCTestCase {
     /// the one whose digits must still land in state.
     func testTypingStillReachesTheReducer() throws {
         let window = hostForm()
-        let cvv = try field("cvv", in: window)
+        let cvv = try field(PayCrossTestIdentifiers.cvv.rawValue, in: window)
 
         XCTAssertTrue(cvv.isSecureTextEntry, "a CVV must not be shoulder-readable")
         XCTAssertEqual(cvv.keyboardType, .numberPad)

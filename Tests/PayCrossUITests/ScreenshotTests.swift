@@ -271,6 +271,122 @@ final class ScreenshotTests: XCTestCase {
         }
     }
 
+    // MARK: - The confirmations
+
+    /// Both questions the sheet asks, drawn by the SDK rather than raised as
+    /// system alerts so their buttons can carry identifiers. New surfaces, so
+    /// they get looked at.
+    func testCancelConfirmation() throws {
+        let model = sheetModel()
+        model.isConfirmingCancel = true
+        try capture("25-cancel-confirmation") { PaymentSheetView(model: model) }
+    }
+
+    func testRemoveCardConfirmation() throws {
+        let model = sheetModel()
+        model.cardPendingRemoval = Self.savedCards[0]
+        try capture("26-remove-confirmation") { PaymentSheetView(model: model) }
+    }
+
+    /// The same question at the ceiling, where its two buttons stack.
+    func testCancelConfirmationAtTheAccessibilityCeiling() throws {
+        let model = sheetModel()
+        model.isConfirmingCancel = true
+        try capture("27-cancel-confirmation-ceiling") {
+            PaymentSheetView(model: model).dynamicTypeSize(.accessibility5)
+        }
+    }
+
+    /// The worst case the card has to hold: the longest French message, at the
+    /// ceiling, in a dialog with no scroll view of its own.
+    ///
+    /// The language arrives through the configuration rather than through
+    /// `SheetLanguage.install`, because the sheet installs its own on `load()`
+    /// and would put English back over anything set here first.
+    func testFrenchRemoveConfirmationAtTheAccessibilityCeiling() throws {
+        defer { SheetLanguage.reset() }
+
+        let model = sheetModel(locale: "fr")
+        model.cardPendingRemoval = Self.savedCards[0]
+        try capture("28-french-remove-confirmation-ceiling") {
+            PaymentSheetView(model: model).dynamicTypeSize(.accessibility5)
+        }
+    }
+
+    /// And the longest French buttons: `Continuer le paiement` above
+    /// `Oui, annuler`, which is why the two answers stack at every size.
+    func testFrenchCancelConfirmationAtTheAccessibilityCeiling() throws {
+        defer { SheetLanguage.reset() }
+
+        let model = sheetModel(locale: "fr")
+        model.isConfirmingCancel = true
+        try capture("29-french-cancel-confirmation-ceiling") {
+            PaymentSheetView(model: model).dynamicTypeSize(.accessibility5)
+        }
+    }
+
+    private func sheetModel(locale: String? = nil) -> PaymentSheetModel {
+        PaymentSheetModel(
+            sessionToken: "header.payload.signature",
+            claims: SessionClaims(
+                sessionID: "sess_1", merchantID: "m1", customerID: "c1", brandingID: nil,
+                amount: Amount(minorUnits: 2599, currencyCode: "EUR"), expiresAt: nil
+            ),
+            configuration: Configuration(environment: .sandbox, locale: locale),
+            sessionData: SessionData(),
+            isPreparing: false,
+            transport: StubTransport(json: #"{"session_id":"sess_1","status":"open"}"#)
+        )
+    }
+
+    // MARK: - The accessibility ceiling
+
+    /// The sheet at the largest size it will render, which is the one the
+    /// clamp produces when the shopper asks for the largest size iOS offers.
+    ///
+    /// `.accessibility5` is passed on purpose rather than `.accessibility3`:
+    /// the picture is only worth looking at if it proves the clamp held. What
+    /// to look for is the expiry above the CVV rather than beside it, a Pay
+    /// button that has grown with its label instead of clipping it, and every
+    /// field box still wider than the digits in it.
+    func testFormAtTheAccessibilityCeiling() throws {
+        var state = CardFormState()
+        CardFormReducer.reduce(state: &state, event: .nameChanged("A Person"))
+        CardFormReducer.reduce(state: &state, event: .panChanged("4111111111111111"))
+        CardFormReducer.reduce(state: &state, event: .expiryChanged("1230"))
+
+        try capture("23-accessibility-ceiling") {
+            form(state, showsApplePayButton: true)
+                .payCrossTypeScale(.unstyled)
+                .dynamicTypeSize(.accessibility5)
+        }
+    }
+
+    /// The same, in the language whose words are a third longer. This is where
+    /// a layout that merely survives English gives up: `Enregistrer la carte
+    /// pour une utilisation future` at an accessibility size, above a Pay
+    /// button reading `Payer 25,99 €`.
+    func testFrenchFormAtTheAccessibilityCeiling() throws {
+        SheetLanguage.install(LocaleResolution.resolve(override: "fr"))
+        defer { SheetLanguage.reset() }
+
+        var state = CardFormState()
+        CardFormReducer.reduce(state: &state, event: .nameChanged("A Person"))
+        CardFormReducer.reduce(state: &state, event: .panChanged("4111111111111111"))
+        CardFormReducer.reduce(state: &state, event: .expiryChanged("1230"))
+        CardFormReducer.reduce(
+            state: &state,
+            event: .declined(message: L("paycross_error_payment_failed", "MISSING"))
+        )
+
+        try capture("24-french-accessibility-ceiling") {
+            form(state)
+                .environment(\.locale, SheetLanguage.locale)
+                .payCrossTypeScale(.unstyled)
+                .dynamicTypeSize(.accessibility5)
+        }
+    }
+
     private static let savedCards = [
         SavedCard(id: "a", brand: .visa, last4: "1111", expiryLabel: "12/30"),
         SavedCard(id: "b", brand: .mastercard, last4: "4444", expiryLabel: "01/29")

@@ -26,7 +26,14 @@ struct NumericField: UIViewRepresentable {
         field.keyboardType = .numberPad
         field.isSecureTextEntry = isSecure
         field.textContentType = contentType
-        field.adjustsFontForContentSizeCategory = true
+        // Off, deliberately. UIKit's own re-scaling reads the device's setting
+        // and knows nothing about the sheet's clamp, so it would walk the card
+        // fields past a ceiling every other label on the screen respects.
+        // `applyStyle` resolves the size against the clamped traits instead, and
+        // runs again on every render — the appearance carries the shopper's step
+        // and compares unequal when it changes, so a setting changed mid-payment
+        // still lands.
+        field.adjustsFontForContentSizeCategory = false
         applyStyle(to: field)
         field.accessibilityIdentifier = identifier
         field.delegate = context.coordinator
@@ -61,12 +68,14 @@ struct NumericField: UIViewRepresentable {
     /// colour on a merchant's dark surface and ignore the size factor.
     ///
     /// `UIFontMetrics` still does the Dynamic Type scaling; the merchant's
-    /// factor multiplies the point size it is given.
+    /// factor multiplies the point size it is given, and the traits it scales
+    /// against are the sheet's clamped ones rather than the device's.
     private func applyStyle(to field: UITextField) {
         field.font = UIFontMetrics(forTextStyle: .body).scaledFont(
             for: .monospacedDigitSystemFont(
                 ofSize: style.scaledPointSize(17), weight: .regular
-            )
+            ),
+            compatibleWith: style.scaledTraits
         )
         field.textColor = style.uiColor(\.text) ?? .label
 
@@ -97,7 +106,7 @@ struct NumericField: UIViewRepresentable {
                 target: self,
                 action: #selector(dismissKeypad)
             )
-            done.accessibilityIdentifier = "keyboardDone"
+            done.accessibilityIdentifier = PayCrossTestIdentifiers.keyboardDone.rawValue
             bar.items = [UIBarButtonItem(systemItem: .flexibleSpace), done]
             bar.sizeToFit()
             return bar

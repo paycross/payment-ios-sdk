@@ -887,6 +887,14 @@ enum DeviceInfo {
 
 struct PaymentSheetView: View {
     @ObservedObject var model: PaymentSheetModel
+    /// Where VoiceOver goes when the cancel confirmation closes without
+    /// cancelling: back to the control that raised it.
+    ///
+    /// Only this one. The trash that raises the *other* confirmation is gone
+    /// from the sheet whenever that question is answered yes, and keying a
+    /// focus state by card id through the picker to reach the rows that survive
+    /// is more plumbing than the case is worth.
+    @AccessibilityFocusState private var cancelFocused: Bool
 
     var body: some View {
         NavigationStack {
@@ -894,6 +902,7 @@ struct PaymentSheetView: View {
                 if model.isPreparing {
                     ProgressView()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .payCrossIdentifier(.loading)
                 } else {
                     CardFormView(
                         state: $model.form,
@@ -911,8 +920,8 @@ struct PaymentSheetView: View {
                     )
                 }
             }
+            .payCrossIdentifier(.sheet)
             .task { await model.load() }
-            .environment(\.payCrossAppearance, model.appearance)
             // The amount is the one string the sheet builds rather than looks
             // up, and `Payer €12.00` reads as a bug. SwiftUI's own formatting
             // follows this too.
@@ -929,44 +938,81 @@ struct PaymentSheetView: View {
                     // isLoading left a shopper whose ACS never returns with no way
                     // out at all. Android's back handler is likewise unconditional.
                     Button(L("paycross_cancel", "Cancel")) { model.isConfirmingCancel = true }
+                        .payCrossIdentifier(PayCrossTestIdentifiers.cancel)
+                        .accessibilityFocused($cancelFocused)
                 }
             }
+            // Both confirmations are drawn by the SDK rather than raised as
+            // `.alert`s. `ConfirmationDialog` says why: SwiftUI does not carry a
+            // button's identifier onto the `UIAlertAction` it builds, so a
+            // merchant's test could not press either answer by name.
+            .overlay { confirmation }
+            .onChange(of: model.isConfirmingCancel) { isConfirming in
+                if !isConfirming { cancelFocused = true }
+            }
+        }
+        // Outside the NavigationStack, so the bar, the toolbar's Cancel and both
+        // confirmations are held to the same ceiling as the form under them.
+        //
+        // The 3-D Secure challenge is not, and cannot be from here: it is a
+        // child view controller with a UIKit trait collection of its own, and
+        // the page inside it is the issuer's web content, which sizes its own
+        // text. The README says so rather than leaving it to be discovered.
+        .payCrossTypeScale(model.appearance)
+    }
+
+    /// Whichever question is outstanding, or nothing.
+    ///
+    /// Cancel wins when both are, which the two-alert arrangement could not
+    /// express: abandoning the payment settles the other question anyway.
+    @ViewBuilder
+    private var confirmation: some View {
+        if model.isConfirmingCancel {
             // Same two-step as Android, so a stray tap cannot abandon a payment
             // that is already in flight.
-            .alert(L("paycross_cancel_payment_title", "Cancel Payment?"), isPresented: $model.isConfirmingCancel) {
-                Button(L("paycross_cancel_payment_yes", "Yes, Cancel"), role: .destructive, action: model.cancel)
-                Button(L("paycross_cancel_payment_continue", "Continue Payment"), role: .cancel) {}
-            } message: {
-                Text(L("paycross_cancel_payment_message", "Are you sure you want to cancel this payment?"))
-            }
+            ConfirmationDialog(
+                identifier: PayCrossTestIdentifiers.cancelDialog,
+                title: L("paycross_cancel_payment_title", "Cancel Payment?"),
+                message: L(
+                    "paycross_cancel_payment_message",
+                    "Are you sure you want to cancel this payment?"
+                ),
+                confirm: .init(
+                    title: L("paycross_cancel_payment_yes", "Yes, Cancel"),
+                    identifier: PayCrossTestIdentifiers.cancelConfirm,
+                    action: model.cancel
+                ),
+                dismiss: .init(
+                    title: L("paycross_cancel_payment_continue", "Continue Payment"),
+                    identifier: PayCrossTestIdentifiers.cancelDismiss,
+                    action: { model.isConfirmingCancel = false }
+                )
+            )
+        } else if let card = model.cardPendingRemoval {
             // Beside the cancel confirmation rather than inside the picker, for
             // the same reason: deleting a stored card is not undoable from the
             // sheet, and the trash sits a thumb's width from the row that
             // selects the card.
-            .alert(
-                L("paycross_remove_card_title", "Remove this card?"),
-                isPresented: isConfirmingRemoval,
-                presenting: model.cardPendingRemoval
-            ) { _ in
-                Button(L("paycross_remove_card_confirm", "Remove"), role: .destructive) {
-                    model.confirmRemoval()
-                }
-                Button(L("paycross_cancel", "Cancel"), role: .cancel) { model.cancelRemoval() }
-            } message: { card in
-                Text(L(
+            ConfirmationDialog(
+                identifier: PayCrossTestIdentifiers.removeDialog,
+                title: L("paycross_remove_card_title", "Remove this card?"),
+                message: L(
                     "paycross_remove_card_message",
                     "%@ will no longer be offered for future payments.",
                     card.rowTitle
-                ))
-            }
+                ),
+                confirm: .init(
+                    title: L("paycross_remove_card_confirm", "Remove"),
+                    identifier: PayCrossTestIdentifiers.removeConfirm,
+                    action: model.confirmRemoval
+                ),
+                dismiss: .init(
+                    title: L("paycross_cancel", "Cancel"),
+                    identifier: PayCrossTestIdentifiers.removeDismiss,
+                    action: model.cancelRemoval
+                )
+            )
         }
-    }
-
-    private var isConfirmingRemoval: Binding<Bool> {
-        Binding(
-            get: { model.cardPendingRemoval != nil },
-            set: { if !$0 { model.cardPendingRemoval = nil } }
-        )
     }
 }
 #endif
