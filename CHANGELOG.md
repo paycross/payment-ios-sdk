@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-06
+
 ### Changed — source-incompatible, and the next release is a MINOR bump
 
 - **Every test identifier is renamed.** Twelve flat names become
@@ -386,7 +388,8 @@ Initial public release.
   merchant-facing types; internal collaborators moved to package access.
 - The payments client no longer caches status poll responses.
 
-[Unreleased]: https://github.com/paycross/payment-ios-sdk/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/paycross/payment-ios-sdk/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/paycross/payment-ios-sdk/releases/tag/v0.7.0
 [0.6.0]: https://github.com/paycross/payment-ios-sdk/releases/tag/v0.6.0
 [0.5.0]: https://github.com/paycross/payment-ios-sdk/releases/tag/v0.5.0
 [0.4.0]: https://github.com/paycross/payment-ios-sdk/releases/tag/v0.4.0
