@@ -292,7 +292,9 @@ not tag-shaped is passed over here too, so a typo cannot misprint a price.
 
 **An explicit locale does not turn string overrides off.** The two answer
 different questions — which language, and which words — and your bundle is
-searched first whatever the sheet resolved to.
+searched first whatever the sheet resolved to. Your overrides come out in the
+**sheet's** language: an app shipping English and French wording gives the French
+to a French sheet even on an English phone.
 
 [`LOCALIZATION.md`](LOCALIZATION.md) lists every key, what it paints, and which
 of them carry a `%@` an override must keep.

@@ -33,11 +33,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- The amount is formatted in the first locale anybody supplied — the override,
-  else the session, else the device's first preference — with its region intact,
-  provided that candidate is shaped like a language tag. One that is not is
-  passed over for formatting the same way it is for the words, so a typo cannot
-  both pick the wrong language and misprint the price.
+- The amount is formatted in the first tag anybody **asked for** — the override,
+  else the session — with its region intact, provided it is shaped like a
+  language tag. It is not clamped to the two languages the SDK ships, so a
+  merchant asking for `de-AT` gets Austrian digits under English labels. When
+  neither names one, the amount is formatted with `Locale.current` exactly as it
+  was in 0.6.0: the device's language list carries no region and none of the
+  shopper's format settings, so it is not used to rebuild a locale.
+- Merchant string overrides are resolved in the **sheet's** language rather than
+  the device's. An app shipping English and French overrides now gives the French
+  ones to a French sheet on an English phone, where before it gave the English
+  ones and produced a half-translated sheet.
   It is deliberately **not** clamped to the two languages the SDK ships:
   Foundation writes currency for every locale, and a shopper who cannot read the
   labels can still read the price. A German phone gets English words and

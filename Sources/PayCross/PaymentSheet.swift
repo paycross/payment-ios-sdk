@@ -80,6 +80,11 @@ public final class PaymentSheet {
         await host.dismissSelf()
         // The sheet is off screen and nothing of ours reads a string again, so
         // the language stops being installed rather than waiting to be replaced.
+        //
+        // One sheet at a time is assumed here, not enforced: two presentations
+        // that somehow overlapped would have the first to finish reset the
+        // language under the second. UIKit declines the second presentation, so
+        // that sheet is already broken before its words are.
         SheetLanguage.reset()
         return result
     }
@@ -131,6 +136,14 @@ final class PaymentSheetModel: ObservableObject {
     /// sheet resolved. Published because the session can move it after the form
     /// has already drawn once.
     @Published private(set) var formattingLocale: Locale = SheetLanguage.locale
+    /// The language the sheet is drawing in.
+    ///
+    /// Published for the repaint rather than read anywhere: `L` reads
+    /// `SheetLanguage`, which is not observable, so a session that moves the
+    /// language without moving the formatting locale — `configure(locale: "de")`
+    /// over an `fr` session does exactly that — would otherwise repaint only
+    /// because `load()` happens to set `isPreparing` on every branch.
+    @Published private(set) var languageTag: String = SheetLanguage.tag
     @Published var fieldValues: [String: [String: String]] = [:]
     @Published private(set) var fieldErrors: [FieldGroupError] = []
     /// Drives the "Cancel Payment?" confirmation. On the model rather than in the
@@ -347,6 +360,7 @@ final class PaymentSheetModel: ObservableObject {
             device: Locale.preferredLanguages
         ))
         formattingLocale = SheetLanguage.locale
+        languageTag = SheetLanguage.tag
     }
 
     /// The sentences Core shows, resolved here because Core cannot resolve them.

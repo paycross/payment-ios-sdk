@@ -165,27 +165,46 @@ final class LocalizedTests: XCTestCase {
         XCTAssertEqual(SheetLanguage.locale.identifier, "fr")
     }
 
-    /// The pair that motivates two answers rather than one. A German phone with
-    /// nothing else to go on gets English words and German digits, so the amount
-    /// is not the one thing on the sheet a shopper cannot read at a glance.
-    func testAGermanDeviceGetsEnglishWordsAndItsOwnNumberFormat() {
+    /// The merchant's own French wording must not leak into an English sheet
+    /// just because the merchant happens to ship a French `.lproj`.
+    func testTheEnglishSheetDoesNotReadTheMerchantsFrench() {
+        SheetLanguage.reset()
+        XCTAssertEqual(
+            L("paycross_card_number", "MISSING", merchant: Bundle.module), "Kartennummer"
+        )
+    }
+
+    /// A device nobody overrode keeps `Locale.current`, region and format
+    /// settings and all, which is what the SDK formatted with before it spoke a
+    /// second language. Rebuilding a locale from the device's language list
+    /// would have quietly rewritten the price for anyone whose Region does not
+    /// simply follow their language.
+    func testADeviceOnlySheetFormatsWithTheDevicesOwnLocale() {
         SheetLanguage.install(LocaleResolution.resolve(device: ["de-DE"]))
         XCTAssertEqual(L("paycross_card_number", "MISSING"), "Card Number")
         XCTAssertEqual(SheetLanguage.tag, "en")
-        XCTAssertEqual(SheetLanguage.locale.identifier, "de-DE")
+        XCTAssertEqual(SheetLanguage.locale, .current)
     }
 
+    /// An asked-for tag is used as asked for, so the region survives where the
+    /// language drops it.
     func testASwissFrenchSessionKeepsItsRegionForTheAmount() {
         SheetLanguage.install(LocaleResolution.resolve(session: "fr-CH"))
         XCTAssertEqual(L("paycross_card_number", "MISSING"), "Numéro de carte")
         XCTAssertEqual(SheetLanguage.locale.identifier, "fr-CH")
     }
 
+    func testAnAskedForTagWeShipNoWordsForStillFormatsTheAmount() {
+        SheetLanguage.install(LocaleResolution.resolve(override: "de-AT"))
+        XCTAssertEqual(L("paycross_card_number", "MISSING"), "Card Number")
+        XCTAssertEqual(SheetLanguage.locale.identifier, "de-AT")
+    }
+
     func testResetHandsTheChoiceBackToFoundation() {
         SheetLanguage.install(LocaleResolution.resolve(override: "fr-CH"))
         SheetLanguage.reset()
         XCTAssertEqual(SheetLanguage.tag, "en")
-        XCTAssertEqual(SheetLanguage.locale.identifier, "en")
+        XCTAssertEqual(SheetLanguage.locale, .current)
         XCTAssertEqual(L("paycross_card_number", "MISSING"), "Card Number")
     }
 
@@ -227,10 +246,45 @@ final class LocalizedTests: XCTestCase {
     /// that reads the merchant bundle first whatever happens.
     func testAMerchantOverrideStillWinsUnderFrench() {
         SheetLanguage.install(LocaleResolution.resolve(override: "fr"))
-        XCTAssertEqual(L("paycross_card_number", "MISSING", merchant: Bundle.module), "Kartennummer")
         XCTAssertEqual(
             L("paycross_cancel", "MISSING", merchant: Bundle.module), "Annuler",
             "a key the merchant did not override still comes from us, in French"
+        )
+    }
+
+    /// The one a merchant would never predict. `Bundle.localizedString` picks a
+    /// localization from the *device's* language list, so asking it directly
+    /// hands a French sheet on an English phone the English override: SDK labels
+    /// in French and the merchant's reworded ones in English, from the single
+    /// call that was supposed to settle the language.
+    ///
+    /// The simulator these run on is English, and this test bundle plays the
+    /// merchant app with a reworded card-number label in both languages. Under a
+    /// French sheet the French one has to win.
+    func testAMerchantOverrideComesOutInTheSheetsLanguageNotTheDevices() {
+        SheetLanguage.install(LocaleResolution.resolve(override: "fr"))
+        XCTAssertEqual(
+            L("paycross_card_number", "MISSING", merchant: Bundle.module),
+            "Numéro de la carte bancaire"
+        )
+    }
+
+    func testAMerchantOverrideComesOutInEnglishUnderAnEnglishSheet() {
+        SheetLanguage.install(LocaleResolution.resolve(override: "en"))
+        XCTAssertEqual(
+            L("paycross_card_number", "MISSING", merchant: Bundle.module), "Kartennummer"
+        )
+    }
+
+    /// A merchant who ships no `.lproj` for the sheet's language still gets
+    /// their override — whatever their own app would have resolved it to. Only
+    /// the English half of this bundle names this key.
+    func testAnOverrideWithoutTheSheetsLanguageFallsBackToTheMerchantsOwnPick() {
+        SheetLanguage.install(LocaleResolution.resolve(override: "fr"))
+        let card = SavedCard(id: "a", brand: .visa, last4: "1111", expiryLabel: "12/30")
+        XCTAssertEqual(
+            L("paycross_remove_card_message", "MISSING", card.rowTitle, merchant: Bundle.module),
+            "%d wird nicht mehr angeboten."
         )
     }
 

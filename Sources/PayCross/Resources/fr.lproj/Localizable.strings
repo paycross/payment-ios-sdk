@@ -26,7 +26,7 @@
 /* Caption above the amount being paid */
 "paycross_total" = "Total";
 
-/* Pay button. %@ is the formatted amount, e.g. "Pay €12.00" */
+/* Pay button. %@ is the formatted amount, e.g. "Payer 12,00 €" */
 "paycross_pay_amount" = "Payer %@";
 
 /* Title of the payment sheet, and of the 3-D Secure challenge over it */

@@ -86,10 +86,14 @@ an override happens because you asked for it and never by accident.
 
 **An explicit `locale:` does not switch overrides off.** They answer different
 questions: one says which language, the other says which words. Your bundle is
-searched first whatever language the sheet resolved to. Your override is resolved
-against *your* app's own localizations, so an app that ships French strings gives
-French overrides to a French shopper, and an English-only app gives its English
-ones in both languages.
+searched first whatever language the sheet resolved to.
+
+**Your overrides come out in the sheet's language, not the device's.** Your
+`<language>.lproj` for whatever the sheet resolved to is read first, so an app
+shipping English and French overrides gives the French ones to a French sheet
+even on an English phone. Ship no `.lproj` for that language and your app's own
+default wording is used instead, which is what an English-only app gets in both
+languages.
 
 Localizing the sheet into a language the SDK does not ship is the same mechanism:
 supply the keys you want, in your app's `.lproj` for that language.

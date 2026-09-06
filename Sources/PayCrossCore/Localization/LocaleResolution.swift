@@ -13,10 +13,16 @@ package struct ResolvedLocale: Sendable, Equatable {
     /// One of the languages the SDK ships strings for.
     package let language: String
 
-    /// The tag the amount is formatted with, as it was supplied. Never empty.
-    package let formattingTag: String
+    /// The tag the amount is formatted with, as it was supplied.
+    ///
+    /// Nil when neither the merchant nor the session offered a usable one. That
+    /// is not "use English": it means nobody but the shopper's own device has an
+    /// opinion, and the caller should hand the formatter `Locale.current`, which
+    /// carries a region and the shopper's explicit format settings that a
+    /// language tag out of `preferredLanguages` does not.
+    package let formattingTag: String?
 
-    package init(language: String, formattingTag: String) {
+    package init(language: String, formattingTag: String?) {
         self.language = language
         self.formattingTag = formattingTag
     }
@@ -49,34 +55,43 @@ package enum LocaleResolution {
     /// French session gets the French sheet rather than the English one. This is
     /// the hosted checkout page's rule, which matches each candidate separately.
     ///
-    /// **Formatting does not.** It is the first candidate that is *shaped* like a
-    /// language tag, unclamped, because Foundation can format an amount in a
-    /// locale the SDK has no words for. That is deliberately not always the same
-    /// locale as the language: a shopper on a German phone should read `12,34 €`
-    /// whatever tongue the labels around it are in.
+    /// **Formatting is a different answer.** It is the first *asked-for* tag —
+    /// the override, then the session — that is shaped like a language tag, and
+    /// it is not clamped to what the SDK ships, because Foundation formats an
+    /// amount in locales the SDK has no words for. So a merchant asking for
+    /// `de-AT` gets Austrian digits under English labels.
+    ///
+    /// The device is deliberately **not** a candidate here. Its language list
+    /// carries no region and none of the shopper's format settings, so rebuilding
+    /// a locale from it would write some shoppers a different price than
+    /// `Locale.current` does. `formattingTag` is nil in that case and the caller
+    /// reaches for `Locale.current` itself, which is what the SDK did before it
+    /// spoke a second language.
     ///
     /// The shape check is there so a typo cannot do double damage. A merchant
-    /// who writes `f-r` picks neither the words nor the number format; the
-    /// session or the device supplies the formatting instead. It is syntax only:
-    /// this cannot tell a language that exists from one that does not, so a
-    /// well-formed tag naming no real language is still used to format.
+    /// who writes `français` picks neither the words nor the number format; the
+    /// session gets its turn, and failing that the device's own locale does. It
+    /// is syntax only: it cannot tell a language that exists from one that does
+    /// not, so a well-formed tag for a language the SDK ships no strings for is
+    /// still what the amount is formatted in.
     ///
     /// - Parameters:
     ///   - override: the merchant's `Configuration.locale`.
     ///   - session: `SessionData.locale`, exactly as the server sent it.
     ///   - device: the shopper's ranked preferences, e.g. `Locale.preferredLanguages`.
-    ///   - supported: the languages to match against. A parameter so a test can
-    ///     pin the rule without depending on what the SDK happens to ship today.
+    ///   - supported: the languages to match against, in any case. A parameter so
+    ///     a test can pin the rule without depending on what the SDK ships today.
     package static func resolve(
         override: String? = nil,
         session: String? = nil,
         device: [String] = [],
         supported: Set<String> = supportedLanguages
     ) -> ResolvedLocale {
-        let candidates = ([override, session].compactMap { $0 } + device).compactMap(cleaned)
+        let asked = [override, session].compactMap { $0 }.compactMap(cleaned)
+        let candidates = asked + device.compactMap(cleaned)
         return ResolvedLocale(
             language: match(candidates, supported: supported) ?? defaultLanguage,
-            formattingTag: candidates.first(where: isWellFormed) ?? defaultLanguage
+            formattingTag: asked.first(where: isWellFormed)
         )
     }
 
@@ -120,6 +135,10 @@ package enum LocaleResolution {
     /// device that ranks `fr-CA` above `en` is asking for French, and sweeping
     /// the list for exact matches first would hand it English.
     private static func match(_ tags: [String], supported: Set<String>) -> String? {
+        // Lowercased here rather than trusted: the parameter is a test seam, and
+        // a caller passing ["EN"] should get English rather than silently match
+        // nothing at all.
+        let supported = Set(supported.map { $0.lowercased() })
         for tag in tags {
             let lowered = tag.lowercased()
             if supported.contains(lowered) { return lowered }

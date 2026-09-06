@@ -19,10 +19,25 @@ import PayCrossCore
 /// are answers to different questions, and a merchant who has reworded one label
 /// still wants their wording when the shopper is French.
 ///
+/// It is searched in the sheet's language first, and only then however the
+/// merchant's app would resolve the key itself. `Bundle.localizedString` picks a
+/// localization from the *device's* language list and knows nothing about
+/// `SheetLanguage`, so asking it directly would hand a French sheet the English
+/// override off an English phone: SDK labels in French, the merchant's two
+/// reworded ones in English, from the one API call that was supposed to settle
+/// the question.
+///
 /// `merchant` is the bundle searched first, and exists so the tests can stand a
 /// bundle of their own in for the merchant's app.
 @MainActor
 func L(_ key: String, _ fallback: String, merchant: Bundle = .main) -> String {
+    if let inSheetLanguage = merchant.path(forResource: SheetLanguage.tag, ofType: "lproj")
+        .flatMap(Bundle.init(path:)) {
+        let override = inSheetLanguage.localizedString(forKey: key, value: nil, table: nil)
+        if override != key { return override }
+    }
+    // Whatever the merchant's app would resolve it to. Reached when they ship no
+    // `.lproj` for the sheet's language, or ship one that does not name this key.
     let override = merchant.localizedString(forKey: key, value: nil, table: nil)
     if override != key { return override }
     return SheetLanguage.bundle.localizedString(forKey: key, value: fallback, table: nil)
@@ -47,11 +62,16 @@ func L(
 
 /// The language the sheet currently speaks.
 ///
-/// Main-actor state rather than an argument threaded through every view. One
-/// sheet is presented at a time — `PaymentSheet.present` is `@MainActor` and
-/// installs a language before it presents anything — so the installed bundle is
-/// always the current presentation's, and a `Text` deep inside the form needs no
-/// extra parameter to read it.
+/// Main-actor state rather than an argument threaded through every view, so a
+/// `Text` deep inside the form needs no extra parameter to read it.
+///
+/// One sheet at a time is **assumed, not enforced**. UIKit declines a second
+/// presentation over the first, so a second `PaymentSheet` is already broken
+/// before its language is; but if one ever got through, its `install` would
+/// re-language the sheet underneath it and whichever finished first would
+/// `reset` under the other. `PassKitWalletAuthorizer.authorize` guards itself
+/// against exactly this, and the guard belongs at `present` if the assumption
+/// ever needs to be real.
 ///
 /// Installed twice per payment on purpose: once from what is known without the
 /// network, and again the moment the session's own `locale` arrives, which is
@@ -72,12 +92,14 @@ enum SheetLanguage {
     /// The locale the amount is formatted in.
     ///
     /// Not derived from `tag`, and deliberately so: the SDK ships words for two
-    /// languages and Foundation formats currency for all of them, so a shopper
-    /// on a German phone reads `12,34 €` under English labels rather than
-    /// `€12.34`. `LocaleResolution` decides both and clamps only the first.
-    private(set) static var locale: Locale = Locale(
-        identifier: LocaleResolution.defaultLanguage
-    )
+    /// languages and Foundation formats currency for all of them, so a merchant
+    /// asking for `de-AT` gets Austrian digits under English labels.
+    ///
+    /// When nobody but the device had an opinion this is `Locale.current`, not a
+    /// locale rebuilt from the device's language list. The two differ for any
+    /// shopper whose Region or format settings do not simply follow their
+    /// language, and rebuilding one would have quietly rewritten their price.
+    private(set) static var locale: Locale = .current
 
     /// Installs a resolved language and its formatting.
     ///
@@ -88,7 +110,7 @@ enum SheetLanguage {
         tag = resolved.language
         bundle = sdkBundle.path(forResource: resolved.language, ofType: "lproj")
             .flatMap(Bundle.init(path:)) ?? sdkBundle
-        locale = Locale(identifier: resolved.formattingTag)
+        locale = resolved.formattingTag.map(Locale.init(identifier:)) ?? .current
     }
 
     /// Hands the choice back to Foundation once the sheet is gone, so a language
@@ -96,7 +118,7 @@ enum SheetLanguage {
     static func reset() {
         tag = LocaleResolution.defaultLanguage
         bundle = sdkBundle
-        locale = Locale(identifier: LocaleResolution.defaultLanguage)
+        locale = .current
     }
 }
 

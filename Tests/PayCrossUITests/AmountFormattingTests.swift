@@ -53,10 +53,27 @@ final class AmountFormattingTests: XCTestCase {
 
     // MARK: - What the sheet actually installs
 
-    /// The reason the resolver answers twice. Nothing here names a language the
-    /// SDK ships, so the words are English — and the amount is still German.
-    func testAGermanDeviceReadsItsOwnAmountUnderEnglishLabels() {
+    /// A device nobody overrode formats with `Locale.current`, which is what the
+    /// SDK did before it spoke a second language. A locale rebuilt from the
+    /// device's language list would drop the shopper's Region and their explicit
+    /// format settings, and rewrite the price for everyone whose Region does not
+    /// simply follow their language.
+    func testADeviceOnlySheetFormatsExactlyAsItDidBeforeFrench() {
         SheetLanguage.install(LocaleResolution.resolve(device: ["de-DE"]))
+
+        XCTAssertEqual(L("paycross_total", "MISSING"), "Total")
+        XCTAssertEqual(SheetLanguage.locale, .current)
+        XCTAssertEqual(
+            Amounts.formatted(amount, locale: SheetLanguage.locale),
+            Amounts.formatted(amount),
+            "the default parameter is Locale.current; these must not diverge"
+        )
+    }
+
+    /// The reason the resolver answers twice: an asked-for tag the SDK ships no
+    /// words for still writes the price its own way.
+    func testAnAskedForGermanTagReadsItsOwnAmountUnderEnglishLabels() {
+        SheetLanguage.install(LocaleResolution.resolve(override: "de-DE"))
 
         XCTAssertEqual(L("paycross_total", "MISSING"), "Total")
         XCTAssertEqual(

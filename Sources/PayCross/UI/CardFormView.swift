@@ -63,7 +63,11 @@ struct CardFormView: View {
                                 // two characters inside the width this row has,
                                 // so "Ou payer par carte" wrapped mid-phrase
                                 // between two lines that had room to spare.
-                                .fixedSize(horizontal: true, vertical: false)
+                                // Priority rather than fixedSize: the dividers
+                                // still shrink first, but once they are gone the
+                                // caption wraps instead of running off a sheet
+                                // it can no longer fit on at accessibility sizes.
+                                .layoutPriority(1)
                             VStack { Divider() }
                         }
                     }

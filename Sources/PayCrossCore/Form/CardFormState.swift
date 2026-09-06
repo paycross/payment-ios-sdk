@@ -19,7 +19,11 @@ package struct SavedCard: Sendable, Hashable, Identifiable {
     /// the delete confirmation. One composition, so the alert cannot name a card
     /// differently from the row it was raised on.
     ///
-    /// Bullets and digits only — no English, so it needs no translation.
+    /// Carries no SDK copy: a brand name is a proper noun, which is why it is
+    /// not translated, and the rest is bullets and digits. `CardBrand.unknown`
+    /// is the exception — its `displayName` is the word `Card`, which now lands
+    /// inside a French sentence in the delete confirmation. Whether that
+    /// deserves its own key is the copy owner's call, not this file's.
     package var rowTitle: String {
         "\(brand.displayName) •••• \(last4)"
     }

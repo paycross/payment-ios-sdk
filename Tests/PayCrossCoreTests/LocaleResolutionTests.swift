@@ -15,7 +15,7 @@ final class LocaleResolutionTests: XCTestCase {
 
     private func formatting(
         override: String? = nil, session: String? = nil, device: [String] = []
-    ) -> String {
+    ) -> String? {
         LocaleResolution.resolve(override: override, session: session, device: device).formattingTag
     }
 
@@ -136,13 +136,22 @@ final class LocaleResolutionTests: XCTestCase {
 
     // MARK: - Formatting is a separate answer, and is not clamped
 
-    /// The strings clamp to what the SDK ships; the amount does not, because
-    /// Foundation formats currency for any locale at all. A shopper on a German
-    /// phone reads `12,34 €` under English labels rather than `€12.34`.
-    func testAnUnsupportedDeviceStillFormatsInItsOwnLocale() {
+    /// The device never supplies a formatting tag. Its language list carries no
+    /// region and none of the shopper's format settings, so the caller reaches
+    /// for `Locale.current` instead — which is what the SDK formatted with
+    /// before it spoke a second language.
+    func testTheDeviceNeverSuppliesAFormattingTag() {
         let resolved = LocaleResolution.resolve(device: ["de-DE"])
         XCTAssertEqual(resolved.language, "en")
-        XCTAssertEqual(resolved.formattingTag, "de-DE")
+        XCTAssertNil(resolved.formattingTag, "the device's own Locale is better than its tag")
+    }
+
+    /// The strings clamp to what the SDK ships; an asked-for tag does not,
+    /// because Foundation formats currency for any locale at all.
+    func testAnAskedForTagWeShipNoWordsForStillFormats() {
+        let resolved = LocaleResolution.resolve(override: "de-AT")
+        XCTAssertEqual(resolved.language, "en")
+        XCTAssertEqual(resolved.formattingTag, "de-AT")
     }
 
     /// The region is kept where the language drops it, which is the whole point:
@@ -153,18 +162,18 @@ final class LocaleResolutionTests: XCTestCase {
         XCTAssertEqual(resolved.formattingTag, "fr-CH")
     }
 
-    func testFormattingTakesTheFirstCandidateAnybodySupplied() {
+    func testFormattingTakesTheFirstTagSomebodyAskedFor() {
         XCTAssertEqual(formatting(override: "de", session: "fr", device: ["en-US"]), "de")
         XCTAssertEqual(formatting(session: "fr-CA", device: ["en-US"]), "fr-CA")
-        XCTAssertEqual(formatting(device: ["ja-JP", "en-US"]), "ja-JP")
+        XCTAssertNil(formatting(device: ["ja-JP", "en-US"]), "the device is not asked for")
     }
 
     func testFormattingSkipsBlanksLikeTheLanguageDoes() {
         XCTAssertEqual(formatting(override: "  ", session: "fr-CH"), "fr-CH")
     }
 
-    func testFormattingIsEnglishWhenNobodySuppliedAnything() {
-        XCTAssertEqual(formatting(), "en")
+    func testFormattingIsUnsetWhenNobodyAskedForAnything() {
+        XCTAssertNil(formatting())
     }
 
     /// `fr_CH` and `fr-CH` are the same locale, and Foundation is happier with
@@ -185,9 +194,13 @@ final class LocaleResolutionTests: XCTestCase {
             "français", "f-r", "f", "frenchy", "fr!", "fr-", "-fr", "fr--CA", "123",
             "fr-CAAAAAAAAA"
         ] {
-            XCTAssertEqual(
-                formatting(override: typo, device: ["de-DE"]), "de-DE",
+            XCTAssertNil(
+                formatting(override: typo, device: ["de-DE"]),
                 "\(typo.debugDescription) is not shaped like a language tag"
+            )
+            XCTAssertEqual(
+                formatting(override: typo, session: "de-DE"), "de-DE",
+                "\(typo.debugDescription) must leave the session its turn"
             )
         }
     }
@@ -201,21 +214,21 @@ final class LocaleResolutionTests: XCTestCase {
         }
     }
 
-    func testWhenNoCandidateIsWellFormedTheAmountIsEnglish() {
-        XCTAssertEqual(formatting(override: "f-r", session: "!!", device: ["-"]), "en")
+    func testWhenNoAskedForTagIsWellFormedTheAmountIsUnset() {
+        XCTAssertNil(formatting(override: "f-r", session: "!!", device: ["fr-FR"]))
     }
 
     /// The shape of typo this rule is for: a merchant who wrote the language's
     /// name where its tag belongs. It picks neither the words nor the number
     /// format, and the device supplies both.
     func testALanguageNameInsteadOfATagPicksNeitherTheWordsNorTheFormat() {
-        let resolved = LocaleResolution.resolve(override: "français", device: ["de-DE"])
+        let resolved = LocaleResolution.resolve(override: "français", session: "de-DE")
         XCTAssertEqual(resolved.language, "en")
-        XCTAssertEqual(resolved.formattingTag, "de-DE")
+        XCTAssertEqual(resolved.formattingTag, "de-DE", "the session gets its turn at both")
     }
 
     func testASingleLetterIsNotATag() {
-        let resolved = LocaleResolution.resolve(override: "f", device: ["de-DE"])
+        let resolved = LocaleResolution.resolve(override: "f", session: "de-DE")
         XCTAssertEqual(resolved.language, "en")
         XCTAssertEqual(resolved.formattingTag, "de-DE")
     }
@@ -224,7 +237,7 @@ final class LocaleResolutionTests: XCTestCase {
     /// that plainly means French and reads as French; it just does not get to
     /// decide how a price is written.
     func testAMalformedCandidateCanStillChooseTheLanguage() {
-        let resolved = LocaleResolution.resolve(override: "fr-", device: ["de-DE"])
+        let resolved = LocaleResolution.resolve(override: "fr-", session: "de-DE")
         XCTAssertEqual(resolved.language, "fr")
         XCTAssertEqual(resolved.formattingTag, "de-DE")
     }
@@ -239,6 +252,14 @@ final class LocaleResolutionTests: XCTestCase {
         let resolved = LocaleResolution.resolve(override: "frr", device: ["de-DE"])
         XCTAssertEqual(resolved.language, "en", "the SDK ships no Frisian")
         XCTAssertEqual(resolved.formattingTag, "frr")
+    }
+
+    /// The seam is a set of languages, not a set of lowercase languages. A
+    /// caller passing `["EN"]` should get English, not silently match nothing.
+    func testTheSupportedSetIsMatchedWhateverCaseItIsWrittenIn() {
+        XCTAssertEqual(
+            LocaleResolution.resolve(override: "EN-gb", supported: ["EN", "FR"]).language, "en"
+        )
     }
 
     // MARK: - What ships
