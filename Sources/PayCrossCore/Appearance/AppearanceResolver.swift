@@ -139,12 +139,15 @@ extension AppearanceResolver {
             light: palette(appearance.light, appearance.primaryButton, serverBrand),
             dark: palette(appearance.dark, appearance.primaryButton, serverBrand),
             themeMode: appearance.themeMode,
-            cornerRadius: appearance.shapes.cornerRadius,
-            buttonCornerRadius: appearance.primaryButton.cornerRadius
-                ?? appearance.shapes.buttonCornerRadius
-                ?? appearance.shapes.cornerRadius,
-            borderWidth: appearance.shapes.borderWidth,
-            buttonHeight: appearance.primaryButton.height,
+            cornerRadius: dimension(appearance.shapes.cornerRadius),
+            // Each step of the fallback is checked on its own, so a nonsense
+            // button radius falls through to the general one rather than taking
+            // both down with it.
+            buttonCornerRadius: dimension(appearance.primaryButton.cornerRadius)
+                ?? dimension(appearance.shapes.buttonCornerRadius)
+                ?? dimension(appearance.shapes.cornerRadius),
+            borderWidth: dimension(appearance.shapes.borderWidth),
+            buttonHeight: dimension(appearance.primaryButton.height),
             sizeScaleFactor: clamped(appearance.typography.sizeScaleFactor)
         )
     }
@@ -185,9 +188,31 @@ extension AppearanceResolver {
     /// Out-of-range factors are clamped rather than rejected: the Flutter
     /// wrapper refuses one before it crosses the channel, and a native caller
     /// who passes 4 wants big text, not a broken sheet.
+    ///
+    /// A factor that is not a number at all is a different thing from one that
+    /// is too large, and is read as unset before the clamp gets to it: clamping
+    /// a NaN would hand the sheet a NaN back.
     package static func clamped(_ sizeScaleFactor: Double?) -> Double {
-        guard let factor = sizeScaleFactor, factor.isFinite else { return 1 }
+        guard let factor = finite(sizeScaleFactor) else { return 1 }
         return min(max(factor, scaleRange.lowerBound), scaleRange.upperBound)
+    }
+
+    /// A length the merchant asked for, or nil when they cannot have meant it.
+    ///
+    /// Every number on this API crosses from a Dart double or a JSON body, so
+    /// NaN and infinity are reachable without anybody typing them. A NaN that
+    /// reaches a corner radius does not draw a strange corner: it takes the
+    /// layout pass down with it, on the payment sheet. Negative is not a
+    /// radius, a border or a height either. All of them read as unset, which
+    /// leaves the value the sheet already drew.
+    package static func dimension(_ value: Double?) -> Double? {
+        guard let value = finite(value), value >= 0 else { return nil }
+        return value
+    }
+
+    private static func finite(_ value: Double?) -> Double? {
+        guard let value, value.isFinite else { return nil }
+        return value
     }
 
     /// Colour pairs that fall under the WCAG AA ratio for body text.
@@ -204,7 +229,13 @@ extension AppearanceResolver {
         for (mode, palette) in [("light", resolved.light), ("dark", resolved.dark)] {
             for (role, pair) in [
                 ("brand", (palette.brand, palette.onBrand)),
-                ("primaryButton", (palette.buttonBackground, palette.buttonLabel))
+                ("primaryButton", (palette.buttonBackground, palette.buttonLabel)),
+                // Only when the merchant set both. A surface with no text
+                // colour is drawn on by the platform's own label colour, which
+                // follows the device rather than the surface, and comparing
+                // against the colour we would have derived is a tautology: it
+                // is chosen to pass.
+                ("surface", (palette.surface, palette.text))
             ] {
                 guard let background = pair.0, let foreground = pair.1 else { continue }
                 let pairKey = UInt64(background.argb) << 32 | UInt64(foreground.argb)

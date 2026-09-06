@@ -205,6 +205,34 @@ final class AppearanceResolverTests: XCTestCase {
         XCTAssertEqual(resolved.light.buttonLabel, .black)
     }
 
+    /// The case a merchant reaches by setting the button background and
+    /// nothing else. There is no brand to derive a label from, and falling
+    /// through to one would put white on white.
+    func testAButtonBackgroundOnItsOwnStillGetsAReadableLabel() {
+        let onWhite = AppearanceResolver.resolve(appearance: PayCrossAppearance(
+            primaryButton: PayCrossPrimaryButton(background: .white)
+        ))
+        XCTAssertEqual(onWhite.light.buttonBackground, .white)
+        XCTAssertEqual(onWhite.light.buttonLabel, .black)
+        XCTAssertEqual(onWhite.dark.buttonLabel, .black)
+
+        let onBlack = AppearanceResolver.resolve(appearance: PayCrossAppearance(
+            primaryButton: PayCrossPrimaryButton(background: .black)
+        ))
+        XCTAssertEqual(onBlack.light.buttonLabel, .white)
+    }
+
+    /// An explicit onBrand is about the brand, not about a button fill the
+    /// merchant separately overrode.
+    func testAButtonBackgroundBeatsAnExplicitOnBrandForItsOwnLabel() {
+        let resolved = AppearanceResolver.resolve(appearance: PayCrossAppearance(
+            light: PayCrossColors(brand: .black, onBrand: .white),
+            primaryButton: PayCrossPrimaryButton(background: .white)
+        ))
+        XCTAssertEqual(resolved.light.onBrand, .white)
+        XCTAssertEqual(resolved.light.buttonLabel, .black)
+    }
+
     func testAnOverriddenButtonLabelWins() {
         let resolved = AppearanceResolver.resolve(appearance: PayCrossAppearance(
             primaryButton: PayCrossPrimaryButton(
@@ -266,7 +294,59 @@ final class AppearanceResolverTests: XCTestCase {
         XCTAssertEqual(AppearanceResolver.clamped(0.1), 0.8)
         XCTAssertEqual(AppearanceResolver.clamped(4), 1.3)
         XCTAssertEqual(AppearanceResolver.clamped(-2), 0.8)
+    }
+
+    /// Not a number is not a size. Clamping one would hand the sheet a NaN
+    /// back, so it is read as unset before the clamp sees it.
+    func testAScaleFactorThatIsNotANumberReadsAsUnset() {
         XCTAssertEqual(AppearanceResolver.clamped(.nan), 1)
+        XCTAssertEqual(AppearanceResolver.clamped(.infinity), 1)
+        XCTAssertEqual(AppearanceResolver.clamped(-.infinity), 1)
+        XCTAssertEqual(AppearanceResolver.clamped(.signalingNaN), 1)
+    }
+
+    // MARK: - Dimensions
+
+    func testDimensionsPassThroughWhenTheyAreLengths() {
+        XCTAssertEqual(AppearanceResolver.dimension(16), 16)
+        XCTAssertEqual(AppearanceResolver.dimension(0), 0)
+    }
+
+    /// Every number on this API crosses from a Dart double or a JSON body, so
+    /// these are reachable without anybody typing them, and a NaN in a corner
+    /// radius takes the layout pass down rather than drawing a strange corner.
+    func testDimensionsThatCannotBeLengthsReadAsUnset() {
+        XCTAssertNil(AppearanceResolver.dimension(nil))
+        XCTAssertNil(AppearanceResolver.dimension(.nan))
+        XCTAssertNil(AppearanceResolver.dimension(.infinity))
+        XCTAssertNil(AppearanceResolver.dimension(-.infinity))
+        XCTAssertNil(AppearanceResolver.dimension(-1))
+    }
+
+    func testEveryShapeValueIsValidated() {
+        for bad in [Double.nan, .infinity, -.infinity, -1] {
+            let resolved = AppearanceResolver.resolve(appearance: PayCrossAppearance(
+                shapes: PayCrossShapes(
+                    cornerRadius: bad, buttonCornerRadius: bad, borderWidth: bad
+                ),
+                primaryButton: PayCrossPrimaryButton(cornerRadius: bad, height: bad)
+            ))
+
+            XCTAssertNil(resolved.cornerRadius, "cornerRadius \(bad)")
+            XCTAssertNil(resolved.buttonCornerRadius, "buttonCornerRadius \(bad)")
+            XCTAssertNil(resolved.borderWidth, "borderWidth \(bad)")
+            XCTAssertNil(resolved.buttonHeight, "buttonHeight \(bad)")
+        }
+    }
+
+    /// Each step of the button-radius fallback is checked on its own, so one
+    /// nonsense value costs itself and not the value behind it.
+    func testANonsenseButtonRadiusFallsThroughToTheGeneralOne() {
+        let resolved = AppearanceResolver.resolve(appearance: PayCrossAppearance(
+            shapes: PayCrossShapes(cornerRadius: 16),
+            primaryButton: PayCrossPrimaryButton(cornerRadius: .nan)
+        ))
+        XCTAssertEqual(resolved.buttonCornerRadius, 16)
     }
 
     func testScaleFactorReachesTheResolvedAppearanceClamped() {
@@ -300,6 +380,35 @@ final class AppearanceResolverTests: XCTestCase {
             dark: PayCrossColors(brand: PayCrossColor(argb: 0xFFFF_EB3B), onBrand: .white)
         ))
         XCTAssertEqual(AppearanceResolver.contrastWarnings(for: resolved).count, 1)
+    }
+
+    /// The third pair the SDK decides: what the merchant's own text does on the
+    /// merchant's own surface.
+    func testAnUnreadableSurfaceAndTextPairIsReported() {
+        let resolved = AppearanceResolver.resolve(appearance: PayCrossAppearance(
+            light: PayCrossColors(
+                surface: .white, text: PayCrossColor(argb: 0xFFEE_EEEE)
+            )
+        ))
+        let warnings = AppearanceResolver.contrastWarnings(for: resolved)
+        XCTAssertEqual(warnings.count, 1)
+        XCTAssertTrue(warnings[0].contains("light.surface"), warnings[0])
+    }
+
+    func testAReadableSurfaceAndTextPairWarnsAboutNothing() {
+        let resolved = AppearanceResolver.resolve(appearance: PayCrossAppearance(
+            light: PayCrossColors(surface: .white, text: .black)
+        ))
+        XCTAssertEqual(AppearanceResolver.contrastWarnings(for: resolved), [])
+    }
+
+    /// A surface with no text colour is drawn on by the platform's own label
+    /// colour, which is not ours to compare against.
+    func testASurfaceWithNoTextColourIsNotReported() {
+        let resolved = AppearanceResolver.resolve(appearance: PayCrossAppearance(
+            light: PayCrossColors(surface: .white)
+        ))
+        XCTAssertEqual(AppearanceResolver.contrastWarnings(for: resolved), [])
     }
 
     func testContrastRatioMatchesTheWCAGExtremes() {
