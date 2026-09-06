@@ -56,9 +56,14 @@ struct CardFormView: View {
                         // than they read a gap.
                         HStack {
                             VStack { Divider() }
-                            Text(L("paycross_or_pay_with_card", "or pay with card"))
+                            Text(L("paycross_or_pay_with_card", "Or pay with card"))
                                 .font(style.font(.footnote))
                                 .foregroundStyle(style.foreground(\.textSecondary, default: .secondary))
+                                // The rules give, not the caption. English sits
+                                // two characters inside the width this row has,
+                                // so "Ou payer par carte" wrapped mid-phrase
+                                // between two lines that had room to spare.
+                                .fixedSize(horizontal: true, vertical: false)
                             VStack { Divider() }
                         }
                     }
