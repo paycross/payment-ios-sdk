@@ -98,7 +98,7 @@ struct SavedCardPicker: View {
                 // is otherwise the same control to VoiceOver, on a screen whose
                 // whole point is telling the cards apart.
                 .accessibilityLabel(
-                    String(format: L("paycross_remove_card", "Remove card, %@"), label)
+                    L("paycross_remove_card", "Remove card, %@", label)
                 )
                 .accessibilityIdentifier(removeIdentifier)
             }

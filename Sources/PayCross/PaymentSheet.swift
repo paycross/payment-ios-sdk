@@ -937,11 +937,9 @@ struct PaymentSheetView: View {
                 }
                 Button(L("paycross_cancel", "Cancel"), role: .cancel) { model.cancelRemoval() }
             } message: { card in
-                Text(String(
-                    format: L(
-                        "paycross_remove_card_message",
-                        "%@ will no longer be offered for future payments."
-                    ),
+                Text(L(
+                    "paycross_remove_card_message",
+                    "%@ will no longer be offered for future payments.",
                     card.rowTitle
                 ))
             }

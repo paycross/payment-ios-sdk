@@ -49,22 +49,10 @@ package struct FlowMessages: Sendable, Equatable {
     package static let english = FlowMessages()
 
     package func requiredMessage(for label: String) -> String {
-        Self.fill(fieldRequired, with: label)
+        Template.fill(fieldRequired, with: label)
     }
 
     package func invalidMessage(for label: String) -> String {
-        Self.fill(fieldInvalid, with: label)
-    }
-
-    /// Substitutes the first `%@`, leaving a template without one alone.
-    ///
-    /// Not `String(format:)`, for two reasons. `%@` with a Swift `String`
-    /// argument is a Darwin facility and this code is asserted on Linux. And
-    /// these templates can come from a merchant's own strings file, where a
-    /// `%d` someone typed by mistake would send `String(format:)` reading a
-    /// vararg that was never passed.
-    private static func fill(_ template: String, with value: String) -> String {
-        guard let range = template.range(of: "%@") else { return template }
-        return template.replacingCharacters(in: range, with: value)
+        Template.fill(fieldInvalid, with: label)
     }
 }

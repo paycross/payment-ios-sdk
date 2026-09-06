@@ -22,7 +22,9 @@ final class AmountFormattingTests: XCTestCase {
         super.tearDown()
     }
 
-    private let amount = Amount(minorUnits: 1234, currencyCode: "EUR")
+    /// The amount the French screenshots render, so the assertions and the
+    /// pictures say the same thing.
+    private let amount = Amount(minorUnits: 2599, currencyCode: "EUR")
 
     /// Non-breaking spaces, so a literal typed with an ordinary space fails for
     /// a reason nobody can see. Compared on digits and separators instead.
@@ -33,12 +35,12 @@ final class AmountFormattingTests: XCTestCase {
 
     func testFrenchPutsTheSymbolLastAndTheCommaInTheMiddle() {
         let formatted = Amounts.formatted(amount, locale: Locale(identifier: "fr-FR"))
-        XCTAssertEqual(normalised(formatted), "12,34 €")
+        XCTAssertEqual(normalised(formatted), "25,99 €")
     }
 
     func testEnglishPutsTheSymbolFirst() {
         let formatted = Amounts.formatted(amount, locale: Locale(identifier: "en-IE"))
-        XCTAssertEqual(normalised(formatted), "€12.34")
+        XCTAssertEqual(normalised(formatted), "€25.99")
     }
 
     /// A zero-decimal currency keeps no fraction in either language.
@@ -58,7 +60,7 @@ final class AmountFormattingTests: XCTestCase {
 
         XCTAssertEqual(L("paycross_total", "MISSING"), "Total")
         XCTAssertEqual(
-            normalised(Amounts.formatted(amount, locale: SheetLanguage.locale)), "12,34 €"
+            normalised(Amounts.formatted(amount, locale: SheetLanguage.locale)), "25,99 €"
         )
     }
 
@@ -79,7 +81,7 @@ final class AmountFormattingTests: XCTestCase {
     func testTheSheetFormatsInFrenchOnceFrenchIsInstalled() {
         SheetLanguage.install(LocaleResolution.resolve(override: "fr-FR"))
         XCTAssertEqual(
-            normalised(Amounts.formatted(amount, locale: SheetLanguage.locale)), "12,34 €"
+            normalised(Amounts.formatted(amount, locale: SheetLanguage.locale)), "25,99 €"
         )
     }
 }

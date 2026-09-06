@@ -60,6 +60,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Internal
 
+- Placeholders are filled by substituting a literal `%@` rather than by
+  `String(format:)`, on both sides of the Core/UI split. These templates can come
+  from a merchant's own strings file, and `String(format:)` handed a mistyped
+  `%d` reads a vararg that was never passed. A bad override now costs a label
+  with a `%d` in it and nothing more.
 - `PayCrossCore` no longer hard-codes the sentences it shows. `FlowMessages`
   carries them in, defaulted to the English the SDK already shipped, so the
   runner's actor isolation holds and every Core test still asserts prose.

@@ -28,6 +28,23 @@ func L(_ key: String, _ fallback: String, merchant: Bundle = .main) -> String {
     return SheetLanguage.bundle.localizedString(forKey: key, value: fallback, table: nil)
 }
 
+/// Looks a string up and fills the one placeholder it carries.
+///
+/// Every key that takes an argument goes through here rather than through
+/// `String(format:)`. The lookup reads the merchant's bundle first, so the
+/// template is a string the SDK does not own, and `String(format:)` handed a
+/// `%d` somebody typed by mistake reads a vararg that was never passed. See
+/// `Template.fill`, which Core uses for the same reason.
+@MainActor
+func L(
+    _ key: String,
+    _ fallback: String,
+    _ argument: String,
+    merchant: Bundle = .main
+) -> String {
+    Template.fill(L(key, fallback, merchant: merchant), with: argument)
+}
+
 /// The language the sheet currently speaks.
 ///
 /// Main-actor state rather than an argument threaded through every view. One

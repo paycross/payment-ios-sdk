@@ -100,12 +100,10 @@ final class PassKitWalletAuthorizer: NSObject, WalletAuthorizing {
     /// with no entitlement -- and a message that names nothing is exactly the
     /// regression worth pinning.
     static func presentationFailureMessage(for spec: ApplePayRequestSpec) -> String {
-        String(
-            format: L(
-                "paycross_error_apple_pay_presentation",
-                "Apple Pay could not be presented for %@. "
-                    + "Check the app's Apple Pay entitlement and the merchant identifier."
-            ),
+        L(
+            "paycross_error_apple_pay_presentation",
+            "Apple Pay could not be presented for %@. "
+                + "Check the app's Apple Pay entitlement and the merchant identifier.",
             spec.merchantIdentifier
         )
     }

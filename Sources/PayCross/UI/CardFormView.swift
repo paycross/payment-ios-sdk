@@ -349,8 +349,8 @@ private struct PayButton: View {
                 if isLoading {
                     ProgressView().tint(labelColor)
                 } else {
-                    Text(String(
-                        format: L("paycross_pay_amount", "Pay %@"),
+                    Text(L(
+                        "paycross_pay_amount", "Pay %@",
                         Amounts.formatted(amount, locale: locale)
                     ))
                         .font(style.font(.headline))

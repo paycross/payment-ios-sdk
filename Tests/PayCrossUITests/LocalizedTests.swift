@@ -258,6 +258,47 @@ final class LocalizedTests: XCTestCase {
         )
     }
 
+    // MARK: - A merchant override is a string the SDK does not own
+
+    /// The hazard `Template.fill` exists for. A merchant who typed `%d` into an
+    /// override of a key carrying `%@` would, under `String(format:)`, have the
+    /// sheet read an integer vararg nobody passed — undefined behaviour reached
+    /// from a text file, on a screen holding a card number. The worst that
+    /// happens now is a label that still says `%d`.
+    func testAnOverrideWithTheWrongPlaceholderIsNotTreatedAsAFormatString() {
+        let card = SavedCard(id: "a", brand: .visa, last4: "1111", expiryLabel: "12/30")
+        XCTAssertEqual(
+            L("paycross_remove_card_message", "MISSING", card.rowTitle, merchant: Bundle.module),
+            "%d wird nicht mehr angeboten."
+        )
+    }
+
+    func testAnOverrideThatKeepsItsPlaceholderIsStillFilled() {
+        XCTAssertEqual(
+            L("paycross_no_such_key", "Remove card, %@", "Visa •••• 1111"),
+            "Remove card, Visa •••• 1111"
+        )
+    }
+
+    /// Every key that carries a `%@` goes through the filling lookup, in both
+    /// languages, so none of them can reach a shopper with the placeholder still
+    /// in it.
+    func testEveryPlaceholderKeyFillsInBothLanguages() throws {
+        for language in ["en", "fr"] {
+            SheetLanguage.install(ResolvedLocale(language: language, formattingTag: language))
+            for key in try values(in: language).filter({ $0.value.contains("%@") }).keys {
+                let filled = L(key, "MISSING", "SUBSTITUTED")
+                XCTAssertTrue(
+                    filled.contains("SUBSTITUTED"),
+                    "\(language) \(key) did not fill its placeholder: \(filled)"
+                )
+                XCTAssertFalse(
+                    filled.contains("%@"), "\(language) \(key) kept a %@ after filling"
+                )
+            }
+        }
+    }
+
     // MARK: - Reading a .lproj off the bundle
 
     private func keys(in language: String) throws -> Set<String> {

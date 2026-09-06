@@ -88,6 +88,10 @@ supply the keys you want, in your app's `.lproj` for that language.
 `%@` marks a value the SDK substitutes at runtime. **An override of a key that
 carries one must keep it**, or the card, amount or field name it names is lost.
 
+Only a literal `%@` is substituted. Any other percent in your override — `%d`,
+`%s`, `%1$@` — is left exactly as you wrote it and is never read as a format
+specifier, so the worst a typo costs you is a label with a `%d` in it.
+
 ### The card form
 
 | Key | What it paints | `%@` |
