@@ -299,11 +299,25 @@ private struct PayButton: View {
     let isEnabled: Bool
     let action: () -> Void
 
+    private var fill: Color {
+        isEnabled ? .accentColor : Color.gray.opacity(0.4)
+    }
+
+    /// White is only right on a dark fill. The accent colour is the merchant
+    /// app's to choose, and a light one left the amount and the spinner
+    /// invisible on the one control the shopper has to press, so the label
+    /// follows the fill's own luminance -- the rule Android has been applying
+    /// since it started taking a brand colour. The disabled fill is the SDK's
+    /// own grey and keeps the white it has always drawn.
+    private var labelColor: Color {
+        isEnabled ? .onBrand(of: .accentColor) : .white
+    }
+
     var body: some View {
         Button(action: action) {
             Group {
                 if isLoading {
-                    ProgressView().tint(.white)
+                    ProgressView().tint(labelColor)
                 } else {
                     Text(String(format: L("paycross_pay_amount", "Pay %@"), Amounts.formatted(amount)))
                         .font(.headline)
@@ -311,8 +325,8 @@ private struct PayButton: View {
             }
             .frame(maxWidth: .infinity, minHeight: 50)
         }
-        .background(isEnabled ? Color.accentColor : Color.gray.opacity(0.4), in: RoundedRectangle(cornerRadius: 12))
-        .foregroundStyle(.white)
+        .background(fill, in: RoundedRectangle(cornerRadius: 12))
+        .foregroundStyle(labelColor)
         .disabled(!isEnabled)
         .accessibilityIdentifier("payButton")
     }
