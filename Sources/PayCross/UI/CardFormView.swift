@@ -9,6 +9,7 @@ import PayCrossCore
 /// CVV clearing live. That keeps this file a rendering concern and keeps the
 /// behaviour testable on Linux.
 struct CardFormView: View {
+    @Environment(\.payCrossAppearance) private var style
     @Binding var state: CardFormState
     let amount: Amount
     let allowsSaving: Bool
@@ -56,8 +57,8 @@ struct CardFormView: View {
                         HStack {
                             VStack { Divider() }
                             Text(L("paycross_or_pay_with_card", "or pay with card"))
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
+                                .font(style.font(.footnote))
+                                .foregroundStyle(style.foreground(\.textSecondary, default: .secondary))
                             VStack { Divider() }
                         }
                     }
@@ -89,7 +90,7 @@ struct CardFormView: View {
 
                     if allowsSaving && state.source.isNewCard {
                         Toggle(L("paycross_save_this_card", "Save this card"), isOn: saveCardBinding)
-                            .font(.subheadline)
+                            .font(style.font(.subheadline))
                     }
                 }
                 .padding(20)
@@ -108,7 +109,8 @@ struct CardFormView: View {
             }
             .background(.ultraThinMaterial)
         }
-        .background(Color(.systemGroupedBackground))
+        .background(style.color(\.surface) ?? Color(.systemGroupedBackground))
+        .payCrossForeground(style.color(\.text))
         // A tap off the fields is the other habit. Buttons and the toggle still
         // win their own taps; this only claims the gaps between them.
         .contentShape(Rectangle())
@@ -213,16 +215,17 @@ struct CardFormView: View {
 // MARK: - Pieces
 
 private struct AmountHeader: View {
+    @Environment(\.payCrossAppearance) private var style
     let amount: Amount
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(L("paycross_total", "Total"))
-                .font(.footnote.weight(.medium))
-                .foregroundStyle(.secondary)
+                .font(style.font(.footnote, weight: .medium))
+                .foregroundStyle(style.foreground(\.textSecondary, default: .secondary))
                 .textCase(.uppercase)
             Text(Amounts.formatted(amount))
-                .font(.largeTitle.weight(.semibold))
+                .font(style.font(.largeTitle, weight: .semibold))
                 .monospacedDigit()
                 .accessibilityIdentifier("amount")
         }
@@ -231,6 +234,7 @@ private struct AmountHeader: View {
 }
 
 private struct LabeledField<Content: View, Trailing: View>: View {
+    @Environment(\.payCrossAppearance) private var style
     let title: String
     var trailing: Trailing
     @ViewBuilder let content: Content
@@ -244,16 +248,16 @@ private struct LabeledField<Content: View, Trailing: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
-                .font(.footnote.weight(.medium))
-                .foregroundStyle(.secondary)
+                .font(style.font(.footnote, weight: .medium))
+                .foregroundStyle(style.foreground(\.textSecondary, default: .secondary))
             HStack {
                 content
-                    .font(.body.monospacedDigit())
+                    .font(style.font(.body).monospacedDigit())
                 trailing
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 12)
-            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10))
+            .payCrossComponentBackground(style)
         }
     }
 }
@@ -265,18 +269,22 @@ extension LabeledField where Trailing == EmptyView {
 }
 
 private struct BrandBadge: View {
+    @Environment(\.payCrossAppearance) private var style
     let brand: CardBrand
 
     var body: some View {
         Text(brand == .unknown ? "" : brand.displayName)
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(.secondary)
+            .font(style.font(.caption, weight: .semibold))
+            .foregroundStyle(style.foreground(\.textSecondary, default: .secondary))
             .accessibilityIdentifier("brand")
     }
 }
 
 private struct ErrorBanner: View {
+    @Environment(\.payCrossAppearance) private var style
     let message: String
+
+    private var errorColor: Color { style.color(\.error) ?? Color(.systemRed) }
 
     var body: some View {
         HStack(spacing: 8) {
@@ -284,23 +292,31 @@ private struct ErrorBanner: View {
             Image(systemName: "exclamationmark.triangle.fill")
             Text(message)
         }
-        .font(.footnote)
-        .foregroundStyle(Color(.systemRed))
+        .font(style.font(.footnote))
+        .foregroundStyle(errorColor)
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
-        .background(Color(.systemRed).opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
+        .background(
+            errorColor.opacity(0.1),
+            in: RoundedRectangle(cornerRadius: style.cornerRadius(or: 10))
+        )
         .accessibilityIdentifier("errorBanner")
     }
 }
 
 private struct PayButton: View {
+    @Environment(\.payCrossAppearance) private var style
     let amount: Amount
     let isLoading: Bool
     let isEnabled: Bool
     let action: () -> Void
 
     private var fill: Color {
-        isEnabled ? .accentColor : Color.gray.opacity(0.4)
+        if isEnabled {
+            style.color(\.buttonBackground) ?? .accentColor
+        } else {
+            style.color(\.buttonDisabledBackground) ?? Color.gray.opacity(0.4)
+        }
     }
 
     /// White is only right on a dark fill. The accent colour is the merchant
@@ -310,7 +326,11 @@ private struct PayButton: View {
     /// since it started taking a brand colour. The disabled fill is the SDK's
     /// own grey and keeps the white it has always drawn.
     private var labelColor: Color {
-        isEnabled ? .onBrand(of: .accentColor) : .white
+        if isEnabled {
+            style.color(\.buttonLabel) ?? .onBrand(of: .accentColor)
+        } else {
+            style.color(\.buttonDisabledLabel) ?? .white
+        }
     }
 
     var body: some View {
@@ -320,12 +340,12 @@ private struct PayButton: View {
                     ProgressView().tint(labelColor)
                 } else {
                     Text(String(format: L("paycross_pay_amount", "Pay %@"), Amounts.formatted(amount)))
-                        .font(.headline)
+                        .font(style.font(.headline))
                 }
             }
-            .frame(maxWidth: .infinity, minHeight: 50)
+            .frame(maxWidth: .infinity, minHeight: style.buttonHeight(or: 50))
         }
-        .background(fill, in: RoundedRectangle(cornerRadius: 12))
+        .background(fill, in: RoundedRectangle(cornerRadius: style.buttonCornerRadius(or: 12)))
         .foregroundStyle(labelColor)
         .disabled(!isEnabled)
         .accessibilityIdentifier("payButton")

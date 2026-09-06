@@ -190,6 +190,38 @@ extension EnvironmentValues {
 }
 
 extension View {
+    /// Paints the sheet's component ground: an input, a stored-card row, a
+    /// field group.
+    ///
+    /// One seam for all three, so the merchant's component colour, corner
+    /// radius and border arrive at every box that is meant to have them and at
+    /// none of the ones that are not. The border is drawn only when a width was
+    /// asked for, because the sheet has never drawn one.
+    func payCrossComponentBackground(_ style: AppearanceStyle) -> some View {
+        let shape = RoundedRectangle(cornerRadius: style.cornerRadius(or: 10))
+        return background(
+            style.color(\.component) ?? Color(.secondarySystemGroupedBackground), in: shape
+        )
+        .overlay {
+            if let width = style.borderWidth {
+                shape.strokeBorder(
+                    style.color(\.componentBorder) ?? Color(.separator), lineWidth: width
+                )
+            }
+        }
+    }
+
+    /// Sets the primary text colour only when the merchant chose one, so an
+    /// unthemed sheet is left with the system's own hierarchy untouched.
+    @ViewBuilder
+    func payCrossForeground(_ color: Color?) -> some View {
+        if let color {
+            foregroundStyle(color)
+        } else {
+            self
+        }
+    }
+
     /// Tints only when a brand colour resolved.
     ///
     /// `.tint(nil)` is not the same as not tinting: it clears whatever the host

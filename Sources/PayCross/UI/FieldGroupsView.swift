@@ -8,6 +8,7 @@ import PayCrossCore
 /// in `FieldGroupLogic` in Core. This file only draws what that logic decides,
 /// which is why the conditional-display rules are asserted on Linux.
 struct FieldGroupsView: View {
+    @Environment(\.payCrossAppearance) private var style
     let groups: [FieldGroup]
     @Binding var values: [String: [String: String]]
     let errors: [FieldGroupError]
@@ -23,7 +24,7 @@ struct FieldGroupsView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     if let label = group.label, !label.isEmpty {
                         Text(label)
-                            .font(.subheadline.weight(.semibold))
+                            .font(style.font(.subheadline, weight: .semibold))
                     }
 
                     ForEach(visible, id: \.name) { field in
@@ -55,6 +56,7 @@ struct FieldGroupsView: View {
 }
 
 private struct FieldRow: View {
+    @Environment(\.payCrossAppearance) private var style
     let field: FieldDefinition
     let state: FieldState
     @Binding var value: String
@@ -71,15 +73,15 @@ private struct FieldRow: View {
         // showed plainly and no test could.
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
-                .font(.footnote.weight(.medium))
-                .foregroundStyle(.secondary)
+                .font(style.font(.footnote, weight: .medium))
+                .foregroundStyle(style.foreground(\.textSecondary, default: .secondary))
 
             inputBox
 
             if let error {
                 Text(error)
-                    .font(.caption)
-                    .foregroundStyle(Color(.systemRed))
+                    .font(style.font(.caption))
+                    .foregroundStyle(style.foreground(\.error, default: Color(.systemRed)))
             }
         }
         .accessibilityIdentifier("field-\(field.name)")
@@ -118,10 +120,7 @@ private struct FieldRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 12)
         .padding(.vertical, 12)
-        .background(
-            Color(.secondarySystemGroupedBackground),
-            in: RoundedRectangle(cornerRadius: 10)
-        )
+        .payCrossComponentBackground(style)
     }
 }
 #endif
