@@ -70,6 +70,10 @@ private struct FieldRow: View {
     @Binding var value: String
     let error: String?
 
+    /// A select is a control of its own and handles its whole box, so it wants
+    /// no tap gesture over it.
+    private var isSelect: Bool { !(field.options ?? []).isEmpty }
+
     private var title: String {
         let base = field.label ?? field.name
         return state.isRequired ? "\(base) *" : base
@@ -103,7 +107,7 @@ private struct FieldRow: View {
     @ViewBuilder
     private var inputBox: some View {
         Group {
-            if let options = field.options, !options.isEmpty {
+            if let options = field.options, isSelect {
                 Picker(title, selection: $value) {
                     // An empty tag so an unset optional select has somewhere to sit;
                     // without it SwiftUI silently picks the first option and the
@@ -137,8 +141,7 @@ private struct FieldRow: View {
         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
         .padding(.horizontal, 12)
         .payCrossComponentBackground(style)
-        .contentShape(Rectangle())
-        .onTapGesture { focused = true }
+        .tapToFocus(isSelect ? nil : { focused = true })
     }
 }
 #endif

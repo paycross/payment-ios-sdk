@@ -914,7 +914,6 @@ struct PaymentSheetView: View {
             }
             .payCrossIdentifier(.sheet)
             .task { await model.load() }
-            .payCrossTypeScale(model.appearance)
             // The amount is the one string the sheet builds rather than looks
             // up, and `Payer €12.00` reads as a bug. SwiftUI's own formatting
             // follows this too.
@@ -966,6 +965,9 @@ struct PaymentSheetView: View {
                 ))
             }
         }
+        // Outside the NavigationStack, so the bar, the toolbar's Cancel and both
+        // confirmations are held to the same ceiling as the form under them.
+        .payCrossTypeScale(model.appearance)
     }
 
     private var isConfirmingRemoval: Binding<Bool> {

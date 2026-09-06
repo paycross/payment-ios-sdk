@@ -297,10 +297,7 @@ private struct LabeledField<Content: View, Trailing: View>: View {
     let title: String
     var trailing: Trailing
     /// What a tap on the box, rather than on the control inside it, should do.
-    ///
-    /// Nil for the UIKit-backed fields, and nil rather than an empty closure:
-    /// those fill their box already, and a gesture that did nothing would eat
-    /// the tap the sheet uses to put the keypad away.
+    /// Nil for the UIKit-backed fields, which fill their box already.
     var focus: (() -> Void)?
     @ViewBuilder let content: Content
 
@@ -337,24 +334,7 @@ private struct LabeledField<Content: View, Trailing: View>: View {
             }
             .padding(.horizontal, 12)
             .payCrossComponentBackground(style)
-            // Claims the whole box, including the horizontal padding and the
-            // band above and below a control that does not fill its frame.
-            .modifier(TapToFocus(focus: focus))
-        }
-    }
-}
-
-/// Makes the whole box focus the control inside it, when the control needs it.
-private struct TapToFocus: ViewModifier {
-    let focus: (() -> Void)?
-
-    func body(content: Content) -> some View {
-        if let focus {
-            content
-                .contentShape(Rectangle())
-                .onTapGesture(perform: focus)
-        } else {
-            content
+            .tapToFocus(focus)
         }
     }
 }
