@@ -887,6 +887,14 @@ enum DeviceInfo {
 
 struct PaymentSheetView: View {
     @ObservedObject var model: PaymentSheetModel
+    /// Where VoiceOver goes when the cancel confirmation closes without
+    /// cancelling: back to the control that raised it.
+    ///
+    /// Only this one. The trash that raises the *other* confirmation is gone
+    /// from the sheet whenever that question is answered yes, and keying a
+    /// focus state by card id through the picker to reach the rows that survive
+    /// is more plumbing than the case is worth.
+    @AccessibilityFocusState private var cancelFocused: Bool
 
     var body: some View {
         NavigationStack {
@@ -930,7 +938,8 @@ struct PaymentSheetView: View {
                     // isLoading left a shopper whose ACS never returns with no way
                     // out at all. Android's back handler is likewise unconditional.
                     Button(L("paycross_cancel", "Cancel")) { model.isConfirmingCancel = true }
-                        .payCrossIdentifier(.cancel)
+                        .payCrossIdentifier(PayCrossTestIdentifiers.cancel)
+                        .accessibilityFocused($cancelFocused)
                 }
             }
             // Both confirmations are drawn by the SDK rather than raised as
@@ -938,6 +947,9 @@ struct PaymentSheetView: View {
             // button's identifier onto the `UIAlertAction` it builds, so a
             // merchant's test could not press either answer by name.
             .overlay { confirmation }
+            .onChange(of: model.isConfirmingCancel) { isConfirming in
+                if !isConfirming { cancelFocused = true }
+            }
         }
         // Outside the NavigationStack, so the bar, the toolbar's Cancel and both
         // confirmations are held to the same ceiling as the form under them.

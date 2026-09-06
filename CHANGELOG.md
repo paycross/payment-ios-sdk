@@ -71,7 +71,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   none — so neither dialog nor any of their four buttons could be reached by
   name. The two answers stack rather than sitting side by side, because
   `Continue Payment` already wraps beside `Yes, Cancel` on a 390pt sheet and
-  `Continuer le paiement` is longer still.
+  `Continuer le paiement` is longer still. Each one announces itself to
+  VoiceOver and takes focus onto its own title, which the system alert did for
+  free and a plain view does not do at all.
 - **Dynamic Type is clamped at `accessibility3`**, and a merchant's
   `sizeScaleFactor` now multiplies a size that has already been clamped rather
   than compounding with the shopper's setting. Below the ceiling nothing about

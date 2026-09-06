@@ -24,6 +24,9 @@ import SwiftUI
 /// in the next language.
 struct ConfirmationDialog: View {
     @Environment(\.payCrossAppearance) private var style
+    /// Where VoiceOver is put when the question appears. The `.isModal` trait
+    /// below keeps it inside; this is what gets it in.
+    @AccessibilityFocusState private var titleFocused: Bool
 
     /// One of the two answers.
     struct Choice {
@@ -40,6 +43,10 @@ struct ConfirmationDialog: View {
     let confirm: Choice
     /// The one that leaves everything as it was.
     let dismiss: Choice
+    /// Announces the appearance to VoiceOver. Injected only so a test can watch
+    /// it happen: focus state is not readable, and there is no VoiceOver in a
+    /// test process to read it with.
+    var announceAppearance: () -> Void = { SheetAnnouncement.screenChanged() }
 
     var body: some View {
         ZStack {
@@ -55,6 +62,7 @@ struct ConfirmationDialog: View {
                     Text(title)
                         .font(style.font(.headline))
                         .multilineTextAlignment(.center)
+                        .accessibilityFocused($titleFocused)
                     Text(message)
                         .font(style.font(.footnote))
                         .foregroundStyle(style.foreground(\.textSecondary, default: .secondary))
@@ -81,9 +89,15 @@ struct ConfirmationDialog: View {
             .accessibilityAddTraits(.isModal)
             .payCrossIdentifier(identifier)
         }
-        // A question drawn over a raised keypad is a question half off the
-        // screen. The alert this replaces put the keypad away on the way up.
-        .onAppear { KeypadDismissal.resignFirstResponder() }
+        .onAppear {
+            // A question drawn over a raised keypad is a question half off the
+            // screen. The alert this replaces put the keypad away on the way up.
+            KeypadDismissal.resignFirstResponder()
+            // And it moved VoiceOver onto itself. Both halves: the notification
+            // tells VoiceOver to re-orient, the focus state says where to land.
+            announceAppearance()
+            titleFocused = true
+        }
     }
 
     private func button(_ choice: Choice, isDestructive: Bool) -> some View {

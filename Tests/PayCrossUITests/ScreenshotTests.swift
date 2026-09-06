@@ -297,14 +297,42 @@ final class ScreenshotTests: XCTestCase {
         }
     }
 
-    private func sheetModel() -> PaymentSheetModel {
+    /// The worst case the card has to hold: the longest French message, at the
+    /// ceiling, in a dialog with no scroll view of its own.
+    ///
+    /// The language arrives through the configuration rather than through
+    /// `SheetLanguage.install`, because the sheet installs its own on `load()`
+    /// and would put English back over anything set here first.
+    func testFrenchRemoveConfirmationAtTheAccessibilityCeiling() throws {
+        defer { SheetLanguage.reset() }
+
+        let model = sheetModel(locale: "fr")
+        model.cardPendingRemoval = Self.savedCards[0]
+        try capture("28-french-remove-confirmation-ceiling") {
+            PaymentSheetView(model: model).dynamicTypeSize(.accessibility5)
+        }
+    }
+
+    /// And the longest French buttons: `Continuer le paiement` above
+    /// `Oui, annuler`, which is why the two answers stack at every size.
+    func testFrenchCancelConfirmationAtTheAccessibilityCeiling() throws {
+        defer { SheetLanguage.reset() }
+
+        let model = sheetModel(locale: "fr")
+        model.isConfirmingCancel = true
+        try capture("29-french-cancel-confirmation-ceiling") {
+            PaymentSheetView(model: model).dynamicTypeSize(.accessibility5)
+        }
+    }
+
+    private func sheetModel(locale: String? = nil) -> PaymentSheetModel {
         PaymentSheetModel(
             sessionToken: "header.payload.signature",
             claims: SessionClaims(
                 sessionID: "sess_1", merchantID: "m1", customerID: "c1", brandingID: nil,
                 amount: Amount(minorUnits: 2599, currencyCode: "EUR"), expiresAt: nil
             ),
-            configuration: Configuration(environment: .sandbox),
+            configuration: Configuration(environment: .sandbox, locale: locale),
             sessionData: SessionData(),
             isPreparing: false,
             transport: StubTransport(json: #"{"session_id":"sess_1","status":"open"}"#)

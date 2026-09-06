@@ -11,6 +11,17 @@ import UIKit
 @MainActor
 enum SheetAnnouncement {
 
+    /// Tells VoiceOver the screen changed under it, so it re-orients and reads
+    /// from the top of whatever is modal now.
+    ///
+    /// A system alert did this for free. The confirmations the sheet draws are
+    /// ordinary views, and a view appearing moves nobody's focus: without this
+    /// a shopper pressed a card's trash and heard silence, with focus still on
+    /// the trash of a card the sheet was already asking about.
+    static func screenChanged() {
+        UIAccessibility.post(notification: .screenChanged, argument: nil)
+    }
+
     /// The seam is `ErrorBanner.announce`, which a test injects. This is only
     /// the default it carries, so there is nothing here to swap.
     static func post(_ message: String) {

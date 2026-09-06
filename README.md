@@ -393,6 +393,11 @@ The floor this sheet is held to, and what holds it there.
 - **The decline banner is announced.** VoiceOver reads what the shopper moves to,
   and a decline arrives without anyone moving, so it used to be silent. It also
   keeps its icon: the message is never colour alone.
+- **Both confirmations take VoiceOver with them.** They are drawn by the SDK
+  rather than raised as system alerts, and a view appearing moves nobody's
+  focus, so each one announces itself, puts focus on its own title and holds it
+  there while the question is open. Answering the cancel confirmation with
+  `Continue Payment` puts focus back on the control that raised it.
 - **Dynamic Type is honoured up to `accessibility3`, and clamped there.** Layouts
   stack rather than clip: the expiry and the security code sit one above the
   other at accessibility sizes, and both buttons grow with their labels. Above
@@ -414,8 +419,10 @@ which sizes its own text. Everything the SDK draws — the form, the navigation
 bar, the sheet's Cancel and both confirmations — is clamped.
 
 Verified by `AccessibilityFloorTests` on real renders, and by the
-`23-accessibility-ceiling`, `24-french-accessibility-ceiling` and
-`27-cancel-confirmation-ceiling` screenshots that CI uploads on every push.
+`23-accessibility-ceiling`, `24-french-accessibility-ceiling`,
+`27-cancel-confirmation-ceiling`, `28-french-remove-confirmation-ceiling` and
+`29-french-cancel-confirmation-ceiling` screenshots that CI uploads on every
+push.
 
 ## Apple Pay
 

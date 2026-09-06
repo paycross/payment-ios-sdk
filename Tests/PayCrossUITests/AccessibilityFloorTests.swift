@@ -169,6 +169,35 @@ final class AccessibilityFloorTests: XCTestCase {
         )
     }
 
+    // MARK: - The confirmations
+
+    /// A drawn confirmation has to tell VoiceOver it arrived.
+    ///
+    /// The system alert this replaces did it for free. A view appearing moves
+    /// nobody's focus, so without this a shopper pressed a card's trash and
+    /// heard silence, with focus still on the trash of the card the sheet was
+    /// already asking about.
+    ///
+    /// Where the focus lands is `.accessibilityFocused` on the title plus the
+    /// `.isModal` trait, and neither is readable from a test process with no
+    /// VoiceOver in it. That it is signalled at all is readable, through the
+    /// same kind of seam the error banner uses.
+    func testAConfirmationTellsVoiceOverItAppeared() throws {
+        var announced = 0
+        _ = host(
+            ConfirmationDialog(
+                identifier: .cancelDialog,
+                title: "Cancel Payment?",
+                message: "Are you sure you want to cancel this payment?",
+                confirm: .init(title: "Yes, Cancel", identifier: .cancelConfirm) {},
+                dismiss: .init(title: "Continue Payment", identifier: .cancelDismiss) {},
+                announceAppearance: { announced += 1 }
+            )
+        )
+
+        XCTAssertEqual(announced, 1)
+    }
+
     // MARK: - Helpers
 
     private static func scaledStyle(_ factor: Double) -> AppearanceStyle {
