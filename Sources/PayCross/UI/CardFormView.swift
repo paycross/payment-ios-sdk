@@ -94,7 +94,7 @@ struct CardFormView: View {
                     }
 
                     if allowsSaving && state.source.isNewCard {
-                        Toggle(L("paycross_save_this_card", "Save this card"), isOn: saveCardBinding)
+                        Toggle(L("paycross_save_this_card", "Save card for future use"), isOn: saveCardBinding)
                             .font(style.font(.subheadline))
                     }
                 }

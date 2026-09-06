@@ -3,6 +3,15 @@ import XCTest
 
 final class CardFormTests: XCTestCase {
 
+    /// The picker row, the trash's VoiceOver label and the delete confirmation
+    /// all name the same card, so they compose that name in one place. Two
+    /// compositions is an alert that says `Visa •••• 1111` over a row reading
+    /// something else.
+    func testASavedCardNamesItselfTheSameWayEverywhere() {
+        let card = SavedCard(id: "a", brand: .visa, last4: "1111", expiryLabel: "12/30")
+        XCTAssertEqual(card.rowTitle, "Visa •••• 1111")
+    }
+
     private var june2026: Date {
         var c = DateComponents()
         c.year = 2026; c.month = 6; c.day = 15

@@ -27,7 +27,7 @@ struct SavedCardPicker: View {
         VStack(alignment: .leading, spacing: 8) {
             ForEach(cards) { card in
                 row(
-                    label: "\(card.brand.displayName) •••• \(card.last4)",
+                    label: card.rowTitle,
                     detail: card.expiryLabel,
                     identifier: "paycross.savedCard.\(card.id)",
                     isSelected: selection == .saved(card),

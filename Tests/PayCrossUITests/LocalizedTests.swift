@@ -207,6 +207,31 @@ final class LocalizedTests: XCTestCase {
         )
     }
 
+    // MARK: - The delete confirmation names its card
+
+    /// The English gained a `%@` this train, where it had none. A call site that
+    /// forgets to fill it puts a literal `%@` in front of a shopper about to
+    /// delete a card, in both languages.
+    func testTheDeleteConfirmationNamesTheCard() {
+        let card = SavedCard(id: "a", brand: .visa, last4: "1111", expiryLabel: "12/30")
+
+        let english = String(
+            format: L("paycross_remove_card_message", "MISSING"), card.rowTitle
+        )
+        XCTAssertEqual(
+            english, "Visa •••• 1111 will no longer be offered for future payments."
+        )
+
+        SheetLanguage.install("fr")
+        let french = String(
+            format: L("paycross_remove_card_message", "MISSING"), card.rowTitle
+        )
+        XCTAssertEqual(
+            french,
+            "La carte Visa •••• 1111 ne sera plus proposée pour vos prochains paiements."
+        )
+    }
+
     // MARK: - Reading a .lproj off the bundle
 
     private func keys(in language: String) throws -> Set<String> {

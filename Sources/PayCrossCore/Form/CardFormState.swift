@@ -13,6 +13,16 @@ package struct SavedCard: Sendable, Hashable, Identifiable {
         self.last4 = last4
         self.expiryLabel = expiryLabel
     }
+
+    /// How this card is named wherever a shopper has to tell it from another:
+    /// the picker row, the delete button's VoiceOver label, and the sentence in
+    /// the delete confirmation. One composition, so the alert cannot name a card
+    /// differently from the row it was raised on.
+    ///
+    /// Bullets and digits only — no English, so it needs no translation.
+    package var rowTitle: String {
+        "\(brand.displayName) •••• \(last4)"
+    }
 }
 
 /// Whether the shopper is entering a new card or re-confirming a saved one.
