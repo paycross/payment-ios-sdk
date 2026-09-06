@@ -209,6 +209,68 @@ final class ScreenshotTests: XCTestCase {
         try capture("14-saved-card-removable") { form(state, allowsCardRemoval: true) }
     }
 
+    // MARK: - French
+
+    /// The form in the other language the SDK ships, rendered the way the sheet
+    /// renders it: the resolved `.lproj` installed, and the amount formatted in
+    /// the same language so it reads `Payer 25,99 €` rather than `Payer €25.99`.
+    ///
+    /// Worth a picture and not only an assertion. French runs about a third
+    /// longer than English here, and `Enregistrer la carte pour une utilisation
+    /// future` is 48 characters against a checkbox on a 390pt sheet — the one row
+    /// most likely to wrap into the field below it.
+    func testFrenchForm() throws {
+        SheetLanguage.install("fr")
+        defer { SheetLanguage.reset() }
+
+        var state = CardFormState()
+        CardFormReducer.reduce(state: &state, event: .nameChanged("A Person"))
+        CardFormReducer.reduce(state: &state, event: .panChanged("4111111111111111"))
+        CardFormReducer.reduce(state: &state, event: .expiryChanged("1230"))
+        CardFormReducer.reduce(state: &state, event: .cvvChanged("123"))
+
+        try capture("21-french") {
+            form(state, showsApplePayButton: true)
+                .environment(\.locale, SheetLanguage.locale)
+        }
+    }
+
+    /// The French sheet on its worst screen: the decline banner and a failed
+    /// server-driven field, both of them sentences that used to be English
+    /// literals inside `PayCrossCore` and now arrive through `FlowMessages`.
+    func testFrenchFormAfterADecline() throws {
+        SheetLanguage.install("fr")
+        defer { SheetLanguage.reset() }
+
+        var state = CardFormState()
+        CardFormReducer.reduce(state: &state, event: .nameChanged("A Person"))
+        CardFormReducer.reduce(state: &state, event: .panChanged("4111111111111111"))
+        CardFormReducer.reduce(state: &state, event: .expiryChanged("1230"))
+        CardFormReducer.reduce(
+            state: &state,
+            event: .declined(message: L("paycross_error_payment_failed", "MISSING"))
+        )
+
+        let groups = [FieldGroup(key: "billing", label: "Adresse de facturation", fields: [
+            FieldDefinition(
+                name: "postcode", type: "text", label: "Code postal",
+                placeholder: "75001", required: true
+            )
+        ])]
+        let messages = FlowMessages(fieldRequired: L("paycross_field_required", "MISSING"))
+
+        try capture("22-french-declined") {
+            form(
+                state, fieldGroups: groups,
+                fieldErrors: [FieldGroupError(
+                    groupKey: "billing", fieldName: "postcode",
+                    message: messages.requiredMessage(for: "Code postal")
+                )]
+            )
+            .environment(\.locale, SheetLanguage.locale)
+        }
+    }
+
     private static let savedCards = [
         SavedCard(id: "a", brand: .visa, last4: "1111", expiryLabel: "12/30"),
         SavedCard(id: "b", brand: .mastercard, last4: "4444", expiryLabel: "01/29")

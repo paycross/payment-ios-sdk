@@ -78,6 +78,9 @@ public final class PaymentSheet {
 
         let result = await model.awaitResult()
         await host.dismissSelf()
+        // The sheet is off screen and nothing of ours reads a string again, so
+        // the language stops being installed rather than waiting to be replaced.
+        SheetLanguage.reset()
         return result
     }
 }

@@ -67,6 +67,13 @@ enum SheetLanguage {
         bundle = sdkBundle.path(forResource: languageTag, ofType: "lproj")
             .flatMap(Bundle.init(path:)) ?? sdkBundle
     }
+
+    /// Hands the choice back to Foundation once the sheet is gone, so a language
+    /// belongs to the presentation that resolved it and to nothing else.
+    static func reset() {
+        tag = LocaleResolution.defaultLanguage
+        bundle = sdkBundle
+    }
 }
 
 /// Where our own strings live, which differs by how the SDK was installed.

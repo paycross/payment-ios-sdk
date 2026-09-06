@@ -1,6 +1,7 @@
 #if os(iOS)
 import XCTest
 @testable import PayCross
+@testable import PayCrossCore
 
 /// A `Text("Card Number")` inside a package resolves its key against
 /// `Bundle.main` — the merchant's app — so a merchant whose own strings file
@@ -8,10 +9,27 @@ import XCTest
 /// of the fix: the strings ship with us, and lookups find them there. The last
 /// two cover the contract that replaced the accident — a merchant bundle that
 /// names one of our keys wins, and a key nobody defines still reads.
+///
+/// `@MainActor` because `L` is: the language the sheet speaks is main-actor
+/// state, installed once per presentation.
+@MainActor
 final class LocalizedTests: XCTestCase {
+
+    override func tearDown() {
+        // Every one of these installs a language; leaving one installed would
+        // hand the next test class a sheet in whatever tongue this one ended in.
+        SheetLanguage.reset()
+        super.tearDown()
+    }
+
+    // MARK: - The strings ship with us
 
     func testEnglishStringsShipInTheSDKBundle() {
         XCTAssertNotNil(sdkBundle.url(forResource: "en", withExtension: "lproj"), "en.lproj missing from the SDK bundle")
+    }
+
+    func testFrenchStringsShipInTheSDKBundle() {
+        XCTAssertNotNil(sdkBundle.url(forResource: "fr", withExtension: "lproj"), "fr.lproj missing from the SDK bundle")
     }
 
     func testKeysResolveFromTheSDKBundleNotTheFallback() {
@@ -50,6 +68,162 @@ final class LocalizedTests: XCTestCase {
 
     func testUnknownKeyFallsBackToTheEnglishLiteral() {
         XCTAssertEqual(L("paycross_no_such_key", "Fallback"), "Fallback")
+    }
+
+    // MARK: - The two files say the same things
+
+    /// A key in one file and not the other is the localization bug that ships:
+    /// English everywhere in QA, and one raw `paycross_` key in the middle of a
+    /// French sheet the day a shopper meets the branch it lives on.
+    func testEveryKeyExistsInBothLanguages() throws {
+        let english = try keys(in: "en")
+        let french = try keys(in: "fr")
+
+        XCTAssertEqual(
+            english.subtracting(french), [], "keys in English that French is missing"
+        )
+        XCTAssertEqual(
+            french.subtracting(english), [], "keys in French that English is missing"
+        )
+    }
+
+    func testBothFilesCarryEveryKeyTheSheetUses() throws {
+        XCTAssertEqual(try keys(in: "en").count, 32)
+        XCTAssertEqual(try keys(in: "fr").count, 32)
+    }
+
+    /// The prefix is the whole reason a merchant override is deliberate rather
+    /// than accidental, so a key added without one is a collision waiting.
+    func testEveryKeyIsPrefixed() throws {
+        for key in try keys(in: "en").union(keys(in: "fr")) {
+            XCTAssertTrue(key.hasPrefix("paycross_"), "\(key) is not prefixed paycross_")
+        }
+    }
+
+    /// A translation that drops the placeholder loses the card, the amount or
+    /// the field name it was supposed to name, and `String(format:)` reads a
+    /// vararg nobody wanted.
+    func testATranslationNeverDropsItsPlaceholder() throws {
+        let english = try values(in: "en")
+        let french = try values(in: "fr")
+
+        for (key, value) in english where value.contains("%@") {
+            XCTAssertEqual(
+                french[key]?.contains("%@"), true,
+                "the French \(key) lost its %@"
+            )
+        }
+        for (key, value) in french where value.contains("%@") {
+            XCTAssertEqual(
+                english[key]?.contains("%@"), true,
+                "the English \(key) lost its %@"
+            )
+        }
+    }
+
+    /// Six keys carry one. Naming the count pins the sheet against a seventh
+    /// arriving in one language only.
+    func testThePlaceholderKeysAreTheOnesWeExpect() throws {
+        let carrying = try values(in: "en").filter { $0.value.contains("%@") }.keys
+        XCTAssertEqual(Set(carrying), [
+            "paycross_pay_amount",
+            "paycross_remove_card",
+            "paycross_remove_card_message",
+            "paycross_error_apple_pay_presentation",
+            "paycross_field_required",
+            "paycross_field_invalid"
+        ])
+    }
+
+    // MARK: - The installed language is what the sheet reads
+
+    func testInstallingFrenchChangesWhatTheSheetSays() {
+        SheetLanguage.install("fr")
+        XCTAssertEqual(L("paycross_card_number", "MISSING"), "Numéro de carte")
+        XCTAssertEqual(L("paycross_cancel", "MISSING"), "Annuler")
+        XCTAssertEqual(L("paycross_save_this_card", "MISSING"), "Enregistrer la carte pour une utilisation future")
+    }
+
+    func testInstallingEnglishPutsItBack() {
+        SheetLanguage.install("fr")
+        SheetLanguage.install("en")
+        XCTAssertEqual(L("paycross_card_number", "MISSING"), "Card Number")
+    }
+
+    /// A language the SDK ships no `.lproj` for is a packaging mistake, not a
+    /// reason to crash a checkout. The resolver never hands one over, but a
+    /// missing bundle at runtime can produce one anyway.
+    func testAnUnshippedLanguageStillReads() {
+        SheetLanguage.install("de")
+        XCTAssertNotEqual(L("paycross_card_number", "MISSING"), "MISSING")
+    }
+
+    func testTheAmountLocaleFollowsTheInstalledLanguage() {
+        SheetLanguage.install("fr")
+        XCTAssertEqual(SheetLanguage.locale.identifier, "fr")
+        XCTAssertEqual(SheetLanguage.tag, "fr")
+    }
+
+    func testResetHandsTheChoiceBackToFoundation() {
+        SheetLanguage.install("fr")
+        SheetLanguage.reset()
+        XCTAssertEqual(SheetLanguage.tag, "en")
+        XCTAssertEqual(L("paycross_card_number", "MISSING"), "Card Number")
+    }
+
+    // MARK: - The ladder, end to end
+
+    /// `LocaleResolutionTests` owns the rule on Linux. This is the half that
+    /// cannot run there: that the rung which wins is the one whose words appear.
+    func testTheMerchantOverrideDecidesWhatTheSheetSays() {
+        SheetLanguage.install(LocaleResolution.resolve(
+            override: "fr", session: "en", device: ["en-US"]
+        ))
+        XCTAssertEqual(L("paycross_cancel", "MISSING"), "Annuler")
+    }
+
+    func testTheSessionDecidesWhenTheMerchantDidNot() {
+        SheetLanguage.install(LocaleResolution.resolve(
+            session: "fr-CA", device: ["en-US"]
+        ))
+        XCTAssertEqual(L("paycross_cancel", "MISSING"), "Annuler")
+    }
+
+    func testTheDeviceDecidesWhenNobodyElseDid() {
+        SheetLanguage.install(LocaleResolution.resolve(device: ["fr-FR", "en-US"]))
+        XCTAssertEqual(L("paycross_cancel", "MISSING"), "Annuler")
+    }
+
+    /// Decision 3. An explicit locale and a reworded label answer different
+    /// questions, so asking for French does not switch a merchant's own wording
+    /// off — Adyen's rule, which the spec quoted, does not apply to a lookup
+    /// that reads the merchant bundle first whatever happens.
+    func testAMerchantOverrideStillWinsUnderFrench() {
+        SheetLanguage.install("fr")
+        XCTAssertEqual(L("paycross_card_number", "MISSING", merchant: Bundle.module), "Kartennummer")
+        XCTAssertEqual(
+            L("paycross_cancel", "MISSING", merchant: Bundle.module), "Annuler",
+            "a key the merchant did not override still comes from us, in French"
+        )
+    }
+
+    // MARK: - Reading a .lproj off the bundle
+
+    private func keys(in language: String) throws -> Set<String> {
+        Set(try values(in: language).keys)
+    }
+
+    private func values(in language: String) throws -> [String: String] {
+        let lproj = try XCTUnwrap(
+            sdkBundle.path(forResource: language, ofType: "lproj"),
+            "\(language).lproj is not in the SDK bundle"
+        )
+        let bundle = try XCTUnwrap(Bundle(path: lproj))
+        let file = try XCTUnwrap(
+            bundle.path(forResource: "Localizable", ofType: "strings"),
+            "\(language).lproj has no Localizable.strings"
+        )
+        return try XCTUnwrap(NSDictionary(contentsOfFile: file) as? [String: String])
     }
 }
 #endif
