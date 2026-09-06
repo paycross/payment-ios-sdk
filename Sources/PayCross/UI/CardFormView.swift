@@ -216,6 +216,9 @@ struct CardFormView: View {
 
 private struct AmountHeader: View {
     @Environment(\.payCrossAppearance) private var style
+    /// Set by the sheet from the language it resolved, so the amount and the
+    /// words around it agree on where the comma goes.
+    @Environment(\.locale) private var locale
     let amount: Amount
 
     var body: some View {
@@ -224,7 +227,7 @@ private struct AmountHeader: View {
                 .font(style.font(.footnote, weight: .medium))
                 .foregroundStyle(style.foreground(\.textSecondary, default: .secondary))
                 .textCase(.uppercase)
-            Text(Amounts.formatted(amount))
+            Text(Amounts.formatted(amount, locale: locale))
                 .font(style.font(.largeTitle, weight: .semibold))
                 .monospacedDigit()
                 .accessibilityIdentifier("amount")
@@ -306,6 +309,8 @@ private struct ErrorBanner: View {
 
 private struct PayButton: View {
     @Environment(\.payCrossAppearance) private var style
+    /// Same reason as `AmountHeader`: the button reads `Payer 12,00 €`.
+    @Environment(\.locale) private var locale
     let amount: Amount
     let isLoading: Bool
     let isEnabled: Bool
@@ -339,7 +344,10 @@ private struct PayButton: View {
                 if isLoading {
                     ProgressView().tint(labelColor)
                 } else {
-                    Text(String(format: L("paycross_pay_amount", "Pay %@"), Amounts.formatted(amount)))
+                    Text(String(
+                        format: L("paycross_pay_amount", "Pay %@"),
+                        Amounts.formatted(amount, locale: locale)
+                    ))
                         .font(style.font(.headline))
                 }
             }

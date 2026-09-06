@@ -66,7 +66,10 @@ final class PassKitWalletAuthorizer: NSObject, WalletAuthorizing {
         // another file, and a second caller is the kind of thing a plugin
         // bridge adds without noticing.
         guard continuation == nil else {
-            return .failed("An Apple Pay sheet is already open.")
+            return .failed(L(
+                "paycross_error_apple_pay_busy",
+                "An Apple Pay sheet is already open."
+            ))
         }
 
         let controller = PKPaymentAuthorizationController(paymentRequest: Self.makeRequest(spec))
@@ -97,8 +100,14 @@ final class PassKitWalletAuthorizer: NSObject, WalletAuthorizing {
     /// with no entitlement -- and a message that names nothing is exactly the
     /// regression worth pinning.
     static func presentationFailureMessage(for spec: ApplePayRequestSpec) -> String {
-        "Apple Pay could not be presented for \(spec.merchantIdentifier). "
-            + "Check the app's Apple Pay entitlement and the merchant identifier."
+        String(
+            format: L(
+                "paycross_error_apple_pay_presentation",
+                "Apple Pay could not be presented for %@. "
+                    + "Check the app's Apple Pay entitlement and the merchant identifier."
+            ),
+            spec.merchantIdentifier
+        )
     }
 
     /// Everything the sheet is asked for, as a pure function of the spec.
@@ -144,7 +153,10 @@ final class PassKitWalletAuthorizer: NSObject, WalletAuthorizing {
     /// arrives here.
     func awaitDelegateOutcome() async -> WalletAuthorizationOutcome {
         guard continuation == nil else {
-            return .failed("An Apple Pay sheet is already open.")
+            return .failed(L(
+                "paycross_error_apple_pay_busy",
+                "An Apple Pay sheet is already open."
+            ))
         }
 
         return await withCheckedContinuation { continuation in
@@ -262,7 +274,10 @@ extension PassKitWalletAuthorizer: PKPaymentAuthorizationControllerDelegate {
             outcome = .authorized(token)
             completion(PKPaymentAuthorizationResult(status: .success, errors: nil))
         } else {
-            outcome = .failed("Apple Pay returned a token this SDK could not read.")
+            outcome = .failed(L(
+                "paycross_error_apple_pay_token",
+                "Apple Pay returned a token this SDK could not read."
+            ))
             completion(PKPaymentAuthorizationResult(status: .failure, errors: nil))
         }
     }

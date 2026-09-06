@@ -1,7 +1,9 @@
 #if os(iOS)
 import Foundation
+import PayCrossCore
 
-/// Looks a user-visible string up, merchant bundle first.
+/// Looks a user-visible string up: merchant bundle first, then the language this
+/// presentation resolved to.
 ///
 /// A SwiftUI `Text("Card Number")` in a package resolves its key against
 /// `Bundle.main` — the merchant's app — not against ours, so a merchant whose
@@ -12,12 +14,59 @@ import Foundation
 /// a merchant who wants their own wording has to name the key on purpose, and
 /// everyone else gets ours.
 ///
+/// The merchant bundle is searched first *whatever language the sheet resolved
+/// to*. An explicit `configure(locale:)` does not turn overrides off — the two
+/// are answers to different questions, and a merchant who has reworded one label
+/// still wants their wording when the shopper is French.
+///
 /// `merchant` is the bundle searched first, and exists so the tests can stand a
 /// bundle of their own in for the merchant's app.
+@MainActor
 func L(_ key: String, _ fallback: String, merchant: Bundle = .main) -> String {
     let override = merchant.localizedString(forKey: key, value: nil, table: nil)
     if override != key { return override }
-    return sdkBundle.localizedString(forKey: key, value: fallback, table: nil)
+    return SheetLanguage.bundle.localizedString(forKey: key, value: fallback, table: nil)
+}
+
+/// The language the sheet currently speaks.
+///
+/// Main-actor state rather than an argument threaded through every view. One
+/// sheet is presented at a time — `PaymentSheet.present` is `@MainActor` and
+/// installs a language before it presents anything — so the installed bundle is
+/// always the current presentation's, and a `Text` deep inside the form needs no
+/// extra parameter to read it.
+///
+/// Installed twice per payment on purpose: once from what is known without the
+/// network, and again the moment the session's own `locale` arrives, which is
+/// the only rung that can still change the answer.
+@MainActor
+enum SheetLanguage {
+
+    /// The resolved BCP-47 primary subtag, e.g. `fr`. Read by the amount
+    /// formatter, which has to agree with the words around it.
+    private(set) static var tag: String = LocaleResolution.defaultLanguage
+
+    /// Where `L` reads our own copy from.
+    ///
+    /// Starts as the whole SDK bundle, which negotiates a language the way
+    /// Foundation always has. From the first `install` it is one `.lproj`,
+    /// because by then the answer is the SDK's to give, not the device's.
+    private(set) static var bundle: Bundle = sdkBundle
+
+    /// The locale the amount is formatted in, so `Payer 12,00 €` does not read
+    /// `Payer €12.00`.
+    static var locale: Locale { Locale(identifier: tag) }
+
+    /// Installs a resolved language.
+    ///
+    /// A missing `.lproj` falls back to the SDK bundle rather than failing: that
+    /// is a packaging mistake, and the English underneath it is still a sheet
+    /// somebody can pay on.
+    static func install(_ languageTag: String) {
+        tag = languageTag
+        bundle = sdkBundle.path(forResource: languageTag, ofType: "lproj")
+            .flatMap(Bundle.init(path:)) ?? sdkBundle
+    }
 }
 
 /// Where our own strings live, which differs by how the SDK was installed.
