@@ -267,24 +267,27 @@ happens because you asked for it, never by accident.
 
 ### Which language a shopper sees
 
-Four rungs, tried in order, and **the first one that gives an answer decides**:
+Three sources, in order of preference:
 
 1. `PayCrossAPI.configure(locale:)`
 2. The session's `locale`, as the server sent it
 3. The shopper's device preferences
-4. English
 
-An answer naming a language the SDK does not ship resolves to English rather than
-dropping to the next rung, so an explicit `locale: "de"` is not quietly overruled
-by a French device. Matching takes the exact tag first and then its primary
-subtag, so `fr-CA` is French. Nothing here throws.
+They are matched one candidate at a time — exact tag first, then primary subtag,
+so `fr-CA` is French — and the first naming a language the SDK ships wins. A
+candidate it cannot speak is passed over rather than ending the search, so
+`locale: "de"` falls through to the session's language and then the device's.
+English when nothing matches. Nothing here throws.
 
 ```swift
 PayCrossAPI.configure(environment: .sandbox, locale: "fr")
 ```
 
-The resolved language formats the amount too: a French sheet reads
-`Payer 25,99 €`, not `Payer €25.99`.
+**The amount is not clamped to those two languages.** It is formatted in the
+first locale anybody supplied, region intact, because Foundation writes currency
+for every locale and a shopper who cannot read the labels can still read the
+price. A German phone gets English words and `12,34 €`; an `fr-CH` session gets
+French words and Swiss-French digits.
 
 **An explicit locale does not turn string overrides off.** The two answer
 different questions — which language, and which words — and your bundle is

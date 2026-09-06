@@ -16,19 +16,20 @@ the other lacks, or if a translation drops a `%@`.
 
 ## Which language a shopper sees
 
-Four rungs, tried in order. **The first rung that gives an answer decides**, and
-an answer that names a language the SDK does not ship resolves to English rather
-than dropping to the next rung.
+Three sources, in order of preference:
 
 1. `PayCrossAPI.configure(locale:)` — the merchant's own choice.
 2. The checkout session's `locale`, as the server sent it.
-3. The shopper's device preferences.
-4. English.
+3. The shopper's device preferences, most preferred first.
 
-Each candidate is matched on the exact tag first (`fr`), then on its primary
-subtag (`fr-CA` → `fr`). Case does not matter and `_` is accepted in place of
-`-`, so `FR_ca` resolves. A tag that parses to nothing resolves to English; no
-input to this makes it throw.
+They are matched **one candidate at a time**: exact tag first (`fr`), then
+primary subtag (`fr-CA` → `fr`). The first candidate naming a language the SDK
+ships wins. A candidate it cannot speak is **passed over**, not treated as the
+final answer, so a merchant asking for German over a French session gets the
+French sheet. When nothing matches, the sheet is English.
+
+Case does not matter and `_` is accepted in place of `-`, so `FR_ca` resolves. A
+tag that parses to nothing is skipped. No input to this makes it throw.
 
 ```swift
 // Nothing set: the session decides, else the device, else English.
@@ -37,18 +38,34 @@ PayCrossAPI.configure(environment: .sandbox)
 // The merchant's app already knows the shopper reads French.
 PayCrossAPI.configure(environment: .sandbox, locale: "fr")
 
-// Resolves to English. "de" is an answer, and it is one this SDK cannot give,
-// so it does NOT fall through to a French device.
+// The SDK ships no German. The sheet falls through to the session's language,
+// then to the device's, and is English only if neither speaks one it ships.
 PayCrossAPI.configure(environment: .sandbox, locale: "de")
 ```
 
-The rung that wins also formats the amount, so a French sheet reads
-`Payer 25,99 €` and never `Payer €25.99`.
-
 The language is resolved twice per payment: once before the sheet appears, from
 the override and the device, and again the moment the session arrives, which is
-the only rung that can still change the answer. It is forgotten when the sheet is
-dismissed.
+the only source that can still change the answer. It is forgotten when the sheet
+is dismissed.
+
+## Amounts
+
+The amount is **not** clamped to the two languages the SDK ships. It is
+formatted in the first locale anybody supplied — the override, else the session,
+else the device's first preference — with its region intact.
+
+Foundation writes currency for every locale, not just the two the SDK has words
+for, and a shopper who cannot read the labels can still read the price. So:
+
+| Override | Session | Device | Words | Amount |
+|---|---|---|---|---|
+| — | — | `de-DE` | English | `12,34 €` |
+| — | `fr-CH` | `en-US` | French | Swiss French |
+| `fr` | — | `en-US` | French | `12,34 €` |
+| — | — | — | English | `€12.34` |
+
+The region matters here where it does not for the words: `fr-CH` and `fr-FR` are
+one language and two number formats.
 
 ## Overriding the words
 

@@ -220,7 +220,7 @@ final class ScreenshotTests: XCTestCase {
     /// future` is 48 characters against a checkbox on a 390pt sheet — the one row
     /// most likely to wrap into the field below it.
     func testFrenchForm() throws {
-        SheetLanguage.install("fr")
+        SheetLanguage.install(LocaleResolution.resolve(override: "fr"))
         defer { SheetLanguage.reset() }
 
         var state = CardFormState()
@@ -239,7 +239,7 @@ final class ScreenshotTests: XCTestCase {
     /// server-driven field, both of them sentences that used to be English
     /// literals inside `PayCrossCore` and now arrive through `FlowMessages`.
     func testFrenchFormAfterADecline() throws {
-        SheetLanguage.install("fr")
+        SheetLanguage.install(LocaleResolution.resolve(override: "fr"))
         defer { SheetLanguage.reset() }
 
         var state = CardFormState()

@@ -21,20 +21,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   [`LOCALIZATION.md`](LOCALIZATION.md) for every key, what it paints, and which
   carry a `%@`.
 - **A rule for which language a shopper sees.** `configure(locale:)`, then the
-  session's `locale`, then the device, then English. The first rung that gives an
-  answer decides: an explicit `locale: "de"` resolves to English rather than
-  dropping through to a French device. Exact tag first, then primary subtag
-  (`fr-CA` → `fr`); case-insensitive; `_` accepted for `-`; nothing throws.
+  session's `locale`, then the device's preferences in order. Candidates are
+  matched one at a time — exact tag first, then primary subtag (`fr-CA` → `fr`) —
+  and the first naming a language the SDK ships wins. One it cannot speak is
+  passed over rather than ending the search, so `locale: "de"` falls through to
+  the session's language. English when nothing matches. Case-insensitive; `_`
+  accepted for `-`; nothing throws.
 - The three Apple Pay failure messages, the three flow errors and the two
   field-validation fallbacks are now keys rather than literals, so all eight are
   translatable and overridable like the rest.
 
 ### Changed
 
-- The amount follows the **resolved language** rather than the device's region.
-  A French sheet reads `Payer 25,99 €`. An English sheet on a device set to a
-  comma-decimal region now reads `Pay €25.99` where it previously followed the
-  region.
+- The amount is formatted in the first locale anybody supplied — the override,
+  else the session, else the device's first preference — with its region intact.
+  It is deliberately **not** clamped to the two languages the SDK ships:
+  Foundation writes currency for every locale, and a shopper who cannot read the
+  labels can still read the price. A German phone gets English words and
+  `12,34 €`; an `fr-CH` session gets French words and Swiss-French digits.
+  Previously the amount always followed `Locale.current`, so a merchant's
+  `locale:` and the session's language did not reach it at all.
 - Three English values change. The keys do not — keys are public API through the
   string override.
   - `paycross_save_this_card`: `Save this card` → `Save card for future use`,

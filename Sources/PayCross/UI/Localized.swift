@@ -42,8 +42,7 @@ func L(_ key: String, _ fallback: String, merchant: Bundle = .main) -> String {
 @MainActor
 enum SheetLanguage {
 
-    /// The resolved BCP-47 primary subtag, e.g. `fr`. Read by the amount
-    /// formatter, which has to agree with the words around it.
+    /// The language whose `.lproj` is installed, e.g. `fr`.
     private(set) static var tag: String = LocaleResolution.defaultLanguage
 
     /// Where `L` reads our own copy from.
@@ -53,19 +52,26 @@ enum SheetLanguage {
     /// because by then the answer is the SDK's to give, not the device's.
     private(set) static var bundle: Bundle = sdkBundle
 
-    /// The locale the amount is formatted in, so `Payer 12,00 €` does not read
-    /// `Payer €12.00`.
-    static var locale: Locale { Locale(identifier: tag) }
+    /// The locale the amount is formatted in.
+    ///
+    /// Not derived from `tag`, and deliberately so: the SDK ships words for two
+    /// languages and Foundation formats currency for all of them, so a shopper
+    /// on a German phone reads `12,34 €` under English labels rather than
+    /// `€12.34`. `LocaleResolution` decides both and clamps only the first.
+    private(set) static var locale: Locale = Locale(
+        identifier: LocaleResolution.defaultLanguage
+    )
 
-    /// Installs a resolved language.
+    /// Installs a resolved language and its formatting.
     ///
     /// A missing `.lproj` falls back to the SDK bundle rather than failing: that
     /// is a packaging mistake, and the English underneath it is still a sheet
     /// somebody can pay on.
-    static func install(_ languageTag: String) {
-        tag = languageTag
-        bundle = sdkBundle.path(forResource: languageTag, ofType: "lproj")
+    static func install(_ resolved: ResolvedLocale) {
+        tag = resolved.language
+        bundle = sdkBundle.path(forResource: resolved.language, ofType: "lproj")
             .flatMap(Bundle.init(path:)) ?? sdkBundle
+        locale = Locale(identifier: resolved.formattingTag)
     }
 
     /// Hands the choice back to Foundation once the sheet is gone, so a language
@@ -73,6 +79,7 @@ enum SheetLanguage {
     static func reset() {
         tag = LocaleResolution.defaultLanguage
         bundle = sdkBundle
+        locale = Locale(identifier: LocaleResolution.defaultLanguage)
     }
 }
 

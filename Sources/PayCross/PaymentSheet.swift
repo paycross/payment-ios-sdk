@@ -338,10 +338,10 @@ final class PaymentSheetModel: ObservableObject {
     /// `PaymentSheet.present` already installed the merchant's override or the
     /// device's language, so this only ever changes anything when the server
     /// named a locale and the merchant did not.
-    private func installLanguage(session locale: String?) {
+    private func installLanguage(session sessionLocale: String?) {
         SheetLanguage.install(LocaleResolution.resolve(
             override: configuration.locale,
-            session: locale,
+            session: sessionLocale,
             device: Locale.preferredLanguages
         ))
         formattingLocale = SheetLanguage.locale
