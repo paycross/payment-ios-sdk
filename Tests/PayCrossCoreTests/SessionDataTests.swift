@@ -357,4 +357,56 @@ final class SessionDataTests: XCTestCase {
         XCTAssertEqual(data.fieldGroups?.first?.key, "billing")
         XCTAssertTrue(WalletGate.allowsApplePay(data))
     }
+
+    // MARK: - Branding
+
+    /// The merchant's back-office brand colour reaches the sheet through the
+    /// session blob. Nothing else about the branding record does: the branding
+    /// claim is a pointer to a merchant-authored script on a CDN, and a native
+    /// sheet does not evaluate one.
+    func testBrandColorDecodesFromTheBrandingBlock() throws {
+        let json = ##"{"session_id":"s","data":{"branding":{"brand_color":"#1E88E5"}}}"##
+        let data = try XCTUnwrap(
+            try JSONDecoder().decode(SessionResponse.self, from: Data(json.utf8)).data
+        )
+
+        XCTAssertEqual(data.branding?.brandColor, "#1E88E5")
+    }
+
+    /// Every session minted before the backend shipped the block carries none,
+    /// and the sheet falls back to the platform's own accent.
+    func testBrandingIsNilWhenTheBlockIsAbsent() throws {
+        let session = try JSONDecoder().decode(SessionResponse.self, from: Data(payload.utf8))
+        XCTAssertNil(try XCTUnwrap(session.data).branding)
+    }
+
+    /// A branding block the SDK cannot read costs the accent colour and nothing
+    /// else. Throwing would take the field groups and the saved cards with it.
+    func testAMalformedBrandingBlockDoesNotLoseTheSession() throws {
+        let json = """
+        { "session_id": "s", "data": {
+            "branding": "blue",
+            "saved_cards": [{
+              "uuid": "card_1", "masked_pan": "411111******1111", "card_brand": "VISA",
+              "expire_month": "12", "expire_year": "2030", "cardholder_name": "A PERSON"
+            }] } }
+        """
+        let data = try XCTUnwrap(
+            try JSONDecoder().decode(SessionResponse.self, from: Data(json.utf8)).data
+        )
+
+        XCTAssertNil(data.branding)
+        XCTAssertEqual(data.savedCards?.count, 1)
+    }
+
+    /// A block that arrived with no colour in it is not a colour.
+    func testAnEmptyBrandingBlockCarriesNoColour() throws {
+        let json = #"{"session_id":"s","data":{"branding":{}}}"#
+        let data = try XCTUnwrap(
+            try JSONDecoder().decode(SessionResponse.self, from: Data(json.utf8)).data
+        )
+
+        XCTAssertNotNil(data.branding)
+        XCTAssertNil(data.branding?.brandColor)
+    }
 }

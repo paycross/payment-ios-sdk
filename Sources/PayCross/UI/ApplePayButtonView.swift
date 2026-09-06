@@ -9,6 +9,7 @@ import SwiftUI
 /// rejection. `.automatic` style so it follows the shopper's appearance
 /// setting, which SwiftUI cannot do for a UIKit control any other way.
 struct ApplePayButtonView: UIViewRepresentable {
+    @Environment(\.payCrossAppearance) private var style
     let action: () -> Void
 
     /// False while a payment is being submitted.
@@ -23,7 +24,9 @@ struct ApplePayButtonView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> PKPaymentButton {
         let button = PKPaymentButton(paymentButtonType: .buy, paymentButtonStyle: .automatic)
-        button.cornerRadius = 10
+        // The radius is the only property of this control the SDK may change:
+        // Apple's guidelines own its colours, its label and its type.
+        button.cornerRadius = style.buttonCornerRadius(or: 10)
         // On the control as well as on the SwiftUI node, which is where the
         // modifier in CardFormView puts it. Anything walking UIViews -- a UI
         // test, the demo harness -- finds nothing otherwise.
@@ -39,6 +42,7 @@ struct ApplePayButtonView: UIViewRepresentable {
         // iOS 26.5, where the alpha took effect on the same view and the
         // enabled flag did not. Both are set anyway, so the control is right if
         // Apple ever starts honouring it.
+        uiView.cornerRadius = style.buttonCornerRadius(or: 10)
         uiView.isEnabled = isEnabled
         uiView.isUserInteractionEnabled = isEnabled
         uiView.alpha = isEnabled ? 1 : 0.4

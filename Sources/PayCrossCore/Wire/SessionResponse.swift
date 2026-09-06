@@ -41,6 +41,8 @@ package struct SessionData: Codable, Sendable, Hashable {
     package let savedCards: [WireSavedCard]?
     package let savedCardsConfig: SavedCardsConfig?
     package let wallets: WalletsAvailability?
+    /// The merchant's back-office branding. Only the brand colour is read.
+    package let branding: Branding?
     // Decoded for the wire contract and deliberately unread: no source file
     // consumes this after the gate stopped checking it. Kept because the
     // backend keeps writing it and dropping the decode would be a silent
@@ -56,7 +58,7 @@ package struct SessionData: Codable, Sendable, Hashable {
         case savedCards = "saved_cards"
         case savedCardsConfig = "saved_cards_config"
         case accountFunding = "account_funding"
-        case locale, wallets
+        case locale, wallets, branding
     }
 
     /// The save-card checkbox appears only when the server configured it.
@@ -82,6 +84,7 @@ package struct SessionData: Codable, Sendable, Hashable {
         savedCards: [WireSavedCard]? = nil,
         savedCardsConfig: SavedCardsConfig? = nil,
         wallets: WalletsAvailability? = nil,
+        branding: Branding? = nil,
         accountFunding: Bool? = nil
     ) {
         self.locale = locale
@@ -93,6 +96,7 @@ package struct SessionData: Codable, Sendable, Hashable {
         self.savedCards = savedCards
         self.savedCardsConfig = savedCardsConfig
         self.wallets = wallets
+        self.branding = branding
         self.accountFunding = accountFunding
     }
 
@@ -127,6 +131,10 @@ package struct SessionData: Codable, Sendable, Hashable {
             SavedCardsConfig.self, forKey: .savedCardsConfig
         )) ?? nil
         wallets = (try? container.decodeIfPresent(WalletsAvailability.self, forKey: .wallets)) ?? nil
+        // Lenient for the same reason as the two above, and the cheapest of the
+        // three to lose: a colour the SDK cannot read costs the merchant's
+        // default accent, and the sheet falls back to the platform's.
+        branding = (try? container.decodeIfPresent(Branding.self, forKey: .branding)) ?? nil
         accountFunding = container.decodeLenientBoolIfPresent(forKey: .accountFunding)
     }
 }
@@ -161,6 +169,27 @@ private extension KeyedDecodingContainer {
         }
 
         return nil
+    }
+}
+
+/// The merchant's branding, as the back office published it.
+///
+/// One colour, applied to both appearances: the branding record holds no
+/// light/dark variants and no mode field, so per-appearance brand colours stay
+/// a code-set feature. A merchant with a dark-mode palette already has a
+/// developer writing the configure call.
+package struct Branding: Codable, Sendable, Hashable {
+
+    /// `#RRGGBB`, as typed into the back office. Parsed leniently, and worth
+    /// nothing but the accent colour if it cannot be read.
+    package let brandColor: String?
+
+    enum CodingKeys: String, CodingKey {
+        case brandColor = "brand_color"
+    }
+
+    package init(brandColor: String? = nil) {
+        self.brandColor = brandColor
     }
 }
 

@@ -16,6 +16,8 @@ final class ThreeDSWebViewController: UIViewController {
     /// Set for a challenge only. A challenge is added over the whole payment
     /// sheet, toolbar included, so it has to carry the way out itself.
     private let onCancel: (() -> Void)?
+    /// The merchant's surface colour, when they set one. Nil keeps the system's.
+    private let surfaceColor: UIColor?
     private var hasFinished = false
     private var webView: WKWebView!
 
@@ -26,10 +28,12 @@ final class ThreeDSWebViewController: UIViewController {
     init(
         action: ThreeDSAction,
         onCancel: (() -> Void)? = nil,
+        surfaceColor: UIColor? = nil,
         onFinish: @escaping (ThreeDSOutcome) -> Void
     ) {
         self.action = action
         self.onCancel = onCancel
+        self.surfaceColor = surfaceColor
         self.onFinish = onFinish
         super.init(nibName: nil, bundle: nil)
     }
@@ -53,7 +57,7 @@ final class ThreeDSWebViewController: UIViewController {
 
         if isChallenge {
             // Opaque, or the sheet it covers shows through above the bar.
-            view.backgroundColor = .systemBackground
+            view.backgroundColor = surfaceColor ?? .systemBackground
             // Confines VoiceOver to the challenge. Without it the card form
             // underneath is still read out, and can still be operated.
             view.accessibilityViewIsModal = true
@@ -194,6 +198,8 @@ extension ThreeDSWebViewController: WKNavigationDelegate {
 final class WebKitThreeDSPresenter: ThreeDSPresenting {
 
     private weak var host: UIViewController?
+    /// The merchant's surface colour, passed to every challenge this presents.
+    private let surfaceColor: UIColor?
     /// Runs the sheet's own two-step cancel confirmation.
     ///
     /// A challenge is added at `host.view.bounds`, so it paints over the sheet's
@@ -213,8 +219,13 @@ final class WebKitThreeDSPresenter: ThreeDSPresenting {
         continuation: CheckedContinuation<ThreeDSOutcome, Never>
     )?
 
-    init(host: UIViewController, onCancelRequested: @escaping () -> Void) {
+    init(
+        host: UIViewController,
+        surfaceColor: UIColor? = nil,
+        onCancelRequested: @escaping () -> Void
+    ) {
         self.host = host
+        self.surfaceColor = surfaceColor
         self.onCancelRequested = onCancelRequested
     }
 
@@ -247,7 +258,8 @@ final class WebKitThreeDSPresenter: ThreeDSPresenting {
 
             let controller = ThreeDSWebViewController(
                 action: step.action,
-                onCancel: step.isChallenge ? onCancelRequested : nil
+                onCancel: step.isChallenge ? onCancelRequested : nil,
+                surfaceColor: surfaceColor
             ) { [weak self] outcome in
                 self?.resolve(outcome)
             }

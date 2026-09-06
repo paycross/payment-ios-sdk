@@ -14,6 +14,7 @@ import UIKit
 /// Holds no validation: text goes out through the binding to `CardFormReducer`,
 /// exactly as the SwiftUI fields did.
 struct NumericField: UIViewRepresentable {
+    @Environment(\.payCrossAppearance) private var style
     let placeholder: String
     @Binding var text: String
     var isSecure = false
@@ -25,9 +26,8 @@ struct NumericField: UIViewRepresentable {
         field.keyboardType = .numberPad
         field.isSecureTextEntry = isSecure
         field.textContentType = contentType
-        field.font = UIFontMetrics(forTextStyle: .body)
-            .scaledFont(for: .monospacedDigitSystemFont(ofSize: 17, weight: .regular))
         field.adjustsFontForContentSizeCategory = true
+        applyStyle(to: field)
         field.accessibilityIdentifier = identifier
         field.delegate = context.coordinator
         field.inputAccessoryView = context.coordinator.doneBar
@@ -49,9 +49,33 @@ struct NumericField: UIViewRepresentable {
         // The binding is captured per render, so the coordinator has to be handed
         // the current one or edits write into a stale view's state.
         context.coordinator.text = $text
-        field.placeholder = placeholder
+        applyStyle(to: field)
         if field.text != text {
             field.text = text
+        }
+    }
+
+    /// The appearance reaches these three fields here rather than through a
+    /// SwiftUI modifier: `.font` and `.foregroundStyle` do not cross into the
+    /// `UIView` a representable wraps, so the card number would keep the system
+    /// colour on a merchant's dark surface and ignore the size factor.
+    ///
+    /// `UIFontMetrics` still does the Dynamic Type scaling; the merchant's
+    /// factor multiplies the point size it is given.
+    private func applyStyle(to field: UITextField) {
+        field.font = UIFontMetrics(forTextStyle: .body).scaledFont(
+            for: .monospacedDigitSystemFont(
+                ofSize: style.scaledPointSize(17), weight: .regular
+            )
+        )
+        field.textColor = style.uiColor(\.text) ?? .label
+
+        if let placeholderColor = style.uiColor(\.placeholder) {
+            field.attributedPlaceholder = NSAttributedString(
+                string: placeholder, attributes: [.foregroundColor: placeholderColor]
+            )
+        } else {
+            field.placeholder = placeholder
         }
     }
 

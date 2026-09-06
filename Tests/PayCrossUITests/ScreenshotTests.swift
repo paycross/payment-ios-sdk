@@ -30,9 +30,16 @@ final class ScreenshotTests: XCTestCase {
     /// it cannot render UIKit-backed views, and `TextField`/`SecureField` are
     /// exactly that. Hosting in a window and calling `drawHierarchy` renders the
     /// genuine view hierarchy, text fields included.
-    private func capture(_ name: String, @ViewBuilder _ content: () -> some View) throws {
+    private func capture(
+        _ name: String,
+        overrideUserInterfaceStyle: UIUserInterfaceStyle = .unspecified,
+        @ViewBuilder _ content: () -> some View
+    ) throws {
         let controller = UIHostingController(rootView: content())
         let window = UIWindow(frame: CGRect(origin: .zero, size: Self.size))
+        // On the window, which is where the sheet pins its own appearance, so
+        // the capture exercises the path a merchant's themeMode takes.
+        window.overrideUserInterfaceStyle = overrideUserInterfaceStyle
         // Attach to the live scene when there is one. A SwiftPM test bundle often
         // has no foreground scene, which is why drawHierarchy alone renders blank.
         if let scene = UIApplication.shared.connectedScenes
@@ -246,6 +253,111 @@ final class ScreenshotTests: XCTestCase {
     func testFormWithApplePayButton() throws {
         try capture("09-apple-pay") {
             form(CardFormState(), showsApplePayButton: true)
+        }
+    }
+
+    // MARK: - Branded
+
+    /// A merchant's own colours in both appearances, so the role substitutions
+    /// are looked at rather than only compiled. The brand is deliberately a
+    /// light amber: white on it is the contrast defect this train fixed, and
+    /// the Pay button's label should be black in both captures.
+    private static let branded = AppearanceStyle(
+        resolved: AppearanceResolver.resolve(appearance: brandedAppearance)
+    )
+
+    private static let brandedAppearance = PayCrossAppearance(
+        light: PayCrossColors(
+            brand: PayCrossColor(hex: "#FFC107"),
+            surface: PayCrossColor(hex: "#FFF8E1"),
+            component: PayCrossColor(hex: "#FFFFFF"),
+            componentBorder: PayCrossColor(hex: "#E0B84C"),
+            text: PayCrossColor(hex: "#2B2118"),
+            textSecondary: PayCrossColor(hex: "#7A6A55"),
+            placeholder: PayCrossColor(hex: "#B9A483"),
+            icon: PayCrossColor(hex: "#7A6A55"),
+            error: PayCrossColor(hex: "#B3261E")
+        ),
+        dark: PayCrossColors(
+            brand: PayCrossColor(hex: "#FFC107"),
+            surface: PayCrossColor(hex: "#171310"),
+            component: PayCrossColor(hex: "#241E18"),
+            componentBorder: PayCrossColor(hex: "#4A3E2C"),
+            text: PayCrossColor(hex: "#F5EFE6"),
+            textSecondary: PayCrossColor(hex: "#BCAE99"),
+            placeholder: PayCrossColor(hex: "#7A6A55"),
+            icon: PayCrossColor(hex: "#BCAE99"),
+            error: PayCrossColor(hex: "#F2B8B5")
+        ),
+        shapes: PayCrossShapes(cornerRadius: 16, buttonCornerRadius: 28, borderWidth: 1)
+    )
+
+    private var brandedState: CardFormState {
+        var state = CardFormState()
+        CardFormReducer.reduce(state: &state, event: .nameChanged("A Person"))
+        CardFormReducer.reduce(state: &state, event: .panChanged("4111111111111111"))
+        CardFormReducer.reduce(state: &state, event: .expiryChanged("1230"))
+        CardFormReducer.reduce(state: &state, event: .cvvChanged("123"))
+        return state
+    }
+
+    func testBrandedFormInLight() throws {
+        try capture("15-branded-light", overrideUserInterfaceStyle: .light) {
+            form(brandedState).environment(\.payCrossAppearance, Self.branded)
+        }
+    }
+
+    func testBrandedFormInDark() throws {
+        try capture("16-branded-dark", overrideUserInterfaceStyle: .dark) {
+            form(brandedState).environment(\.payCrossAppearance, Self.branded)
+        }
+    }
+
+    func testBrandedSavedCardsInLight() throws {
+        try capture("17-branded-saved-cards-light", overrideUserInterfaceStyle: .light) {
+            form(CardFormState(savedCards: Self.savedCards), allowsCardRemoval: true)
+                .environment(\.payCrossAppearance, Self.branded)
+        }
+    }
+
+    func testBrandedSavedCardsInDark() throws {
+        try capture("18-branded-saved-cards-dark", overrideUserInterfaceStyle: .dark) {
+            form(CardFormState(savedCards: Self.savedCards), allowsCardRemoval: true)
+                .environment(\.payCrossAppearance, Self.branded)
+        }
+    }
+
+    /// The whole sheet rather than the card form alone.
+    ///
+    /// The navigation bar, its ground and the toolbar are the part a merchant
+    /// surface has to reach as well: a themed form framed by a system-coloured
+    /// bar reads as a rendering fault rather than as a theme, and the card-form
+    /// captures above cannot show it because they render no bar.
+    private func brandedSheet() -> PaymentSheetView {
+        PaymentSheetView(model: PaymentSheetModel(
+            sessionToken: "header.payload.signature",
+            claims: SessionClaims(
+                sessionID: "sess_1", merchantID: "m1", customerID: "c1", brandingID: nil,
+                amount: Amount(minorUnits: 2599, currencyCode: "EUR"), expiresAt: nil
+            ),
+            configuration: Configuration(
+                environment: .sandbox, appearance: Self.brandedAppearance
+            ),
+            sessionData: SessionData(),
+            isPreparing: false,
+            transport: StubTransport(json: #"{"session_id":"sess_1","status":"open"}"#)
+        ))
+    }
+
+    func testBrandedSheetInLight() throws {
+        try capture("19-branded-sheet-light", overrideUserInterfaceStyle: .light) {
+            brandedSheet()
+        }
+    }
+
+    func testBrandedSheetInDark() throws {
+        try capture("20-branded-sheet-dark", overrideUserInterfaceStyle: .dark) {
+            brandedSheet()
         }
     }
 

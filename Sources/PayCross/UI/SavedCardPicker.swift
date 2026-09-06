@@ -9,6 +9,7 @@ import PayCrossCore
 /// The delete confirmation lives on the sheet beside the cancel confirmation,
 /// because both are the sheet asking the shopper to stand behind something.
 struct SavedCardPicker: View {
+    @Environment(\.payCrossAppearance) private var style
     let cards: [SavedCard]
     let selection: CardEntrySource
     let allowsRemoval: Bool
@@ -62,11 +63,18 @@ struct SavedCardPicker: View {
             Button(action: action) {
                 HStack {
                     Image(systemName: isSelected ? "largecircle.fill.circle" : "circle")
-                        .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+                        .foregroundStyle(
+                            isSelected
+                                ? style.foreground(\.brand, default: Color.accentColor)
+                                : style.foreground(\.icon, default: .secondary)
+                        )
                     Text(label)
+                        .font(style.font(.body))
                     Spacer()
                     if let detail {
-                        Text(detail).foregroundStyle(.secondary).font(.footnote)
+                        Text(detail)
+                            .foregroundStyle(style.foreground(\.textSecondary, default: .secondary))
+                            .font(style.font(.footnote))
                     }
                 }
                 .padding(12)
@@ -79,7 +87,7 @@ struct SavedCardPicker: View {
             if let remove {
                 Button(action: remove) {
                     Image(systemName: "trash")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(style.foreground(\.icon, default: .secondary))
                         // The row is 44pt tall; the trash matches it, so the
                         // target is a target rather than a glyph.
                         .frame(minWidth: 44, minHeight: 44)
@@ -95,7 +103,7 @@ struct SavedCardPicker: View {
                 .accessibilityIdentifier(removeIdentifier)
             }
         }
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10))
+        .payCrossComponentBackground(style)
     }
 }
 #endif
