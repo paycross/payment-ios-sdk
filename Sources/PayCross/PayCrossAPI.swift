@@ -67,9 +67,12 @@ public struct Configuration: Sendable {
     /// Nil means the sheet decides: the session's own `locale` if the server
     /// sent one, else the shopper's device, else English. Set it only when the
     /// merchant's app has already asked the shopper what language they read in
-    /// and wants the sheet to agree. A tag the SDK ships no strings for resolves
-    /// to English rather than to the next rung down: an explicit answer that
-    /// cannot be honoured is not a reason to guess.
+    /// and wants the sheet to agree.
+    ///
+    /// A tag the SDK ships no strings for is passed over rather than ending the
+    /// search, so asking for a language the sheet does not speak leaves the
+    /// session and the device their turn at it. The amount is a separate answer
+    /// and is not clamped to what the SDK ships: see `LOCALIZATION.md`.
     public let locale: String?
 
     /// Defaulted rather than left to the synthesised memberwise initialiser, so

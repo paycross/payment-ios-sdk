@@ -284,10 +284,11 @@ PayCrossAPI.configure(environment: .sandbox, locale: "fr")
 ```
 
 **The amount is not clamped to those two languages.** It is formatted in the
-first locale anybody supplied, region intact, because Foundation writes currency
-for every locale and a shopper who cannot read the labels can still read the
-price. A German phone gets English words and `12,34 €`; an `fr-CH` session gets
-French words and Swiss-French digits.
+first supplied locale that is shaped like a language tag, region intact, because
+Foundation writes currency for every locale and a shopper who cannot read the
+labels can still read the price. A German phone gets English words and `12,34 €`;
+an `fr-CH` session gets French words and Swiss-French digits. A candidate that is
+not tag-shaped is passed over here too, so a typo cannot misprint a price.
 
 **An explicit locale does not turn string overrides off.** The two answer
 different questions — which language, and which words — and your bundle is

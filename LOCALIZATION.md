@@ -52,7 +52,16 @@ is dismissed.
 
 The amount is **not** clamped to the two languages the SDK ships. It is
 formatted in the first locale anybody supplied — the override, else the session,
-else the device's first preference — with its region intact.
+else the device's first preference — with its region intact, **provided that
+candidate is shaped like a language tag**: two or three letters, then any number
+of short alphanumeric subtags. One that is not, `f-r` or `fr-` or `frenchy`, is
+passed over and the next candidate formats the amount instead, so a typo cannot
+both pick the wrong words and misprint the price.
+
+That check is syntax only. It cannot tell a language that exists from one that
+does not, so a well-formed tag naming a language the SDK has no words for — say
+`frr`, which is Northern Frisian and is probably a typo for `fr` — gives English
+words and is still what the amount is formatted in.
 
 Foundation writes currency for every locale, not just the two the SDK has words
 for, and a shopper who cannot read the labels can still read the price. So:

@@ -335,9 +335,11 @@ final class PaymentSheetModel: ObservableObject {
 
     /// Re-resolves the sheet's language now that the session has answered.
     ///
-    /// `PaymentSheet.present` already installed the merchant's override or the
-    /// device's language, so this only ever changes anything when the server
-    /// named a locale and the merchant did not.
+    /// `PaymentSheet.present` installed what could be known without the network.
+    /// The session is a new candidate in the middle of the list, so it can move
+    /// the answer whatever the merchant set: an override the SDK ships no
+    /// strings for is passed over, and the session's language is then the next
+    /// one asked.
     private func installLanguage(session sessionLocale: String?) {
         SheetLanguage.install(LocaleResolution.resolve(
             override: configuration.locale,

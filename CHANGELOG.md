@@ -34,7 +34,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - The amount is formatted in the first locale anybody supplied — the override,
-  else the session, else the device's first preference — with its region intact.
+  else the session, else the device's first preference — with its region intact,
+  provided that candidate is shaped like a language tag. One that is not is
+  passed over for formatting the same way it is for the words, so a typo cannot
+  both pick the wrong language and misprint the price.
   It is deliberately **not** clamped to the two languages the SDK ships:
   Foundation writes currency for every locale, and a shopper who cannot read the
   labels can still read the price. A German phone gets English words and

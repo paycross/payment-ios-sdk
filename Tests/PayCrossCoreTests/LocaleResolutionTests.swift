@@ -164,6 +164,55 @@ final class LocaleResolutionTests: XCTestCase {
         XCTAssertEqual(formatting(session: " fr_CH "), "fr-CH")
     }
 
+    // MARK: - A tag that is not shaped like one never formats an amount
+
+    /// `Locale(identifier:)` accepts anything and quietly formats nonsense with
+    /// root data, so a typo would otherwise do double damage: wrong words *and*
+    /// a wrong price format. A candidate that is not shaped like a language tag
+    /// is passed over for formatting, and the next one supplies it.
+    func testAMalformedCandidateDoesNotFormatTheAmount() {
+        for typo in ["f-r", "f", "frenchy", "fr!", "fr-", "-fr", "fr--CA", "123", "fr-CAAAAAAAAA"] {
+            XCTAssertEqual(
+                formatting(override: typo, device: ["de-DE"]), "de-DE",
+                "\(typo.debugDescription) is not shaped like a language tag"
+            )
+        }
+    }
+
+    func testWellFormedTagsAreAcceptedForFormatting() {
+        for tag in ["fr", "en", "fr-CA", "de-DE", "fr-Latn-CA", "zh-Hant-TW", "es-419"] {
+            XCTAssertEqual(
+                formatting(override: tag), tag,
+                "\(tag.debugDescription) is shaped like a language tag"
+            )
+        }
+    }
+
+    func testWhenNoCandidateIsWellFormedTheAmountIsEnglish() {
+        XCTAssertEqual(formatting(override: "f-r", session: "!!", device: ["-"]), "en")
+    }
+
+    /// The words are more forgiving than the amount, on purpose. `fr-` is a typo
+    /// that plainly means French and reads as French; it just does not get to
+    /// decide how a price is written.
+    func testAMalformedCandidateCanStillChooseTheLanguage() {
+        let resolved = LocaleResolution.resolve(override: "fr-", device: ["de-DE"])
+        XCTAssertEqual(resolved.language, "fr")
+        XCTAssertEqual(resolved.formattingTag, "de-DE")
+    }
+
+    /// **The limit of a syntax check, pinned so nobody assumes otherwise.**
+    /// `frr` is Northern Frisian: three letters, perfectly well formed, and
+    /// almost certainly a typo for `fr`. Nothing syntactic separates it from
+    /// `de`, so it is passed over for the *words* — the SDK ships no Frisian —
+    /// but it is still what the amount is formatted in. Making this fall through
+    /// as well needs a list of real languages, not a shape rule.
+    func testAWellFormedTagNamingNoShippedLanguageStillFormats() {
+        let resolved = LocaleResolution.resolve(override: "frr", device: ["de-DE"])
+        XCTAssertEqual(resolved.language, "en", "the SDK ships no Frisian")
+        XCTAssertEqual(resolved.formattingTag, "frr")
+    }
+
     // MARK: - What ships
 
     func testTheSDKShipsEnglishAndFrench() {

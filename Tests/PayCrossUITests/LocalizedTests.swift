@@ -62,8 +62,10 @@ final class LocalizedTests: XCTestCase {
     /// The delete button's label interpolates the row it belongs to, so an
     /// override that drops the `%@` silently unnames every trash on the screen.
     func testTheRemoveCardLabelKeepsItsPlaceholder() {
-        let label = String(format: L("paycross_remove_card", "MISSING"), "Visa •••• 1111")
-        XCTAssertEqual(label, "Remove card, Visa •••• 1111")
+        XCTAssertEqual(
+            L("paycross_remove_card", "MISSING", "Visa •••• 1111"),
+            "Remove card, Visa •••• 1111"
+        )
     }
 
     func testUnknownKeyFallsBackToTheEnglishLiteral() {
@@ -101,8 +103,7 @@ final class LocalizedTests: XCTestCase {
     }
 
     /// A translation that drops the placeholder loses the card, the amount or
-    /// the field name it was supposed to name, and `String(format:)` reads a
-    /// vararg nobody wanted.
+    /// the field name it was supposed to name.
     func testATranslationNeverDropsItsPlaceholder() throws {
         let english = try values(in: "en")
         let french = try values(in: "fr")
@@ -241,31 +242,36 @@ final class LocalizedTests: XCTestCase {
     func testTheDeleteConfirmationNamesTheCard() {
         let card = SavedCard(id: "a", brand: .visa, last4: "1111", expiryLabel: "12/30")
 
-        let english = String(
-            format: L("paycross_remove_card_message", "MISSING"), card.rowTitle
-        )
         XCTAssertEqual(
-            english, "Visa •••• 1111 will no longer be offered for future payments."
+            L("paycross_remove_card_message", "MISSING", card.rowTitle),
+            "Visa •••• 1111 will no longer be offered for future payments."
         )
 
         SheetLanguage.install(LocaleResolution.resolve(override: "fr"))
-        let french = String(
-            format: L("paycross_remove_card_message", "MISSING"), card.rowTitle
-        )
         XCTAssertEqual(
-            french,
+            L("paycross_remove_card_message", "MISSING", card.rowTitle),
             "La carte Visa •••• 1111 ne sera plus proposée pour vos prochains paiements."
         )
     }
 
     // MARK: - A merchant override is a string the SDK does not own
 
-    /// The hazard `Template.fill` exists for. A merchant who typed `%d` into an
-    /// override of a key carrying `%@` would, under `String(format:)`, have the
-    /// sheet read an integer vararg nobody passed — undefined behaviour reached
-    /// from a text file, on a screen holding a card number. The worst that
-    /// happens now is a label that still says `%d`.
+    /// The hazard `Template.fill` exists for, on the one key that gained a
+    /// placeholder this train. A merchant who typed `%d` into an override of it
+    /// would, under `String(format:)`, have the sheet read an integer vararg
+    /// nobody passed — undefined behaviour reached from a text file, on a screen
+    /// holding a card number. The alert comes out with the `%d` intact instead.
     func testAnOverrideWithTheWrongPlaceholderIsNotTreatedAsAFormatString() {
+        let card = SavedCard(id: "a", brand: .visa, last4: "1111", expiryLabel: "12/30")
+        XCTAssertEqual(
+            L("paycross_remove_card_message", "MISSING", card.rowTitle, merchant: Bundle.module),
+            "%d wird nicht mehr angeboten."
+        )
+    }
+
+    /// The same override under French, since the alert is reached in both.
+    func testAnOverrideWithTheWrongPlaceholderSurvivesInFrenchToo() {
+        SheetLanguage.install(LocaleResolution.resolve(override: "fr"))
         let card = SavedCard(id: "a", brand: .visa, last4: "1111", expiryLabel: "12/30")
         XCTAssertEqual(
             L("paycross_remove_card_message", "MISSING", card.rowTitle, merchant: Bundle.module),

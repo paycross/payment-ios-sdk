@@ -49,11 +49,17 @@ package enum LocaleResolution {
     /// French session gets the French sheet rather than the English one. This is
     /// the hosted checkout page's rule, which matches each candidate separately.
     ///
-    /// **Formatting does not.** It is simply the first candidate anybody
-    /// supplied, unclamped, because Foundation can format an amount in a locale
-    /// the SDK has no words for. That is deliberately not always the same locale
-    /// as the language: a shopper on a German phone should read `12,34 €`
+    /// **Formatting does not.** It is the first candidate that is *shaped* like a
+    /// language tag, unclamped, because Foundation can format an amount in a
+    /// locale the SDK has no words for. That is deliberately not always the same
+    /// locale as the language: a shopper on a German phone should read `12,34 €`
     /// whatever tongue the labels around it are in.
+    ///
+    /// The shape check is there so a typo cannot do double damage. A merchant
+    /// who writes `f-r` picks neither the words nor the number format; the
+    /// session or the device supplies the formatting instead. It is syntax only:
+    /// this cannot tell a language that exists from one that does not, so a
+    /// well-formed tag naming no real language is still used to format.
     ///
     /// - Parameters:
     ///   - override: the merchant's `Configuration.locale`.
@@ -70,8 +76,41 @@ package enum LocaleResolution {
         let candidates = ([override, session].compactMap { $0 } + device).compactMap(cleaned)
         return ResolvedLocale(
             language: match(candidates, supported: supported) ?? defaultLanguage,
-            formattingTag: candidates.first ?? defaultLanguage
+            formattingTag: candidates.first(where: isWellFormed) ?? defaultLanguage
         )
+    }
+
+    /// Whether a tag is shaped like a language tag: a 2-3 letter language, then
+    /// any number of 1-8 character alphanumeric subtags.
+    ///
+    /// Syntax only, and deliberately narrow. `Locale(identifier:)` accepts
+    /// anything at all and quietly formats a nonsense tag with root data, so the
+    /// choice is between checking the shape here or discovering the typo in a
+    /// screenshot of a price. Foundation is not asked to validate: it has no
+    /// "is this real" to give, and its answer would differ between Darwin and
+    /// the Linux build this is asserted on.
+    ///
+    /// Language matching does *not* go through this. `fr-` reads as French, and
+    /// should: the words degrade to something a shopper can read, while a number
+    /// format guessed from a broken tag has nothing to degrade to.
+    private static func isWellFormed(_ tag: String) -> Bool {
+        let subtags = tag.split(separator: "-", omittingEmptySubsequences: false)
+        guard let language = subtags.first,
+              (2...3).contains(language.count),
+              language.allSatisfy(isASCIILetter)
+        else { return false }
+
+        return subtags.dropFirst().allSatisfy { subtag in
+            (1...8).contains(subtag.count) && subtag.allSatisfy(isASCIIAlphanumeric)
+        }
+    }
+
+    private static func isASCIILetter(_ character: Character) -> Bool {
+        character.isASCII && character.isLetter
+    }
+
+    private static func isASCIIAlphanumeric(_ character: Character) -> Bool {
+        character.isASCII && (character.isLetter || character.isNumber)
     }
 
     /// The first candidate naming a language we ship, exact tag before primary
