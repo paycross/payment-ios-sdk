@@ -136,3 +136,29 @@ jobs:
             exit 1
           fi
           echo "ok"
+
+      - name: Every published test identifier is applied
+        run: |
+          set -euo pipefail
+          status=0
+          source=Sources/PayCross/TestIdentifiers.swift
+          for name in $(grep -oE '^    case [a-zA-Z]+ =' "$source" | awk '{print $2}'); do
+            if ! grep -rqE "payCrossIdentifier\(\.$name\)|PayCrossTestIdentifiers\.$name\b" \
+                 --include='*.swift' Sources/PayCross --exclude=TestIdentifiers.swift; then
+              echo "::error::PayCrossTestIdentifiers.$name is published and applied nowhere."
+              status=1
+            fi
+          done
+          exit $status
+
+      - name: No identifier is set from a literal
+        run: |
+          set -euo pipefail
+          # Every one in the SDK comes from PayCrossTestIdentifiers, so a
+          # string here is either a name outside the namespace or a second copy
+          # of one in it. The demo harness is not part of the contract.
+          if grep -rnE 'accessibilityIdentifier(\(| = )"' --include='*.swift' Sources/PayCross; then
+            echo "::error::set the identifier from PayCrossTestIdentifiers, not from a literal"
+            exit 1
+          fi
+          echo "ok"

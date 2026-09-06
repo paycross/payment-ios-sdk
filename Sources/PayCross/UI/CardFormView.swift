@@ -48,7 +48,7 @@ struct CardFormView: View {
                     if showsApplePayButton {
                         ApplePayButtonView(action: onApplePay, isEnabled: !isLoading)
                             .frame(height: 48)
-                            .accessibilityIdentifier("applePayButton")
+                            .payCrossIdentifier(.walletButton)
 
                         // A separator rather than nothing: without it the card
                         // fields read as part of the Apple Pay button, and a
@@ -70,6 +70,7 @@ struct CardFormView: View {
                                 .layoutPriority(1)
                             VStack { Divider() }
                         }
+                        .payCrossIdentifier(.walletDivider)
                     }
 
                     if !state.savedCards.isEmpty {
@@ -100,6 +101,7 @@ struct CardFormView: View {
                     if allowsSaving && state.source.isNewCard {
                         Toggle(L("paycross_save_this_card", "Save card for future use"), isOn: saveCardBinding)
                             .font(style.font(.subheadline))
+                            .payCrossIdentifier(.saveCard)
                     }
                 }
                 .padding(20)
@@ -133,7 +135,7 @@ struct CardFormView: View {
                     .textContentType(.name)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.characters)
-                    .accessibilityIdentifier("cardholderName")
+                    .payCrossIdentifier(.cardholderName)
             }
 
             LabeledField(title: L("paycross_card_number", "Card Number"), trailing: BrandBadge(brand: state.brand)) {
@@ -146,7 +148,7 @@ struct CardFormView: View {
                     placeholder: "1234 5678 9012 3456",
                     text: panBinding,
                     contentType: .creditCardNumber,
-                    identifier: "cardNumber"
+                    identifier: PayCrossTestIdentifiers.cardNumber.rawValue
                 )
             }
 
@@ -155,7 +157,7 @@ struct CardFormView: View {
                     NumericField(
                         placeholder: "12/30",
                         text: expiryBinding,
-                        identifier: "expiry"
+                        identifier: PayCrossTestIdentifiers.expiry.rawValue
                     )
                 }
                 cvvField
@@ -169,7 +171,7 @@ struct CardFormView: View {
                 placeholder: String(repeating: "•", count: state.cvvBrand.cvvLength),
                 text: cvvBinding,
                 isSecure: true,
-                identifier: "cvv"
+                identifier: PayCrossTestIdentifiers.cvv.rawValue
             )
         }
     }
@@ -239,7 +241,7 @@ private struct AmountHeader: View {
             Text(Amounts.formatted(amount, locale: locale))
                 .font(style.font(.largeTitle, weight: .semibold))
                 .monospacedDigit()
-                .accessibilityIdentifier("amount")
+                .payCrossIdentifier(.amount)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -288,7 +290,7 @@ private struct BrandBadge: View {
         Text(brand == .unknown ? "" : brand.displayName)
             .font(style.font(.caption, weight: .semibold))
             .foregroundStyle(style.foreground(\.textSecondary, default: .secondary))
-            .accessibilityIdentifier("brand")
+            .payCrossIdentifier(.brand)
     }
 }
 
@@ -312,7 +314,7 @@ private struct ErrorBanner: View {
             errorColor.opacity(0.1),
             in: RoundedRectangle(cornerRadius: style.cornerRadius(or: 10))
         )
-        .accessibilityIdentifier("errorBanner")
+        .payCrossIdentifier(.errorBanner)
     }
 }
 
@@ -365,7 +367,7 @@ private struct PayButton: View {
         .background(fill, in: RoundedRectangle(cornerRadius: style.buttonCornerRadius(or: 12)))
         .foregroundStyle(labelColor)
         .disabled(!isEnabled)
-        .accessibilityIdentifier("payButton")
+        .payCrossIdentifier(.payButton)
     }
 }
 #endif

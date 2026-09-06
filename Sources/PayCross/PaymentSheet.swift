@@ -894,6 +894,7 @@ struct PaymentSheetView: View {
                 if model.isPreparing {
                     ProgressView()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .payCrossIdentifier(.loading)
                 } else {
                     CardFormView(
                         state: $model.form,
@@ -911,6 +912,7 @@ struct PaymentSheetView: View {
                     )
                 }
             }
+            .payCrossIdentifier(.sheet)
             .task { await model.load() }
             .environment(\.payCrossAppearance, model.appearance)
             // The amount is the one string the sheet builds rather than looks
@@ -935,7 +937,9 @@ struct PaymentSheetView: View {
             // that is already in flight.
             .alert(L("paycross_cancel_payment_title", "Cancel Payment?"), isPresented: $model.isConfirmingCancel) {
                 Button(L("paycross_cancel_payment_yes", "Yes, Cancel"), role: .destructive, action: model.cancel)
+                    .payCrossIdentifier(.cancelConfirm)
                 Button(L("paycross_cancel_payment_continue", "Continue Payment"), role: .cancel) {}
+                    .payCrossIdentifier(.cancelDismiss)
             } message: {
                 Text(L("paycross_cancel_payment_message", "Are you sure you want to cancel this payment?"))
             }
@@ -951,7 +955,9 @@ struct PaymentSheetView: View {
                 Button(L("paycross_remove_card_confirm", "Remove"), role: .destructive) {
                     model.confirmRemoval()
                 }
+                .payCrossIdentifier(.removeConfirm)
                 Button(L("paycross_cancel", "Cancel"), role: .cancel) { model.cancelRemoval() }
+                    .payCrossIdentifier(.removeDismiss)
             } message: { card in
                 Text(L(
                     "paycross_remove_card_message",

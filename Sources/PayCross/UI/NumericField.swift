@@ -97,7 +97,7 @@ struct NumericField: UIViewRepresentable {
                 target: self,
                 action: #selector(dismissKeypad)
             )
-            done.accessibilityIdentifier = "keyboardDone"
+            done.accessibilityIdentifier = PayCrossTestIdentifiers.keyboardDone.rawValue
             bar.items = [UIBarButtonItem(systemItem: .flexibleSpace), done]
             bar.sizeToFit()
             return bar

@@ -78,7 +78,13 @@ final class ThreeDSPresentationTests: XCTestCase {
             "a challenge covers the sheet's toolbar and must supply a bar of its own"
         )
         let cancel = try XCTUnwrap(bar.items?.first?.leftBarButtonItem, "no cancel control")
-        XCTAssertEqual(cancel.accessibilityIdentifier, "threeDSCancel")
+        XCTAssertEqual(cancel.accessibilityIdentifier, PayCrossTestIdentifiers.threeDSCancel.rawValue)
+
+        // The challenge is the one screen a driver has to recognise before it
+        // can answer the issuer, so the hosting view carries a name of its own.
+        XCTAssertEqual(
+            bar.superview?.accessibilityIdentifier, PayCrossTestIdentifiers.threeDS.rawValue
+        )
 
         // The regression itself: during a challenge a tap at the Cancel's own
         // coordinates landed on the ACS web view and did nothing.
@@ -208,7 +214,7 @@ final class ThreeDSPresentationTests: XCTestCase {
 
         // Stands in for the card form's CVV field, editing when the step arrives.
         let field = UITextField(frame: CGRect(x: 0, y: 0, width: 100, height: 40))
-        field.accessibilityIdentifier = "cvv"
+        field.accessibilityIdentifier = PayCrossTestIdentifiers.cvv.rawValue
         host.view.addSubview(field)
         try XCTSkipUnless(field.becomeFirstResponder(), "the stand-in field could not take focus")
 

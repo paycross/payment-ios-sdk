@@ -136,7 +136,7 @@ final class ApplePayPresentationTests: XCTestCase {
         let window = hostForm(showsApplePayButton: true)
         let button = try XCTUnwrap(firstSubview(PKPaymentButton.self, in: window))
 
-        XCTAssertEqual(button.accessibilityIdentifier, "applePayButton")
+        XCTAssertEqual(button.accessibilityIdentifier, PayCrossTestIdentifiers.walletButton.rawValue)
     }
 
     func testTappingTheButtonRunsTheAction() throws {

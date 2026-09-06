@@ -32,6 +32,7 @@ struct FieldGroupsView: View {
                             for: field, groupValues: groupValues
                         )
                         FieldRow(
+                            groupKey: group.key,
                             field: field,
                             state: state,
                             value: binding(group: group.key, field: field.name),
@@ -57,6 +58,9 @@ struct FieldGroupsView: View {
 
 private struct FieldRow: View {
     @Environment(\.payCrossAppearance) private var style
+    /// Carried only so the row and its message can be addressed as
+    /// `paycross.field.<group>.<name>`: two groups may name a field the same.
+    let groupKey: String
     let field: FieldDefinition
     let state: FieldState
     @Binding var value: String
@@ -82,9 +86,14 @@ private struct FieldRow: View {
                 Text(error)
                     .font(style.font(.caption))
                     .foregroundStyle(style.foreground(\.error, default: Color(.systemRed)))
+                    .accessibilityIdentifier(
+                        PayCrossTestIdentifiers.fieldError(group: groupKey, name: field.name)
+                    )
             }
         }
-        .accessibilityIdentifier("field-\(field.name)")
+        .accessibilityIdentifier(
+            PayCrossTestIdentifiers.field(group: groupKey, name: field.name)
+        )
     }
 
     @ViewBuilder
