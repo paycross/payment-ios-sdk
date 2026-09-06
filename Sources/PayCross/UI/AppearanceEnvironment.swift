@@ -51,4 +51,157 @@ extension Color {
         })
     }
 }
+
+/// The resolved appearance, as the sheet's views read it.
+///
+/// Bridges Core's platform-free palettes to SwiftUI and UIKit. Every colour
+/// accessor answers nil when the merchant set nothing for that role, so a call
+/// site keeps the system colour it already drew and an unset appearance leaves
+/// the sheet byte for byte where it was.
+struct AppearanceStyle: Sendable, Equatable {
+    let resolved: ResolvedAppearance
+
+    /// What the sheet looks like when nobody has themed it.
+    static let unstyled = AppearanceStyle(resolved: .unstyled)
+
+    /// A colour that answers each appearance from its own palette.
+    ///
+    /// Dynamic rather than resolved once, so a shopper who switches appearance
+    /// mid-payment gets the merchant's other palette without the sheet being
+    /// rebuilt. A role set in one appearance only is used in both: a partial
+    /// palette is a merchant changing one colour, not asking for the other
+    /// appearance to fall back to the system's.
+    func uiColor(_ role: KeyPath<ResolvedPalette, PayCrossColor?>) -> UIColor? {
+        let light = resolved.light[keyPath: role]
+        let dark = resolved.dark[keyPath: role]
+        guard light != nil || dark != nil else { return nil }
+
+        return UIColor { traits in
+            let chosen = traits.userInterfaceStyle == .dark ? dark ?? light : light ?? dark
+            return chosen?.uiColor ?? .clear
+        }
+    }
+
+    func color(_ role: KeyPath<ResolvedPalette, PayCrossColor?>) -> Color? {
+        uiColor(role).map(Color.init)
+    }
+
+    /// The same, as a shape style, so a call site can keep a hierarchical
+    /// default such as `.secondary` that has no single colour to fall back to.
+    func foreground(
+        _ role: KeyPath<ResolvedPalette, PayCrossColor?>,
+        default fallback: some ShapeStyle
+    ) -> AnyShapeStyle {
+        color(role).map { AnyShapeStyle($0) } ?? AnyShapeStyle(fallback)
+    }
+
+    /// The radius for inputs, rows, groups and the banner. The fallback is the
+    /// literal the call site used before it asked.
+    func cornerRadius(or fallback: Double) -> CGFloat {
+        CGFloat(resolved.cornerRadius ?? fallback)
+    }
+
+    /// The radius for the Pay button and the wallet button, which is the only
+    /// property of the wallet button the SDK may change.
+    func buttonCornerRadius(or fallback: Double) -> CGFloat {
+        CGFloat(resolved.buttonCornerRadius ?? fallback)
+    }
+
+    /// Nil draws no border, which is what the sheet does today.
+    var borderWidth: CGFloat? { resolved.borderWidth.map { CGFloat($0) } }
+
+    func buttonHeight(or fallback: Double) -> CGFloat {
+        CGFloat(resolved.buttonHeight ?? fallback)
+    }
+
+    /// The style to pin the sheet's own window to. Unspecified follows the device.
+    var userInterfaceStyle: UIUserInterfaceStyle {
+        switch resolved.themeMode {
+        case .system: .unspecified
+        case .light: .light
+        case .dark: .dark
+        }
+    }
+
+    /// A text style, multiplied by the merchant's scale factor.
+    ///
+    /// At the default factor this is the plain SwiftUI style, which keeps
+    /// Dynamic Type entirely as it was. A merchant who set a factor gets a font
+    /// built from the current Dynamic Type size times their factor, resolved
+    /// when the sheet is presented: the multiplication has to happen in points,
+    /// and a `Font` carrying a `UIFont` is the one form SwiftUI will not scale
+    /// a second time.
+    func font(_ style: Font.TextStyle, weight: Font.Weight? = nil) -> Font {
+        let scale = resolved.sizeScaleFactor
+        guard scale != 1 else {
+            let base = Font.system(style)
+            return weight.map { base.weight($0) } ?? base
+        }
+
+        let size = UIFont.preferredFont(forTextStyle: Self.uiTextStyle(style)).pointSize
+        return Font(UIFont.systemFont(ofSize: size * scale, weight: Self.uiWeight(weight)))
+    }
+
+    /// The point size a UIKit field should ask `UIFontMetrics` to scale.
+    func scaledPointSize(_ base: Double) -> CGFloat {
+        CGFloat(base * resolved.sizeScaleFactor)
+    }
+
+    private static func uiTextStyle(_ style: Font.TextStyle) -> UIFont.TextStyle {
+        switch style {
+        case .largeTitle: .largeTitle
+        case .title: .title1
+        case .title2: .title2
+        case .title3: .title3
+        case .headline: .headline
+        case .subheadline: .subheadline
+        case .callout: .callout
+        case .footnote: .footnote
+        case .caption: .caption1
+        case .caption2: .caption2
+        default: .body
+        }
+    }
+
+    private static func uiWeight(_ weight: Font.Weight?) -> UIFont.Weight {
+        switch weight {
+        case .some(.ultraLight): .ultraLight
+        case .some(.thin): .thin
+        case .some(.light): .light
+        case .some(.medium): .medium
+        case .some(.semibold): .semibold
+        case .some(.bold): .bold
+        case .some(.heavy): .heavy
+        case .some(.black): .black
+        default: .regular
+        }
+    }
+}
+
+private struct AppearanceStyleKey: EnvironmentKey {
+    static let defaultValue = AppearanceStyle.unstyled
+}
+
+extension EnvironmentValues {
+    var payCrossAppearance: AppearanceStyle {
+        get { self[AppearanceStyleKey.self] }
+        set { self[AppearanceStyleKey.self] = newValue }
+    }
+}
+
+extension View {
+    /// Tints only when a brand colour resolved.
+    ///
+    /// `.tint(nil)` is not the same as not tinting: it clears whatever the host
+    /// app set on the window, so an unthemed sheet inside a tinted app would
+    /// come back to system blue.
+    @ViewBuilder
+    func payCrossTint(_ color: Color?) -> some View {
+        if let color {
+            tint(color)
+        } else {
+            self
+        }
+    }
+}
 #endif

@@ -20,12 +20,14 @@ public enum PayCrossAPI {
     public static func configure(
         environment: PayCrossEnvironment,
         testCardPrefill: TestCardPrefill? = nil,
-        applePayMerchantIdentifier: String? = nil
+        applePayMerchantIdentifier: String? = nil,
+        appearance: PayCrossAppearance? = nil
     ) {
         state.set(Configuration(
             environment: environment,
             testCardPrefill: testCardPrefill,
-            applePayMerchantIdentifier: applePayMerchantIdentifier
+            applePayMerchantIdentifier: applePayMerchantIdentifier,
+            appearance: appearance
         ))
     }
 
@@ -48,6 +50,29 @@ public struct Configuration: Sendable {
     /// entitlement, and on the merchant record in the PayCross back office --
     /// and the edge refuses a payment where the first and the last disagree.
     public let applePayMerchantIdentifier: String?
+
+    /// How the sheet should look.
+    ///
+    /// Nil is not "no theming": the sheet still picks up the brand colour the
+    /// merchant set in the back office, which arrives with the session. Every
+    /// role a merchant leaves unset keeps the platform colour the sheet already
+    /// draws, so an appearance that names one colour changes one colour.
+    public let appearance: PayCrossAppearance?
+
+    /// Defaulted rather than left to the synthesised memberwise initialiser, so
+    /// that adding a field here does not break every call site that never had
+    /// an opinion about it.
+    init(
+        environment: PayCrossEnvironment,
+        testCardPrefill: TestCardPrefill? = nil,
+        applePayMerchantIdentifier: String? = nil,
+        appearance: PayCrossAppearance? = nil
+    ) {
+        self.environment = environment
+        self.testCardPrefill = testCardPrefill
+        self.applePayMerchantIdentifier = applePayMerchantIdentifier
+        self.appearance = appearance
+    }
 
     /// Prefill is ignored in production, matching `effectiveTestPrefill()` on Android.
     public var effectiveTestCardPrefill: TestCardPrefill? {
