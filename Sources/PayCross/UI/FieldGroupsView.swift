@@ -58,6 +58,10 @@ struct FieldGroupsView: View {
 
 private struct FieldRow: View {
     @Environment(\.payCrossAppearance) private var style
+    /// One per row, so a tap on this row's box reaches this row's field. Same
+    /// reason as the cardholder field: SwiftUI centres the control inside the
+    /// frame instead of filling it, so the box has to hand the focus on.
+    @FocusState private var focused: Bool
     /// Carried only so the row and its message can be addressed as
     /// `paycross.field.<group>.<name>`: two groups may name a field the same.
     let groupKey: String
@@ -114,6 +118,7 @@ private struct FieldRow: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 TextField(field.placeholder ?? "", text: $value)
+                    .focused($focused)
                     .disabled(state.isReadOnly)
                     .keyboardType(field.type == "number" ? .numberPad : .default)
                     .textInputAutocapitalization(field.type == "email" ? .never : .sentences)
@@ -126,10 +131,14 @@ private struct FieldRow: View {
                     }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        // Same 44pt floor and the same reason as the card fields: the padding
+        // around a `TextField` is not part of the control, so a tap in it
+        // focused nothing.
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
         .padding(.horizontal, 12)
-        .padding(.vertical, 12)
         .payCrossComponentBackground(style)
+        .contentShape(Rectangle())
+        .onTapGesture { focused = true }
     }
 }
 #endif

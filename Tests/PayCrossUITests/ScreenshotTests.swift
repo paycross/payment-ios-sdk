@@ -271,6 +271,54 @@ final class ScreenshotTests: XCTestCase {
         }
     }
 
+    // MARK: - The accessibility ceiling
+
+    /// The sheet at the largest size it will render, which is the one the
+    /// clamp produces when the shopper asks for the largest size iOS offers.
+    ///
+    /// `.accessibility5` is passed on purpose rather than `.accessibility3`:
+    /// the picture is only worth looking at if it proves the clamp held. What
+    /// to look for is the expiry above the CVV rather than beside it, a Pay
+    /// button that has grown with its label instead of clipping it, and every
+    /// field box still wider than the digits in it.
+    func testFormAtTheAccessibilityCeiling() throws {
+        var state = CardFormState()
+        CardFormReducer.reduce(state: &state, event: .nameChanged("A Person"))
+        CardFormReducer.reduce(state: &state, event: .panChanged("4111111111111111"))
+        CardFormReducer.reduce(state: &state, event: .expiryChanged("1230"))
+
+        try capture("23-accessibility-ceiling") {
+            form(state, showsApplePayButton: true)
+                .payCrossTypeScale(.unstyled)
+                .dynamicTypeSize(.accessibility5)
+        }
+    }
+
+    /// The same, in the language whose words are a third longer. This is where
+    /// a layout that merely survives English gives up: `Enregistrer la carte
+    /// pour une utilisation future` at an accessibility size, above a Pay
+    /// button reading `Payer 25,99 €`.
+    func testFrenchFormAtTheAccessibilityCeiling() throws {
+        SheetLanguage.install(LocaleResolution.resolve(override: "fr"))
+        defer { SheetLanguage.reset() }
+
+        var state = CardFormState()
+        CardFormReducer.reduce(state: &state, event: .nameChanged("A Person"))
+        CardFormReducer.reduce(state: &state, event: .panChanged("4111111111111111"))
+        CardFormReducer.reduce(state: &state, event: .expiryChanged("1230"))
+        CardFormReducer.reduce(
+            state: &state,
+            event: .declined(message: L("paycross_error_payment_failed", "MISSING"))
+        )
+
+        try capture("24-french-accessibility-ceiling") {
+            form(state)
+                .environment(\.locale, SheetLanguage.locale)
+                .payCrossTypeScale(.unstyled)
+                .dynamicTypeSize(.accessibility5)
+        }
+    }
+
     private static let savedCards = [
         SavedCard(id: "a", brand: .visa, last4: "1111", expiryLabel: "12/30"),
         SavedCard(id: "b", brand: .mastercard, last4: "4444", expiryLabel: "01/29")

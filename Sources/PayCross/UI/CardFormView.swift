@@ -10,6 +10,21 @@ import PayCrossCore
 /// behaviour testable on Linux.
 struct CardFormView: View {
     @Environment(\.payCrossAppearance) private var style
+    /// Read for one decision: whether the expiry and the CVV still fit beside
+    /// each other. Everything else about the size is handled by the fonts.
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// The wallet button's height, tracking the text beside it. Apple's control
+    /// draws a fixed-size label, so this is the box it is given rather than the
+    /// type inside it, and a shopper at an accessibility size gets a button in
+    /// proportion to the rest of the sheet instead of a 48pt strip under a
+    /// 40pt total.
+    @ScaledMetric(relativeTo: .body) private var walletButtonHeight: CGFloat = 48
+    /// The cardholder field is the one SwiftUI-backed input on the form, and
+    /// SwiftUI centres a one-line `UITextField` inside whatever frame it is
+    /// given rather than filling it. A minimum height makes the box a target
+    /// and leaves the control 22pt tall in the middle of it, so the box asks
+    /// for the focus itself.
+    @FocusState private var cardholderFocused: Bool
     @Binding var state: CardFormState
     let amount: Amount
     let allowsSaving: Bool
@@ -47,7 +62,7 @@ struct CardFormView: View {
 
                     if showsApplePayButton {
                         ApplePayButtonView(action: onApplePay, isEnabled: !isLoading)
-                            .frame(height: 48)
+                            .frame(height: max(walletButtonHeight, style.buttonHeight(or: 0)))
                             .payCrossIdentifier(.walletButton)
 
                         // A separator rather than nothing: without it the card
@@ -130,11 +145,15 @@ struct CardFormView: View {
 
     private var newCardFields: some View {
         VStack(alignment: .leading, spacing: 14) {
-            LabeledField(title: L("paycross_cardholder_name", "Cardholder Name")) {
+            LabeledField(
+                title: L("paycross_cardholder_name", "Cardholder Name"),
+                focus: { cardholderFocused = true }
+            ) {
                 TextField(L("paycross_name_on_card", "NAME ON CARD"), text: binding(\.cardholderName, event: CardFormEvent.nameChanged))
                     .textContentType(.name)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.characters)
+                    .focused($cardholderFocused)
                     .payCrossIdentifier(.cardholderName)
             }
 
@@ -152,16 +171,31 @@ struct CardFormView: View {
                 )
             }
 
-            HStack(spacing: 12) {
-                LabeledField(title: L("paycross_expiry_label", "MM/YY")) {
-                    NumericField(
-                        placeholder: "12/30",
-                        text: expiryBinding,
-                        identifier: PayCrossTestIdentifiers.expiry.rawValue
-                    )
-                }
+            // An explicit gate rather than `ViewThatFits`. `NumericField` sets
+            // low hugging and low compression resistance on purpose, so the
+            // side-by-side candidate always reports that it fits and shrinks the
+            // two fields to slivers instead: at an accessibility size the
+            // shopper would get a four-digit CVV box two characters wide rather
+            // than the vertical layout they need.
+            if dynamicTypeSize.isAccessibilitySize {
+                expiryField
                 cvvField
+            } else {
+                HStack(spacing: 12) {
+                    expiryField
+                    cvvField
+                }
             }
+        }
+    }
+
+    private var expiryField: some View {
+        LabeledField(title: L("paycross_expiry_label", "MM/YY")) {
+            NumericField(
+                placeholder: "12/30",
+                text: expiryBinding,
+                identifier: PayCrossTestIdentifiers.expiry.rawValue
+            )
         }
     }
 
@@ -233,14 +267,25 @@ private struct AmountHeader: View {
     let amount: Amount
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(L("paycross_total", "Total"))
+        let caption = L("paycross_total", "Total")
+        let total = Amounts.formatted(amount, locale: locale)
+
+        return VStack(alignment: .leading, spacing: 4) {
+            Text(caption)
                 .font(style.font(.footnote, weight: .medium))
                 .foregroundStyle(style.foreground(\.textSecondary, default: .secondary))
                 .textCase(.uppercase)
-            Text(Amounts.formatted(amount, locale: locale))
+                // Its words are in the amount's label below. Left visible it is
+                // read twice, and read first as the letters T-O-T-A-L, because
+                // VoiceOver spells short uppercase runs.
+                .accessibilityHidden(true)
+            Text(total)
                 .font(style.font(.largeTitle, weight: .semibold))
                 .monospacedDigit()
+                // A bare "25,99 €" is a number with no noun. The caption above
+                // it is the noun, and it is already translated, so the label
+                // composes the two rather than introducing copy of its own.
+                .accessibilityLabel("\(caption), \(total)")
                 .payCrossIdentifier(.amount)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -251,11 +296,23 @@ private struct LabeledField<Content: View, Trailing: View>: View {
     @Environment(\.payCrossAppearance) private var style
     let title: String
     var trailing: Trailing
+    /// What a tap on the box, rather than on the control inside it, should do.
+    ///
+    /// Nil for the UIKit-backed fields, and nil rather than an empty closure:
+    /// those fill their box already, and a gesture that did nothing would eat
+    /// the tap the sheet uses to put the keypad away.
+    var focus: (() -> Void)?
     @ViewBuilder let content: Content
 
-    init(title: String, trailing: Trailing, @ViewBuilder content: () -> Content) {
+    init(
+        title: String,
+        trailing: Trailing,
+        focus: (() -> Void)? = nil,
+        @ViewBuilder content: () -> Content
+    ) {
         self.title = title
         self.trailing = trailing
+        self.focus = focus
         self.content = content()
     }
 
@@ -266,19 +323,47 @@ private struct LabeledField<Content: View, Trailing: View>: View {
                 .foregroundStyle(style.foreground(\.textSecondary, default: .secondary))
             HStack {
                 content
+                    // On the field rather than around it. A `UITextField` is one
+                    // line of its font tall — 22pt at the default size, measured
+                    // — and the 12pt of padding this box used to carry is not
+                    // part of it: a tap landing in the padding hit the
+                    // background and focused nothing, so the real target was
+                    // half Apple's 44pt minimum inside a box that looked twice
+                    // the size. The field now fills the box it is drawn in, and
+                    // the box is 2pt shorter than the padding made it.
+                    .frame(minHeight: 44)
                     .font(style.font(.body).monospacedDigit())
                 trailing
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 12)
             .payCrossComponentBackground(style)
+            // Claims the whole box, including the horizontal padding and the
+            // band above and below a control that does not fill its frame.
+            .modifier(TapToFocus(focus: focus))
+        }
+    }
+}
+
+/// Makes the whole box focus the control inside it, when the control needs it.
+private struct TapToFocus: ViewModifier {
+    let focus: (() -> Void)?
+
+    func body(content: Content) -> some View {
+        if let focus {
+            content
+                .contentShape(Rectangle())
+                .onTapGesture(perform: focus)
+        } else {
+            content
         }
     }
 }
 
 extension LabeledField where Trailing == EmptyView {
-    init(title: String, @ViewBuilder content: () -> Content) {
-        self.init(title: title, trailing: EmptyView(), content: content)
+    init(
+        title: String, focus: (() -> Void)? = nil, @ViewBuilder content: () -> Content
+    ) {
+        self.init(title: title, trailing: EmptyView(), focus: focus, content: content)
     }
 }
 
@@ -294,9 +379,13 @@ private struct BrandBadge: View {
     }
 }
 
-private struct ErrorBanner: View {
+/// Internal rather than private so its announcement can be asserted on a real
+/// render; nothing outside the sheet builds one.
+struct ErrorBanner: View {
     @Environment(\.payCrossAppearance) private var style
     let message: String
+    /// The seam. Defaulted, so every call site in the sheet stays a one-liner.
+    var announce: (String) -> Void = { SheetAnnouncement.post($0) }
 
     private var errorColor: Color { style.color(\.error) ?? Color(.systemRed) }
 
@@ -315,11 +404,19 @@ private struct ErrorBanner: View {
             in: RoundedRectangle(cornerRadius: style.cornerRadius(or: 10))
         )
         .payCrossIdentifier(.errorBanner)
+        // On appear and on change: a decline arrives while the shopper is
+        // somewhere else on the form, and a second decline with a different
+        // reason reuses this view rather than building a new one.
+        .onAppear { announce(message) }
+        .onChange(of: message) { announce($0) }
     }
 }
 
 private struct PayButton: View {
     @Environment(\.payCrossAppearance) private var style
+    /// Grows with the label inside it. A fixed 50pt clipped `Payer 25,99 €` at
+    /// an accessibility size, on the one control the shopper has to press.
+    @ScaledMetric(relativeTo: .headline) private var height: CGFloat = 50
     /// Same reason as `AmountHeader`: the button reads `Payer 12,00 €`.
     @Environment(\.locale) private var locale
     let amount: Amount
@@ -362,7 +459,7 @@ private struct PayButton: View {
                         .font(style.font(.headline))
                 }
             }
-            .frame(maxWidth: .infinity, minHeight: style.buttonHeight(or: 50))
+            .frame(maxWidth: .infinity, minHeight: max(height, style.buttonHeight(or: 0)))
         }
         .background(fill, in: RoundedRectangle(cornerRadius: style.buttonCornerRadius(or: 12)))
         .foregroundStyle(labelColor)
