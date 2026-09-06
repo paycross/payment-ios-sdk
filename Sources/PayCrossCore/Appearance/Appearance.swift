@@ -34,7 +34,7 @@ public struct PayCrossColor: Sendable, Hashable {
 ///
 /// A pinned mode applies to the payment sheet only. The host app's own
 /// appearance is never touched.
-public enum ThemeMode: String, Sendable, Hashable, CaseIterable {
+public enum PayCrossThemeMode: String, Sendable, Hashable, CaseIterable {
     case system
     case light
     case dark
@@ -180,7 +180,7 @@ public struct PayCrossAppearance: Sendable, Hashable {
 
     public var light: PayCrossColors
     public var dark: PayCrossColors
-    public var themeMode: ThemeMode
+    public var themeMode: PayCrossThemeMode
     public var shapes: PayCrossShapes
     public var primaryButton: PayCrossPrimaryButton
     public var typography: PayCrossTypography
@@ -188,7 +188,7 @@ public struct PayCrossAppearance: Sendable, Hashable {
     public init(
         light: PayCrossColors = PayCrossColors(),
         dark: PayCrossColors = PayCrossColors(),
-        themeMode: ThemeMode = .system,
+        themeMode: PayCrossThemeMode = .system,
         shapes: PayCrossShapes = PayCrossShapes(),
         primaryButton: PayCrossPrimaryButton = PayCrossPrimaryButton(),
         typography: PayCrossTypography = PayCrossTypography()

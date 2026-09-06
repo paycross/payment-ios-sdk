@@ -52,6 +52,60 @@ extension Color {
     }
 }
 
+/// The role colours, built once as dynamic colours.
+///
+/// Built here rather than in a view's `body`: a colour constructed in a body is
+/// constructed again on every render, and this sheet re-renders on every
+/// keystroke the shopper types.
+struct DynamicPalette: Sendable {
+    let brand: UIColor?
+    let onBrand: UIColor?
+    let surface: UIColor?
+    let component: UIColor?
+    let componentBorder: UIColor?
+    let text: UIColor?
+    let textSecondary: UIColor?
+    let placeholder: UIColor?
+    let icon: UIColor?
+    let error: UIColor?
+    let buttonBackground: UIColor?
+    let buttonLabel: UIColor?
+    let buttonDisabledBackground: UIColor?
+    let buttonDisabledLabel: UIColor?
+
+    init(_ resolved: ResolvedAppearance) {
+        /// Nil when neither appearance named the role, so the call site keeps
+        /// the system colour it already drew. A role named in one appearance
+        /// only is used in both: a partial palette is a merchant changing one
+        /// colour, not asking for the other appearance to fall back.
+        func dynamic(_ role: KeyPath<ResolvedPalette, PayCrossColor?>) -> UIColor? {
+            let light = resolved.light[keyPath: role]
+            let dark = resolved.dark[keyPath: role]
+            guard light != nil || dark != nil else { return nil }
+
+            return UIColor { traits in
+                let chosen = traits.userInterfaceStyle == .dark ? dark ?? light : light ?? dark
+                return chosen?.uiColor ?? .clear
+            }
+        }
+
+        brand = dynamic(\.brand)
+        onBrand = dynamic(\.onBrand)
+        surface = dynamic(\.surface)
+        component = dynamic(\.component)
+        componentBorder = dynamic(\.componentBorder)
+        text = dynamic(\.text)
+        textSecondary = dynamic(\.textSecondary)
+        placeholder = dynamic(\.placeholder)
+        icon = dynamic(\.icon)
+        error = dynamic(\.error)
+        buttonBackground = dynamic(\.buttonBackground)
+        buttonLabel = dynamic(\.buttonLabel)
+        buttonDisabledBackground = dynamic(\.buttonDisabledBackground)
+        buttonDisabledLabel = dynamic(\.buttonDisabledLabel)
+    }
+}
+
 /// The resolved appearance, as the sheet's views read it.
 ///
 /// Bridges Core's platform-free palettes to SwiftUI and UIKit. Every colour
@@ -60,36 +114,36 @@ extension Color {
 /// the sheet byte for byte where it was.
 struct AppearanceStyle: Sendable, Equatable {
     let resolved: ResolvedAppearance
+    private let palette: DynamicPalette
+
+    init(resolved: ResolvedAppearance) {
+        self.resolved = resolved
+        palette = DynamicPalette(resolved)
+    }
 
     /// What the sheet looks like when nobody has themed it.
     static let unstyled = AppearanceStyle(resolved: .unstyled)
 
-    /// A colour that answers each appearance from its own palette.
-    ///
-    /// Dynamic rather than resolved once, so a shopper who switches appearance
-    /// mid-payment gets the merchant's other palette without the sheet being
-    /// rebuilt. A role set in one appearance only is used in both: a partial
-    /// palette is a merchant changing one colour, not asking for the other
-    /// appearance to fall back to the system's.
-    func uiColor(_ role: KeyPath<ResolvedPalette, PayCrossColor?>) -> UIColor? {
-        let light = resolved.light[keyPath: role]
-        let dark = resolved.dark[keyPath: role]
-        guard light != nil || dark != nil else { return nil }
-
-        return UIColor { traits in
-            let chosen = traits.userInterfaceStyle == .dark ? dark ?? light : light ?? dark
-            return chosen?.uiColor ?? .clear
-        }
+    /// Two styles are equal when they were resolved from the same values. The
+    /// palette is derived from `resolved` and carries no identity of its own,
+    /// and comparing freshly built dynamic colours would report every style as
+    /// different and re-render the sheet for nothing.
+    static func == (one: AppearanceStyle, other: AppearanceStyle) -> Bool {
+        one.resolved == other.resolved
     }
 
-    func color(_ role: KeyPath<ResolvedPalette, PayCrossColor?>) -> Color? {
-        uiColor(role).map(Color.init)
+    func uiColor(_ role: KeyPath<DynamicPalette, UIColor?>) -> UIColor? {
+        palette[keyPath: role]
+    }
+
+    func color(_ role: KeyPath<DynamicPalette, UIColor?>) -> Color? {
+        palette[keyPath: role].map(Color.init)
     }
 
     /// The same, as a shape style, so a call site can keep a hierarchical
     /// default such as `.secondary` that has no single colour to fall back to.
     func foreground(
-        _ role: KeyPath<ResolvedPalette, PayCrossColor?>,
+        _ role: KeyPath<DynamicPalette, UIColor?>,
         default fallback: some ShapeStyle
     ) -> AnyShapeStyle {
         color(role).map { AnyShapeStyle($0) } ?? AnyShapeStyle(fallback)
@@ -190,6 +244,24 @@ extension EnvironmentValues {
 }
 
 extension View {
+    /// Paints the sheet's own chrome: the ground behind the loading spinner and
+    /// the navigation bar the form sits under.
+    ///
+    /// Applied only when a surface resolved, so an unthemed sheet keeps the
+    /// system bar it has always had. Without it a merchant who paints the sheet
+    /// gets their colour framed by a system-coloured bar, which reads as a
+    /// rendering fault rather than as a theme.
+    @ViewBuilder
+    func payCrossSheetChrome(_ style: AppearanceStyle) -> some View {
+        if let surface = style.color(\.surface) {
+            background(surface)
+                .toolbarBackground(surface, for: .navigationBar)
+                .toolbarBackground(.visible, for: .navigationBar)
+        } else {
+            self
+        }
+    }
+
     /// Paints the sheet's component ground: an input, a stored-card row, a
     /// field group.
     ///

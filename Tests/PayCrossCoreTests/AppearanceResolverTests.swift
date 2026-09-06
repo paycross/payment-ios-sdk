@@ -69,8 +69,8 @@ final class AppearanceResolverTests: XCTestCase {
         XCTAssertEqual(PayCrossColor(hex: "#1E88E5"), PayCrossColor(argb: 0xFF1E_88E5))
     }
 
-    func testParsesHexWithoutTheHashAndInEitherCase() {
-        XCTAssertEqual(PayCrossColor(hex: "1e88e5"), PayCrossColor(argb: 0xFF1E_88E5))
+    func testParsesEitherCaseAndTrimsSurroundingSpace() {
+        XCTAssertEqual(PayCrossColor(hex: "#1e88e5"), PayCrossColor(argb: 0xFF1E_88E5))
         XCTAssertEqual(PayCrossColor(hex: "  #1E88E5 "), PayCrossColor(argb: 0xFF1E_88E5))
     }
 
@@ -78,11 +78,14 @@ final class AppearanceResolverTests: XCTestCase {
         XCTAssertEqual(PayCrossColor(hex: "#1AF"), PayCrossColor(argb: 0xFF11_AAFF))
     }
 
-    func testParsesEightDigitHexAsARGB() {
-        XCTAssertEqual(PayCrossColor(hex: "#801E88E5"), PayCrossColor(argb: 0x801E_88E5))
-    }
-
-    func testRejectsAnythingElse() {
+    /// The hash is required and eight digits are refused, which is exactly the
+    /// grammar the core's own normaliser accepts and the one Android matches.
+    /// A brand colour the shopper can partly see through is a mistake rather
+    /// than a request, so an alpha channel is not a thing this reads.
+    func testRejectsAnythingOutsideTheAgreedGrammar() {
+        XCTAssertNil(PayCrossColor(hex: "1e88e5"))
+        XCTAssertNil(PayCrossColor(hex: "1AF"))
+        XCTAssertNil(PayCrossColor(hex: "#801E88E5"))
         XCTAssertNil(PayCrossColor(hex: ""))
         XCTAssertNil(PayCrossColor(hex: "#"))
         XCTAssertNil(PayCrossColor(hex: "#12345"))
@@ -245,7 +248,7 @@ final class AppearanceResolverTests: XCTestCase {
     }
 
     func testThemeModeCrossesUnchanged() {
-        for mode in ThemeMode.allCases {
+        for mode in PayCrossThemeMode.allCases {
             let resolved = AppearanceResolver.resolve(
                 appearance: PayCrossAppearance(themeMode: mode)
             )

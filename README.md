@@ -112,12 +112,16 @@ PayCrossAPI.configure(
 )
 ```
 
+`PayCrossColor` takes components or a hex string. The hex initialiser is
+failable and accepts `#RGB` and `#RRGGBB` only, with the hash, which is the
+grammar the back office accepts and the Android SDK matches.
+
 One brand colour and nothing else is a one-liner:
 
 ```swift
 PayCrossAPI.configure(
     environment: .production,
-    appearance: .brand(PayCrossColor(hex: "#1E88E5")!)
+    appearance: .brand(PayCrossColor(red: 0x1E, green: 0x88, blue: 0xE5))
 )
 ```
 
@@ -159,6 +163,12 @@ platforms. Set it yourself and the SDK does not argue.
 `themeMode` is `.system`, `.light` or `.dark`. A pinned mode applies to the
 payment sheet's own window and to nothing else: the host app's appearance is
 never touched.
+
+Pin it if you set a `surface` for one appearance only. The navigation bar takes
+the surface as its background but draws its title in the system's own colour
+for the device's appearance, so a dark surface on a device in light mode gets a
+dark title on it. Pinning the mode, or setting `surface` in both palettes,
+avoids that.
 
 ### Shapes and the Pay button
 

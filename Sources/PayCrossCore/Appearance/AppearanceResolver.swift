@@ -36,15 +36,21 @@ package enum AppearanceResolver {
 
 extension PayCrossColor {
 
-    /// Parses `#RGB`, `#RRGGBB` and `#AARRGGBB`, with or without the hash and in
-    /// either case. Anything else is nil.
+    /// Parses `#RGB` and `#RRGGBB`, in either case. Anything else is nil.
     ///
-    /// Lenient on purpose at the two places it is used: a merchant typing a
-    /// colour into the back office, and that colour arriving on the wire. A
-    /// value this cannot read costs the colour, never the sheet.
+    /// Exactly the grammar the core's own colour normaliser accepts, and the
+    /// one Android matches, so a colour a merchant can type into the back
+    /// office means the same thing on every surface that reads it. The hash is
+    /// required and an alpha channel is not accepted: a brand colour the
+    /// shopper can partly see through is a mistake, not a request.
+    ///
+    /// Never throws and never guesses. A value this cannot read costs the
+    /// colour, never the sheet.
     public init?(hex: String) {
-        let digits = hex.trimmingCharacters(in: .whitespacesAndNewlines)
-            .drop { $0 == "#" }
+        let trimmed = hex.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.hasPrefix("#") else { return nil }
+
+        let digits = trimmed.dropFirst()
         guard digits.allSatisfy(\.isHexDigit), let value = UInt32(digits, radix: 16) else {
             return nil
         }
@@ -58,8 +64,6 @@ extension PayCrossColor {
                 | green << 12 | green << 8 | blue << 4 | blue)
         case 6:
             self.init(argb: 0xFF00_0000 | value)
-        case 8:
-            self.init(argb: value)
         default:
             return nil
         }
@@ -99,7 +103,7 @@ package struct ResolvedPalette: Sendable, Hashable {
 package struct ResolvedAppearance: Sendable, Hashable {
     package let light: ResolvedPalette
     package let dark: ResolvedPalette
-    package let themeMode: ThemeMode
+    package let themeMode: PayCrossThemeMode
     package let cornerRadius: Double?
     package let buttonCornerRadius: Double?
     package let borderWidth: Double?
@@ -117,6 +121,10 @@ extension AppearanceResolver {
     /// Merges what the merchant's code asked for, what the merchant's back
     /// office published, and what the platform already does.
     ///
+    /// Pure, and called on every session update, so it reports nothing and logs
+    /// nothing. `contrastWarnings(for:)` is the separate question, asked once by
+    /// whoever owns the sheet.
+    ///
     /// Per role: code wins, then the server's brand colour, then the platform
     /// default. The server publishes one brand colour and it applies to both
     /// appearances, because the branding record holds no light/dark variants.
@@ -127,7 +135,7 @@ extension AppearanceResolver {
         let appearance = appearance ?? PayCrossAppearance()
         let serverBrand = serverBrandColor.flatMap(PayCrossColor.init(hex:))
 
-        let resolved = ResolvedAppearance(
+        return ResolvedAppearance(
             light: palette(appearance.light, appearance.primaryButton, serverBrand),
             dark: palette(appearance.dark, appearance.primaryButton, serverBrand),
             themeMode: appearance.themeMode,
@@ -139,14 +147,6 @@ extension AppearanceResolver {
             buttonHeight: appearance.primaryButton.height,
             sizeScaleFactor: clamped(appearance.typography.sizeScaleFactor)
         )
-
-        #if DEBUG
-        for warning in contrastWarnings(for: resolved) {
-            print("PayCrossAppearance: \(warning)")
-        }
-        #endif
-
-        return resolved
     }
 
     private static func palette(

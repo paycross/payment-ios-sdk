@@ -113,6 +113,9 @@ final class PaymentSheetModel: ObservableObject {
     /// What the sheet draws with. Re-resolved once the session lands, because
     /// the merchant's back-office brand colour arrives with it.
     @Published private(set) var appearance: AppearanceStyle
+    /// The appearance the contrast warnings were last written for, so a session
+    /// re-read does not repeat them.
+    private var warnedAppearance: ResolvedAppearance?
     @Published var fieldValues: [String: [String: String]] = [:]
     @Published private(set) var fieldErrors: [FieldGroupError] = []
     /// Drives the "Cancel Payment?" confirmation. On the model rather than in the
@@ -260,6 +263,8 @@ final class PaymentSheetModel: ObservableObject {
             initial.saveCard = prefill.saveCard
         }
         self.form = initial
+
+        warnAboutContrast()
     }
 
     var amount: Amount { claims.amount }
@@ -318,6 +323,7 @@ final class PaymentSheetModel: ObservableObject {
                 serverBrandColor: data.branding?.brandColor
             )
         )
+        warnAboutContrast()
         fieldValues = FieldGroupLogic.initialValues(data.fieldGroups ?? [])
         form.savedCards = data.savedCards?.map(\.presentable) ?? []
 
@@ -326,6 +332,23 @@ final class PaymentSheetModel: ObservableObject {
         if data.preselectsSavedCard, let first = form.savedCards.first {
             CardFormReducer.reduce(state: &form, event: .sourceSelected(.saved(first)))
         }
+    }
+
+    /// Reports colour pairs a shopper will not be able to read, in debug builds
+    /// only and once per distinct appearance.
+    ///
+    /// Here rather than in the resolver, which is pure and is called again every
+    /// time the session is re-read. The merchant chose these colours and the SDK
+    /// does not correct them; a sheet that silently ignores what it was told is
+    /// worse than one that says so while the integration is being written.
+    private func warnAboutContrast() {
+        #if DEBUG
+        guard warnedAppearance != appearance.resolved else { return }
+        warnedAppearance = appearance.resolved
+        for warning in AppearanceResolver.contrastWarnings(for: appearance.resolved) {
+            print("PayCrossAppearance: \(warning)")
+        }
+        #endif
     }
 
     /// The shopper pressed a row's trash. Raises the confirmation; deletes nothing.
@@ -822,6 +845,7 @@ struct PaymentSheetView: View {
             .task { await model.load() }
             .environment(\.payCrossAppearance, model.appearance)
             .payCrossTint(model.appearance.color(\.brand))
+            .payCrossSheetChrome(model.appearance)
             .navigationTitle(L("paycross_payment", "Payment"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
