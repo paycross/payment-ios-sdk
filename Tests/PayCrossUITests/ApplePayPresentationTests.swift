@@ -19,18 +19,17 @@ import UIKit
 @MainActor
 final class ApplePayPresentationTests: XCTestCase {
 
-    private static let hostSize = CGSize(width: 390, height: 844) // iPhone 17 portrait
 
     /// Held for the duration of the test; a released window takes the hierarchy
     /// under test with it.
     ///
-    /// No `tearDown()` override clearing it, unlike `ThreeDSPresentationTests`:
+    /// No `tearDown()` override releasing it, unlike `ThreeDSPresentationTests`:
     /// `tearDown()` is a nonisolated override and this class is `@MainActor`, so
     /// touching main-actor state from it is a Swift 6 diagnostic that can only
     /// be silenced with an escape hatch. XCTest holds one instance per test
     /// method for the length of the run, which is three windows here, and they
     /// go when the suite does.
-    private var windows: [UIWindow] = []
+    private let host = ViewHost()
 
     /// Nothing in this file is about the user agent, and WebKit's helper processes
     /// can take tens of seconds to launch on a loaded CI machine — or never answer.
@@ -57,28 +56,13 @@ final class ApplePayPresentationTests: XCTestCase {
         isLoading: Bool = false,
         onApplePay: @escaping () -> Void = {}
     ) -> UIWindow {
-        let controller = UIHostingController(
-            rootView: FormHarness(
+        return host(
+            FormHarness(
                 showsApplePayButton: showsApplePayButton,
                 isLoading: isLoading,
                 onApplePay: onApplePay
             )
         )
-        let window = UIWindow(frame: CGRect(origin: .zero, size: Self.hostSize))
-        if let scene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene }).first {
-            window.windowScene = scene
-        }
-        window.rootViewController = controller
-        window.isHidden = false
-        window.makeKeyAndVisible()
-        windows.append(window)
-
-        controller.view.frame = window.bounds
-        controller.view.setNeedsLayout()
-        controller.view.layoutIfNeeded()
-        RunLoop.current.run(until: Date().addingTimeInterval(0.3))
-        return window
     }
 
     func testTheButtonIsInTheHierarchyWhenTheFormIsToldToShowIt() throws {
@@ -531,22 +515,7 @@ final class ApplePayPresentationTests: XCTestCase {
             isPreparing: false
         )
 
-        let controller = UIHostingController(rootView: PaymentSheetView(model: model))
-        let window = UIWindow(frame: CGRect(origin: .zero, size: Self.hostSize))
-        if let scene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene }).first {
-            window.windowScene = scene
-        }
-        window.rootViewController = controller
-        window.isHidden = false
-        window.makeKeyAndVisible()
-        windows.append(window)
-
-        controller.view.frame = window.bounds
-        controller.view.setNeedsLayout()
-        controller.view.layoutIfNeeded()
-        RunLoop.current.run(until: Date().addingTimeInterval(0.3))
-        return (window, model)
+        return (host(PaymentSheetView(model: model)), model)
     }
 
     private func makeModel(

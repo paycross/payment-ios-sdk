@@ -107,7 +107,7 @@ private struct FieldRow: View {
     @ViewBuilder
     private var inputBox: some View {
         Group {
-            if let options = field.options, isSelect {
+            if isSelect, let options = field.options {
                 Picker(title, selection: $value) {
                     // An empty tag so an unset optional select has somewhere to sit;
                     // without it SwiftUI silently picks the first option and the
@@ -141,7 +141,10 @@ private struct FieldRow: View {
         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
         .padding(.horizontal, 12)
         .payCrossComponentBackground(style)
-        .tapToFocus(isSelect ? nil : { focused = true })
+        // A select handles its own box, and a disabled field has no focus to
+        // take: a gesture over either would only eat the tap the sheet uses to
+        // put the keypad away.
+        .tapToFocus(isSelect || state.isReadOnly ? nil : { focused = true })
     }
 }
 #endif

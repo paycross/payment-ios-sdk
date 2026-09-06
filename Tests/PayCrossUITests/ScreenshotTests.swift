@@ -271,6 +271,46 @@ final class ScreenshotTests: XCTestCase {
         }
     }
 
+    // MARK: - The confirmations
+
+    /// Both questions the sheet asks, drawn by the SDK rather than raised as
+    /// system alerts so their buttons can carry identifiers. New surfaces, so
+    /// they get looked at.
+    func testCancelConfirmation() throws {
+        let model = sheetModel()
+        model.isConfirmingCancel = true
+        try capture("25-cancel-confirmation") { PaymentSheetView(model: model) }
+    }
+
+    func testRemoveCardConfirmation() throws {
+        let model = sheetModel()
+        model.cardPendingRemoval = Self.savedCards[0]
+        try capture("26-remove-confirmation") { PaymentSheetView(model: model) }
+    }
+
+    /// The same question at the ceiling, where its two buttons stack.
+    func testCancelConfirmationAtTheAccessibilityCeiling() throws {
+        let model = sheetModel()
+        model.isConfirmingCancel = true
+        try capture("27-cancel-confirmation-ceiling") {
+            PaymentSheetView(model: model).dynamicTypeSize(.accessibility5)
+        }
+    }
+
+    private func sheetModel() -> PaymentSheetModel {
+        PaymentSheetModel(
+            sessionToken: "header.payload.signature",
+            claims: SessionClaims(
+                sessionID: "sess_1", merchantID: "m1", customerID: "c1", brandingID: nil,
+                amount: Amount(minorUnits: 2599, currencyCode: "EUR"), expiresAt: nil
+            ),
+            configuration: Configuration(environment: .sandbox),
+            sessionData: SessionData(),
+            isPreparing: false,
+            transport: StubTransport(json: #"{"session_id":"sess_1","status":"open"}"#)
+        )
+    }
+
     // MARK: - The accessibility ceiling
 
     /// The sheet at the largest size it will render, which is the one the

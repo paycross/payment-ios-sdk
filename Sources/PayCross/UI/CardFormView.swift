@@ -396,7 +396,13 @@ private struct PayButton: View {
     @Environment(\.payCrossAppearance) private var style
     /// Grows with the label inside it. A fixed 50pt clipped `Payer 25,99 €` at
     /// an accessibility size, on the one control the shopper has to press.
-    @ScaledMetric(relativeTo: .headline) private var height: CGFloat = 50
+    ///
+    /// Relative to `.body` rather than to this button's own `.headline`, so the
+    /// two primary buttons climb at the same rate: Apple draws the wallet
+    /// button's label at a fixed size, which gives its height nothing of its own
+    /// to track, and two buttons of the same shape growing differently reads as
+    /// a bug.
+    @ScaledMetric(relativeTo: .body) private var height: CGFloat = 50
     /// Same reason as `AmountHeader`: the button reads `Payer 12,00 €`.
     @Environment(\.locale) private var locale
     let amount: Amount

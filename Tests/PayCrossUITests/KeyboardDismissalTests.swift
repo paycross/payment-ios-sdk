@@ -15,12 +15,10 @@ import SwiftUI
 @MainActor
 final class KeyboardDismissalTests: XCTestCase {
 
-    /// Held for the duration of the test; a released window takes the hierarchy
-    /// under test with it.
-    private var windows: [UIWindow] = []
+    private let host = ViewHost()
 
     override func tearDown() async throws {
-        windows.removeAll()
+        host.release()
         try await super.tearDown()
     }
 
@@ -36,27 +34,7 @@ final class KeyboardDismissalTests: XCTestCase {
             fieldErrors: [],
             onPay: {}
         )
-        let controller = UIHostingController(rootView: NavigationStack { view })
-        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
-        // Attach to the live scene when there is one, so the fields can take
-        // first responder.
-        if let scene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene }).first {
-            window.windowScene = scene
-        }
-        window.rootViewController = controller
-        window.isHidden = false
-        window.makeKeyAndVisible()
-        controller.view.frame = window.bounds
-        controller.view.layoutIfNeeded()
-        RunLoop.current.run(until: Date().addingTimeInterval(0.3))
-        windows.append(window)
-        return window
-    }
-
-    private func textFields(in view: UIView) -> [UITextField] {
-        (view.subviews.compactMap { $0 as? UITextField })
-            + view.subviews.flatMap(textFields(in:))
+        return host(NavigationStack { view })
     }
 
     private func field(_ identifier: String, in window: UIWindow) throws -> UITextField {

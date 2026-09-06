@@ -30,13 +30,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`PayCrossTestIdentifiers`**, the identifier strings as constants, so a
   merchant's UI test can reference them rather than retype them. Same strings on
   both platforms, including `savedCard(_:)` keyed by the card's own `uuid`.
-  Eleven elements that had no handle at all now have one: the sheet root, the
-  save-card toggle, the wallet divider, the stored-card container, server-field
-  validation messages, the initial spinner, the 3-D Secure challenge and the
-  four confirmation buttons. The two confirmations themselves cannot carry one —
-  SwiftUI renders `.alert` as a `UIAlertController` the SDK never holds — so
-  Android's `paycross.cancelDialog` and `paycross.removeDialog` have no iOS
-  counterpart.
+  Fourteen elements that had no handle at all now have one: the sheet root, the
+  sheet's own Cancel, the save-card toggle, the wallet divider, the stored-card
+  container, server-field validation messages, the initial spinner, the 3-D
+  Secure challenge, and both confirmations with their two buttons each.
 - **An announced decline.** The error banner posts an accessibility
   announcement when it appears and when its wording changes, so a shopper using
   VoiceOver hears why the payment stopped instead of only noticing the Pay
@@ -47,7 +44,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **An accessibility floor**, documented in the
   [README](README.md#accessibility): every control labelled, Dynamic Type
   honoured to `accessibility3`, layouts that stack rather than clip, and 44pt
-  touch targets.
+  touch targets. One surface stays outside it and says so: the 3-D Secure
+  challenge, whose page is the issuer's own web content.
 - **French.** The sheet ships `fr` alongside `en`, 32 keys each. See
   [`LOCALIZATION.md`](LOCALIZATION.md) for every key, what it paints, and which
   carry a `%@`.
@@ -64,6 +62,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The cancel and delete confirmations are drawn by the SDK** instead of being
+  raised as system alerts. They keep their copy, their two-step shape and their
+  destructive-first ordering; what changes is that they are addressable.
+  SwiftUI renders `.alert` through a `UIAlertController` and does not carry a
+  button's identifier onto the resulting action — measured on iOS 26.5, both
+  actions came back with a nil identifier and the alert's view tree carried
+  none — so neither dialog nor any of their four buttons could be reached by
+  name. The two answers stack rather than sitting side by side, because
+  `Continue Payment` already wraps beside `Yes, Cancel` on a 390pt sheet and
+  `Continuer le paiement` is longer still.
 - **Dynamic Type is clamped at `accessibility3`**, and a merchant's
   `sizeScaleFactor` now multiplies a size that has already been clamped rather
   than compounding with the shopper's setting. Below the ceiling nothing about

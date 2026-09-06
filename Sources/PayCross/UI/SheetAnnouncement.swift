@@ -11,12 +11,9 @@ import UIKit
 @MainActor
 enum SheetAnnouncement {
 
-    /// The real post, and the seam a test replaces.
-    ///
-    /// There is no VoiceOver in a test process and nothing observable when this
-    /// runs for real, so the alternative to a seam is not testing the highest
-    /// value item on the accessibility floor at all.
-    static var post: (String) -> Void = { message in
+    /// The seam is `ErrorBanner.announce`, which a test injects. This is only
+    /// the default it carries, so there is nothing here to swap.
+    static func post(_ message: String) {
         if #available(iOS 17.0, *) {
             AccessibilityNotification.Announcement(message).post()
         } else {

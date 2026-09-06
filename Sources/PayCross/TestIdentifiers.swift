@@ -14,9 +14,8 @@ import SwiftUI
 /// accessibility service on the device; an iOS `accessibilityIdentifier` is not
 /// surfaced to VoiceOver or to other apps, so there is nothing to gate.
 ///
-/// The two dialogs are the exception, and are documented as such in the README:
-/// SwiftUI renders `.alert` as a `UIAlertController` the SDK never holds, so
-/// only the buttons inside it can be named.
+/// Cases are added as the sheet grows elements worth reaching. Switching over
+/// this exhaustively is not what it is for; read the case you want.
 public enum PayCrossTestIdentifiers: String, CaseIterable, Sendable {
 
     /// The sheet's content, everything under the navigation bar.
@@ -71,11 +70,21 @@ public enum PayCrossTestIdentifiers: String, CaseIterable, Sendable {
     /// The Done button above the numeric keypad.
     case keyboardDone = "paycross.keyboardDone"
 
+    /// The sheet's own Cancel, which opens the cancel confirmation rather than
+    /// cancelling anything. The confirmation's buttons are below.
+    case cancel = "paycross.cancel"
+
+    /// The confirmation raised before a payment is abandoned.
+    case cancelDialog = "paycross.cancelDialog"
+
     /// `Yes, Cancel` in the cancel confirmation.
     case cancelConfirm = "paycross.cancelConfirm"
 
     /// `Continue Payment` in the cancel confirmation.
     case cancelDismiss = "paycross.cancelDismiss"
+
+    /// The confirmation raised before a stored card is deleted.
+    case removeDialog = "paycross.removeDialog"
 
     /// `Remove` in the delete confirmation.
     case removeConfirm = "paycross.removeConfirm"
@@ -83,9 +92,10 @@ public enum PayCrossTestIdentifiers: String, CaseIterable, Sendable {
     /// `Cancel` in the delete confirmation.
     case removeDismiss = "paycross.removeDismiss"
 
-    /// One stored card's row. `uuid` is the card's `uuid` from the session.
+    /// One stored card's row. `uuid` is the card's `uuid` from the session,
+    /// which is a uuid and so carries none of the characters `escaped` removes.
     public static func savedCard(_ uuid: String) -> String {
-        "paycross.savedCard.\(uuid)"
+        "paycross.savedCard.\(escaped(uuid))"
     }
 
     /// The trash on one stored card's row.
@@ -95,13 +105,26 @@ public enum PayCrossTestIdentifiers: String, CaseIterable, Sendable {
 
     /// One server-driven field. Both parts come from the session's
     /// `field_groups`: the group's key and the field's name.
+    ///
+    /// A dot inside either half would make the pair ambiguous — `("a.b", "c")`
+    /// and `("a", "b.c")` are different fields and must not answer to the same
+    /// string — so dots and whitespace are replaced before joining. Neither is
+    /// expected: both halves are merchant configuration, and both are keys.
     public static func field(group: String, name: String) -> String {
-        "paycross.field.\(group).\(name)"
+        "paycross.field.\(escaped(group)).\(escaped(name))"
     }
 
     /// The validation message under one server-driven field.
     public static func fieldError(group: String, name: String) -> String {
         "\(field(group: group, name: name)).error"
+    }
+
+    /// Keeps a component from spilling into the segment beside it.
+    ///
+    /// A dot is the separator, and whitespace makes an identifier a merchant
+    /// cannot reasonably match; both become `_`.
+    private static func escaped(_ component: String) -> String {
+        String(component.map { $0 == "." || $0.isWhitespace ? "_" : $0 })
     }
 }
 

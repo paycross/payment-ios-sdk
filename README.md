@@ -315,18 +315,26 @@ reason is a real one on that platform, so a release-build UI test can address
 this sheet and not that one.
 
 The strings are also constants, so a test can reference them rather than retype
-them:
+them. A UI test target does not link the app's frameworks by default: add the
+`PayCross` package (or, under CocoaPods, the pod) to that target as well.
 
 ```swift
 import PayCross
+import XCTest
 
+let app = XCUIApplication()
 app.textFields[PayCrossTestIdentifiers.cardNumber.rawValue].tap()
-app.buttons[PayCrossTestIdentifiers.savedCard(card.uuid)].tap()
+
+// The uuid your own backend already holds from the session it created.
+let saved = "8f4b0e2a-91c7-4d3e-8a11-2c6b5d0f7e93"
+app.buttons[PayCrossTestIdentifiers.savedCard(saved)].tap()
+app.buttons[PayCrossTestIdentifiers.payButton.rawValue].tap()
 ```
 
 | Element | Identifier |
 |---|---|
 | The sheet's content | `paycross.sheet` |
+| The sheet's own Cancel | `paycross.cancel` |
 | Total | `paycross.amount` |
 | Apple Pay button | `paycross.walletButton` |
 | `Or pay with card` rule | `paycross.walletDivider` |
@@ -348,8 +356,10 @@ app.buttons[PayCrossTestIdentifiers.savedCard(card.uuid)].tap()
 | 3-D Secure challenge | `paycross.threeDS` |
 | Cancel, on the challenge | `paycross.threeDSCancel` |
 | Done, above the numeric keypad | `paycross.keyboardDone` |
+| The cancel confirmation | `paycross.cancelDialog` |
 | `Yes, Cancel` | `paycross.cancelConfirm` |
 | `Continue Payment` | `paycross.cancelDismiss` |
+| The delete confirmation | `paycross.removeDialog` |
 | `Remove` | `paycross.removeConfirm` |
 | `Cancel`, in the delete confirmation | `paycross.removeDismiss` |
 
@@ -357,10 +367,13 @@ app.buttons[PayCrossTestIdentifiers.savedCard(card.uuid)].tap()
 can name a specific stored card without reading the screen first. `<group>` and
 `<name>` come from `field_groups` the same way.
 
-**The two confirmations have no identifier of their own**, only their buttons.
-SwiftUI renders `.alert` as a `UIAlertController` this SDK never holds, so there
-is nothing to name. Android's `paycross.cancelDialog` and `paycross.removeDialog`
-have no iOS counterpart; assert on the buttons instead.
+**The two confirmations are drawn by the SDK rather than raised as system
+alerts**, which is what lets them carry identifiers at all. SwiftUI renders
+`.alert` through a `UIAlertController` and does not carry a button's identifier
+onto the resulting action: measured on iOS 26.5, both actions came back with a
+nil identifier and the alert's whole view tree carried none. Drawn in the sheet,
+the two dialogs and their four buttons are named like everything else, and the
+names match Android's.
 
 While a payment is in flight the spinner is inside the Pay button, which keeps
 `paycross.payButton`. `paycross.loading` is the initial session fetch only.
@@ -390,9 +403,15 @@ The floor this sheet is held to, and what holds it there.
   tap that landed there focused nothing. Every field now fills its box, and the
   two SwiftUI-backed ones hand the focus on from a tap anywhere in the box.
 
+**One surface is outside the ceiling**, and cannot be brought inside it from
+here: the 3-D Secure challenge. It is a child view controller with a UIKit trait
+collection of its own, and the page inside it is the issuer's own web content,
+which sizes its own text. Everything the SDK draws — the form, the navigation
+bar, the sheet's Cancel and both confirmations — is clamped.
+
 Verified by `AccessibilityFloorTests` on real renders, and by the
-`23-accessibility-ceiling` and `24-french-accessibility-ceiling` screenshots that
-CI uploads on every push.
+`23-accessibility-ceiling`, `24-french-accessibility-ceiling` and
+`27-cancel-confirmation-ceiling` screenshots that CI uploads on every push.
 
 ## Apple Pay
 

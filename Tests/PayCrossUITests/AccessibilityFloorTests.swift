@@ -14,15 +14,12 @@ import UIKit
 @MainActor
 final class AccessibilityFloorTests: XCTestCase {
 
-    private var windows: [UIWindow] = []
+    private let host = ViewHost()
 
     override func tearDown() async throws {
-        windows.removeAll()
-        SheetAnnouncement.post = Self.realAnnouncement
+        host.release()
         try await super.tearDown()
     }
-
-    private static let realAnnouncement = SheetAnnouncement.post
 
     // MARK: - The clamp
 
@@ -165,7 +162,7 @@ final class AccessibilityFloorTests: XCTestCase {
         _ = host(BannerHost(messages: messages) { spoken.append($0) })
 
         messages.value = "Network error. Please try again."
-        RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+        host.settle()
 
         XCTAssertEqual(
             spoken, ["Payment failed. Please try again.", "Network error. Please try again."]
@@ -221,27 +218,6 @@ final class AccessibilityFloorTests: XCTestCase {
         return host(view.payCrossTypeScale(.unstyled).dynamicTypeSize(size))
     }
 
-    private func host(_ view: some View) -> UIWindow {
-        let controller = UIHostingController(rootView: view)
-        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
-        if let scene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene }).first {
-            window.windowScene = scene
-        }
-        window.rootViewController = controller
-        window.isHidden = false
-        window.makeKeyAndVisible()
-        controller.view.frame = window.bounds
-        controller.view.layoutIfNeeded()
-        RunLoop.current.run(until: Date().addingTimeInterval(0.3))
-        windows.append(window)
-        return window
-    }
-
-    private func textFields(in view: UIView) -> [UITextField] {
-        (view.subviews.compactMap { $0 as? UITextField })
-            + view.subviews.flatMap(textFields(in:))
-    }
 
 }
 

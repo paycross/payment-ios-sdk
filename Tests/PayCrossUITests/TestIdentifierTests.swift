@@ -24,12 +24,10 @@ import SwiftUI
 @MainActor
 final class TestIdentifierTests: XCTestCase {
 
-    /// Held for the duration of a test; a released window takes the hierarchy
-    /// under test with it.
-    private var windows: [UIWindow] = []
+    private let host = ViewHost()
 
     override func tearDown() async throws {
-        windows.removeAll()
+        host.release()
         try await super.tearDown()
     }
 
@@ -117,6 +115,40 @@ final class TestIdentifierTests: XCTestCase {
         }
     }
 
+    /// Neither confirmation may be a system alert.
+    ///
+    /// This is the measurement `ConfirmationDialog` exists for. With the cancel
+    /// confirmation open through `.alert`, the presented `UIAlertController`
+    /// answered `accessibilityIdentifier` with nil on both of its actions and
+    /// carried none anywhere in its view tree, so the four button identifiers
+    /// the README promises could not be reached by name. Drawn in the sheet
+    /// they are ordinary SwiftUI identifiers, like the Pay button's.
+    ///
+    /// Nothing presented over the sheet is what that comes down to, and it is
+    /// the one half of it a unit test can hold.
+    func testAConfirmationIsDrawnInTheSheetRatherThanPresentedOverIt() throws {
+        let model = makeModel(isPreparing: false)
+        let window = host(PaymentSheetView(model: model))
+
+        model.isConfirmingCancel = true
+        host.settle()
+
+        XCTAssertNil(
+            window.rootViewController?.presentedViewController,
+            "the confirmation is a system alert again; its buttons cannot carry identifiers"
+        )
+    }
+
+    func testTheRemovalConfirmationIsNotPresentedOverTheSheetEither() throws {
+        let model = makeModel(isPreparing: false)
+        let window = host(PaymentSheetView(model: model))
+
+        model.cardPendingRemoval = Self.storedCard
+        host.settle()
+
+        XCTAssertNil(window.rootViewController?.presentedViewController)
+    }
+
     /// The Done control above the keypad, which lives on a `UIBarButtonItem`
     /// rather than in the view tree.
     func testTheKeypadAccessoryPublishesItsIdentifier() throws {
@@ -137,6 +169,25 @@ final class TestIdentifierTests: XCTestCase {
 
     // MARK: - Hosting
 
+    private static let storedCard = SavedCard(
+        id: "6f1c9c3e-0d5a-4a3f-9c2b-4d0e1f2a3b4c",
+        brand: .visa, last4: "0366", expiryLabel: "03/29"
+    )
+
+    private func makeModel(isPreparing: Bool) -> PaymentSheetModel {
+        PaymentSheetModel(
+            sessionToken: "header.payload.signature",
+            claims: SessionClaims(
+                sessionID: "sess_1", merchantID: "m1", customerID: "c1", brandingID: nil,
+                amount: Amount(minorUnits: 2599, currencyCode: "EUR"), expiresAt: nil
+            ),
+            configuration: Configuration(environment: .sandbox),
+            sessionData: isPreparing ? nil : SessionData(),
+            isPreparing: isPreparing,
+            transport: StubTransport(json: #"{"session_id":"sess_1","status":"open"}"#)
+        )
+    }
+
     private func hostForm(showsApplePayButton: Bool = false) -> UIWindow {
         var state = CardFormState()
         CardFormReducer.reduce(state: &state, event: .panChanged("4111111111111111"))
@@ -155,23 +206,6 @@ final class TestIdentifierTests: XCTestCase {
         return host(NavigationStack { view })
     }
 
-    private func host(_ view: some View) -> UIWindow {
-        let controller = UIHostingController(rootView: view)
-        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
-        if let scene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene }).first {
-            window.windowScene = scene
-        }
-        window.rootViewController = controller
-        window.isHidden = false
-        window.makeKeyAndVisible()
-        controller.view.frame = window.bounds
-        controller.view.layoutIfNeeded()
-        RunLoop.current.run(until: Date().addingTimeInterval(0.3))
-        windows.append(window)
-        return window
-    }
-
     private func identifiers(in view: UIView) -> Set<String> {
         var found: Set<String> = []
         if let identifier = view.accessibilityIdentifier, !identifier.isEmpty {
@@ -183,9 +217,5 @@ final class TestIdentifierTests: XCTestCase {
         return found
     }
 
-    private func textFields(in view: UIView) -> [UITextField] {
-        (view.subviews.compactMap { $0 as? UITextField })
-            + view.subviews.flatMap(textFields(in:))
-    }
 }
 #endif
