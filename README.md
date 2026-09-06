@@ -365,7 +365,11 @@ app.buttons[PayCrossTestIdentifiers.payButton.rawValue].tap()
 
 `<uuid>` is the card's own `uuid`, exactly as `saved_cards` listed it, so a test
 can name a specific stored card without reading the screen first. `<group>` and
-`<name>` come from `field_groups` the same way.
+`<name>` come from `field_groups` the same way, and **neither may contain a
+dot**: the dot is the separator and nothing escapes it, so `a.b`/`c` and
+`a`/`b.c` would produce the same string. Both are wire keys rather than anything
+a shopper types, and Android joins them the same way, which is why the rule is a
+constraint rather than an escaping scheme.
 
 **The two confirmations are drawn by the SDK rather than raised as system
 alerts**, which is what lets them carry identifiers at all. SwiftUI renders

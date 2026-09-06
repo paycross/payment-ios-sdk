@@ -76,6 +76,26 @@ final class TestIdentifierTests: XCTestCase {
         )
     }
 
+    /// The pin on the one rule these strings cannot express.
+    ///
+    /// The dot is the separator and nothing escapes it, so a dotted component
+    /// collides with the pair beside it. Both halves are our own wire keys —
+    /// snake_case names the server sends in `field_groups` — where a dot has
+    /// never been valid, and Android joins the same way, so an escaping rule
+    /// would have to be invented on both platforms and kept identical for one
+    /// identifier to keep naming one field.
+    ///
+    /// This asserts the collision rather than a fix for it. Anyone who starts
+    /// allowing a dot in a group key or a field name lands here, and can go and
+    /// change Android in the same breath.
+    func testADottedComponentCollides() {
+        XCTAssertEqual(
+            PayCrossTestIdentifiers.field(group: "a.b", name: "c"),
+            PayCrossTestIdentifiers.field(group: "a", name: "b.c"),
+            "a dot is now escaped on iOS; Android must be changed to match"
+        )
+    }
+
     /// The row identifier is built from the card's own id and nothing else, so
     /// a session that lists two cards produces two distinct handles.
     func testEachStoredCardGetsAHandleOfItsOwn() {

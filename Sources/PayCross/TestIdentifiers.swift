@@ -92,10 +92,9 @@ public enum PayCrossTestIdentifiers: String, CaseIterable, Sendable {
     /// `Cancel` in the delete confirmation.
     case removeDismiss = "paycross.removeDismiss"
 
-    /// One stored card's row. `uuid` is the card's `uuid` from the session,
-    /// which is a uuid and so carries none of the characters `escaped` removes.
+    /// One stored card's row. `uuid` is the card's `uuid` from the session.
     public static func savedCard(_ uuid: String) -> String {
-        "paycross.savedCard.\(escaped(uuid))"
+        "paycross.savedCard.\(uuid)"
     }
 
     /// The trash on one stored card's row.
@@ -106,25 +105,21 @@ public enum PayCrossTestIdentifiers: String, CaseIterable, Sendable {
     /// One server-driven field. Both parts come from the session's
     /// `field_groups`: the group's key and the field's name.
     ///
-    /// A dot inside either half would make the pair ambiguous — `("a.b", "c")`
-    /// and `("a", "b.c")` are different fields and must not answer to the same
-    /// string — so dots and whitespace are replaced before joining. Neither is
-    /// expected: both halves are merchant configuration, and both are keys.
+    /// **Both must be free of dots.** The dot is the separator, and nothing
+    /// escapes it, so `("a.b", "c")` and `("a", "b.c")` would answer to the same
+    /// string. That is deliberate rather than overlooked: Android joins these
+    /// the same way, and one identifier has to name one field on both platforms,
+    /// so an escaping rule would have to be invented twice and kept identical.
+    /// Neither half is shopper input — they are our own wire keys, snake_case,
+    /// and a dot in one has never been valid. `testADottedComponentCollides`
+    /// pins it, so whoever changes the rule finds the other platform first.
     public static func field(group: String, name: String) -> String {
-        "paycross.field.\(escaped(group)).\(escaped(name))"
+        "paycross.field.\(group).\(name)"
     }
 
     /// The validation message under one server-driven field.
     public static func fieldError(group: String, name: String) -> String {
         "\(field(group: group, name: name)).error"
-    }
-
-    /// Keeps a component from spilling into the segment beside it.
-    ///
-    /// A dot is the separator, and whitespace makes an identifier a merchant
-    /// cannot reasonably match; both become `_`.
-    private static func escaped(_ component: String) -> String {
-        String(component.map { $0 == "." || $0.isWhitespace ? "_" : $0 })
     }
 }
 
