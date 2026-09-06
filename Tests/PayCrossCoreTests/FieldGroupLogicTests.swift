@@ -179,6 +179,33 @@ final class FieldGroupLogicTests: XCTestCase {
         )
     }
 
+    func testTheFallbackMessagesAreTheOnesTheSheetResolved() {
+        let groups = [FieldGroup(key: "b", fields: [
+            field("postcode", required: true, label: "Code postal")
+        ])]
+        let french = FlowMessages(fieldRequired: "Champ obligatoire : %@")
+        XCTAssertEqual(
+            FieldGroupLogic.validate(groups: groups, values: [:], messages: french).first?.message,
+            "Champ obligatoire : Code postal"
+        )
+    }
+
+    /// The server writes these for one field in one merchant's own words, so they
+    /// are not translatable and they still win over anything the sheet resolved.
+    func testAServerSuppliedMessageStillBeatsTheResolvedFallback() {
+        let groups = [FieldGroup(key: "b", fields: [
+            field(
+                "postcode", required: true, label: "Code postal",
+                validation: FieldValidation(messages: ["required": "We need this"])
+            )
+        ])]
+        let french = FlowMessages(fieldRequired: "Champ obligatoire : %@")
+        XCTAssertEqual(
+            FieldGroupLogic.validate(groups: groups, values: [:], messages: french).first?.message,
+            "We need this"
+        )
+    }
+
     /// Kotlin uses containsMatchIn, i.e. a substring match. Treating an unanchored
     /// server pattern as a whole-string match would reject values the checkout
     /// page accepts.

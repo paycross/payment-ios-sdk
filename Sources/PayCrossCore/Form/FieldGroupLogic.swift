@@ -73,9 +73,14 @@ package enum FieldGroupLogic {
     ///
     /// Ordered deterministically — group order then field order, as the server
     /// sent them — so the first error shown to a shopper is stable.
+    ///
+    /// - Parameter messages: the fallback sentences, resolved by the sheet. A
+    ///   message the server sent with the field still wins over both: it is
+    ///   written for that one field and it is never translatable.
     package static func validate(
         groups: [FieldGroup],
-        values: [String: [String: String]]
+        values: [String: [String: String]],
+        messages: FlowMessages = .english
     ) -> [FieldGroupError] {
         var errors: [FieldGroupError] = []
 
@@ -93,7 +98,7 @@ package enum FieldGroupLogic {
                         groupKey: group.key,
                         fieldName: field.name,
                         message: field.validation?.messages?["required"]
-                            ?? "\(field.label ?? field.name) is required"
+                            ?? messages.requiredMessage(for: field.label ?? field.name)
                     ))
                     continue
                 }
@@ -104,7 +109,7 @@ package enum FieldGroupLogic {
                         groupKey: group.key,
                         fieldName: field.name,
                         message: field.validation?.messages?["pattern"]
-                            ?? "\(field.label ?? field.name) is invalid"
+                            ?? messages.invalidMessage(for: field.label ?? field.name)
                     ))
                 }
             }

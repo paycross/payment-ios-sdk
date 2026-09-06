@@ -149,6 +149,21 @@ final class PaymentFlowReducerTests: XCTestCase {
         XCTAssertEqual(state.inlineError, "Payment failed. Please try again.")
     }
 
+    /// The reducer writes the banner, and the reducer is in Core where `L(...)`
+    /// cannot reach. The sheet resolves the sentence and hands it in; this is the
+    /// assertion that the reducer actually uses it instead of its own literal.
+    func testTheReArmBannerUsesTheMessagesItWasGiven() {
+        var state = PaymentFlowState()
+        _ = PaymentFlowReducer.reduce(
+            state: &state,
+            event: .statusReceived(
+                StatusResponse(transactionID: "txn_1", status: "failed", recovery: "retry")
+            ),
+            messages: FlowMessages(paymentFailed: "Le paiement a échoué. Veuillez réessayer.")
+        )
+        XCTAssertEqual(state.inlineError, "Le paiement a échoué. Veuillez réessayer.")
+    }
+
     /// A re-armed form is only worth showing while the session can still take a
     /// payment. Nothing else bounds it — the 480 s poll deadline goes with the
     /// poll — so the sheet would otherwise sit on a live Pay button long after the

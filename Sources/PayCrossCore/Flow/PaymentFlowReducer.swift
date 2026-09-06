@@ -65,12 +65,16 @@ package enum PaymentFlowEffect: Sendable, Equatable {
 /// microseconds on Linux.
 package enum PaymentFlowReducer {
 
-    /// - Parameter now: the reference date, for the session-expiry check. Taken as
-    ///   a parameter rather than read from the clock so the boundary is testable.
+    /// - Parameters:
+    ///   - now: the reference date, for the session-expiry check. Taken as a
+    ///     parameter rather than read from the clock so the boundary is testable.
+    ///   - messages: the sentences to put on the form, resolved by the sheet.
+    ///     Defaulted to English so Core's own tests read as prose.
     package static func reduce(
         state: inout PaymentFlowState,
         event: PaymentFlowEvent,
-        now: Date = Date()
+        now: Date = Date(),
+        messages: FlowMessages = .english
     ) -> [PaymentFlowEffect] {
         switch event {
         case .threeDSCompleted:
@@ -96,14 +100,15 @@ package enum PaymentFlowReducer {
             return [.stopPolling, .finish(result)]
 
         case .statusReceived(let status):
-            return apply(status: status, to: &state, now: now)
+            return apply(status: status, to: &state, now: now, messages: messages)
         }
     }
 
     private static func apply(
         status: StatusResponse,
         to state: inout PaymentFlowState,
-        now: Date
+        now: Date,
+        messages: FlowMessages
     ) -> [PaymentFlowEffect] {
         switch TransactionStatus(rawValue: status.status) {
         case .success, .authorized:
@@ -161,7 +166,7 @@ package enum PaymentFlowReducer {
                 // produced, but the poll loop still stops.
                 state.transactionID = nil
                 state.handledThreeDSKeys.removeAll()
-                state.inlineError = "Payment failed. Please try again."
+                state.inlineError = messages.paymentFailed
                 return [.stopPolling, .dismiss3DS]
             }
 
