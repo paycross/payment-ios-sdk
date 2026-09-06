@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed — source-incompatible, and the next release is a MINOR bump
 
+- **Every test identifier is renamed.** Twelve flat names become
+  `paycross.`-prefixed camelCase ones, and `paycross.savedCard.new` becomes
+  `paycross.useNewCard`, which is the name Android already used. A UI test
+  matching any of the old strings stops finding its element — silently, the way
+  a UI test does. The full table is in the
+  [README](README.md#test-identifiers); the old names are `amount`,
+  `applePayButton`, `cardNumber`, `expiry`, `cvv`, `cardholderName`, `brand`,
+  `errorBanner`, `payButton`, `threeDSCancel`, `keyboardDone` and
+  `field-<name>`. Nothing keeps them: half a sheet under one scheme and half
+  under another is worse than either.
 - `PayCrossAPI.configure` gains a fifth parameter, `locale: String?`, defaulted
   to nil and added last, so a call that uses argument labels keeps compiling
   untouched. What does not: a reference to `configure` as a function value, and
@@ -17,6 +27,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`PayCrossTestIdentifiers`**, the identifier strings as constants, so a
+  merchant's UI test can reference them rather than retype them. Same strings on
+  both platforms, including `savedCard(_:)` keyed by the card's own `uuid`.
+  Eleven elements that had no handle at all now have one: the sheet root, the
+  save-card toggle, the wallet divider, the stored-card container, server-field
+  validation messages, the initial spinner, the 3-D Secure challenge and the
+  four confirmation buttons. The two confirmations themselves cannot carry one —
+  SwiftUI renders `.alert` as a `UIAlertController` the SDK never holds — so
+  Android's `paycross.cancelDialog` and `paycross.removeDialog` have no iOS
+  counterpart.
+- **An announced decline.** The error banner posts an accessibility
+  announcement when it appears and when its wording changes, so a shopper using
+  VoiceOver hears why the payment stopped instead of only noticing the Pay
+  button go quiet.
+- **A label on the amount**, reading `Total, 25,99 €` rather than a bare number.
+  Composed from the caption above it, which is now hidden from VoiceOver so it
+  is not read twice.
+- **An accessibility floor**, documented in the
+  [README](README.md#accessibility): every control labelled, Dynamic Type
+  honoured to `accessibility3`, layouts that stack rather than clip, and 44pt
+  touch targets.
 - **French.** The sheet ships `fr` alongside `en`, 32 keys each. See
   [`LOCALIZATION.md`](LOCALIZATION.md) for every key, what it paints, and which
   carry a `%@`.
@@ -33,6 +64,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Dynamic Type is clamped at `accessibility3`**, and a merchant's
+  `sizeScaleFactor` now multiplies a size that has already been clamped rather
+  than compounding with the shopper's setting. Below the ceiling nothing about
+  the factor changes. Above it the sheet stops growing, which is the trade that
+  keeps the Pay button on the screen.
+- **The expiry and the security code stack vertically at accessibility sizes**
+  instead of sharing a row and shrinking to slivers.
+- **Both buttons grow with their labels.** The Apple Pay and Pay button heights
+  scale with Dynamic Type, and a merchant-pinned `buttonHeight` is honoured as a
+  minimum rather than as a fixed height. A merchant who pinned a height taller
+  than the default now gets it on the Apple Pay button too, which previously
+  ignored it.
+- **The card fields are touch targets.** They were 22pt controls centred in 46pt
+  boxes, so a tap in the padding focused nothing. Each field fills its box now;
+  the boxes are 2pt shorter and otherwise unchanged.
 - The amount is formatted in the first tag anybody **asked for** — the override,
   else the session — with its region intact, provided it is shaped like a
   language tag. It is not clamped to the two languages the SDK ships, so a

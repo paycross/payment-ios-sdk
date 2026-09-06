@@ -186,11 +186,11 @@ rule applied to the fill they chose, not to the brand they did not use.
 ### Type size
 
 `PayCrossTypography(sizeScaleFactor:)` multiplies every font size on top of
-Dynamic Type rather than instead of it. It is clamped to **0.8...1.3**. At the
-default factor Dynamic Type behaves exactly as it always has, including changes
-made while the sheet is open; with a factor set, the size is resolved when the
-sheet is presented and a Dynamic Type change made mid-payment is picked up on
-the next presentation. A font family is not exposed in this release.
+Dynamic Type rather than instead of it. It is clamped to **0.8...1.3**, and the
+size it multiplies is the shopper's own setting held at `accessibility3`, so the
+two cannot compound past the ceiling the rest of the sheet respects. See
+[Accessibility](#accessibility). A change made while the sheet is open is picked
+up either way. A font family is not exposed in this release.
 
 ### Fixed by design
 
@@ -303,6 +303,96 @@ to a French sheet even on an English phone.
 
 [`LOCALIZATION.md`](LOCALIZATION.md) lists every key, what it paints, and which
 of them carry a `%@` an override must keep.
+
+## Test identifiers
+
+Every element a UI test needs to reach carries an accessibility identifier, and
+**the same string reaches it on Android**, where the matching Compose `testTag`
+is published as a resource id. They are set in every build: an iOS
+`accessibilityIdentifier` is not surfaced to VoiceOver or to other apps, so
+there is nothing to gate. Android gates its tags on `FLAG_DEBUGGABLE`, and the
+reason is a real one on that platform, so a release-build UI test can address
+this sheet and not that one.
+
+The strings are also constants, so a test can reference them rather than retype
+them:
+
+```swift
+import PayCross
+
+app.textFields[PayCrossTestIdentifiers.cardNumber.rawValue].tap()
+app.buttons[PayCrossTestIdentifiers.savedCard(card.uuid)].tap()
+```
+
+| Element | Identifier |
+|---|---|
+| The sheet's content | `paycross.sheet` |
+| Total | `paycross.amount` |
+| Apple Pay button | `paycross.walletButton` |
+| `Or pay with card` rule | `paycross.walletDivider` |
+| Stored cards, as a container | `paycross.savedCards` |
+| One stored card's row | `paycross.savedCard.<uuid>` |
+| That row's delete button | `paycross.savedCard.<uuid>.delete` |
+| `Use a new card` | `paycross.useNewCard` |
+| Cardholder name | `paycross.cardholderName` |
+| Card number | `paycross.cardNumber` |
+| Detected brand | `paycross.brand` |
+| Expiry | `paycross.expiry` |
+| Security code | `paycross.cvv` |
+| Save-card toggle | `paycross.saveCard` |
+| A server-driven field | `paycross.field.<group>.<name>` |
+| That field's validation message | `paycross.field.<group>.<name>.error` |
+| Decline banner | `paycross.errorBanner` |
+| Pay button | `paycross.payButton` |
+| The spinner while the session loads | `paycross.loading` |
+| 3-D Secure challenge | `paycross.threeDS` |
+| Cancel, on the challenge | `paycross.threeDSCancel` |
+| Done, above the numeric keypad | `paycross.keyboardDone` |
+| `Yes, Cancel` | `paycross.cancelConfirm` |
+| `Continue Payment` | `paycross.cancelDismiss` |
+| `Remove` | `paycross.removeConfirm` |
+| `Cancel`, in the delete confirmation | `paycross.removeDismiss` |
+
+`<uuid>` is the card's own `uuid`, exactly as `saved_cards` listed it, so a test
+can name a specific stored card without reading the screen first. `<group>` and
+`<name>` come from `field_groups` the same way.
+
+**The two confirmations have no identifier of their own**, only their buttons.
+SwiftUI renders `.alert` as a `UIAlertController` this SDK never holds, so there
+is nothing to name. Android's `paycross.cancelDialog` and `paycross.removeDialog`
+have no iOS counterpart; assert on the buttons instead.
+
+While a payment is in flight the spinner is inside the Pay button, which keeps
+`paycross.payButton`. `paycross.loading` is the initial session fetch only.
+
+## Accessibility
+
+The floor this sheet is held to, and what holds it there.
+
+- **Every control has a label.** The amount reads `Total, 25,99 €` rather than a
+  bare number, composed from the caption above it, which is hidden from VoiceOver
+  so it is not read twice. Each stored card's delete button is named after the
+  row it belongs to.
+- **The decline banner is announced.** VoiceOver reads what the shopper moves to,
+  and a decline arrives without anyone moving, so it used to be silent. It also
+  keeps its icon: the message is never colour alone.
+- **Dynamic Type is honoured up to `accessibility3`, and clamped there.** Layouts
+  stack rather than clip: the expiry and the security code sit one above the
+  other at accessibility sizes, and both buttons grow with their labels. Above
+  `accessibility3` the sheet stops growing, because a form whose Pay button is
+  off the bottom of the screen is one nobody can pay on.
+- **A merchant size factor is multiplied against a size that has already been
+  clamped**, so `sizeScaleFactor` and the shopper's setting cannot compound past
+  that ceiling. Under it, the factor still tracks the shopper's setting exactly
+  as before.
+- **Touch targets are at least 44pt.** The card fields were 22pt controls
+  centred in 46pt boxes: the padding around a text field is not part of it, and a
+  tap that landed there focused nothing. Every field now fills its box, and the
+  two SwiftUI-backed ones hand the focus on from a tap anywhere in the box.
+
+Verified by `AccessibilityFloorTests` on real renders, and by the
+`23-accessibility-ceiling` and `24-french-accessibility-ceiling` screenshots that
+CI uploads on every push.
 
 ## Apple Pay
 
