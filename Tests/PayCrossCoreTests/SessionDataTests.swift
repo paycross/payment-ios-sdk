@@ -64,6 +64,32 @@ final class SessionDataTests: XCTestCase {
         XCTAssertEqual(data.saveCardConfig?.usage, "card_on_file")
     }
 
+    // MARK: - locale
+
+    /// The session's language is now what the sheet speaks, not just a field that
+    /// decoded. `LocaleResolutionTests` owns the rule; this owns the wire.
+    func testTheSessionLanguageDecodes() throws {
+        let session = try JSONDecoder().decode(SessionResponse.self, from: Data(payload.utf8))
+        XCTAssertEqual(try XCTUnwrap(session.data).locale, "en-GB")
+    }
+
+    func testAMissingLocaleIsNilRatherThanADecodingFailure() throws {
+        let json = #"{"session_id":"s","status":"open","data":{"merchant_country":"GB"}}"#
+        let session = try JSONDecoder().decode(SessionResponse.self, from: Data(json.utf8))
+        XCTAssertNil(try XCTUnwrap(session.data).locale)
+    }
+
+    /// The tag is carried as the server wrote it, however it wrote it. Rejecting
+    /// a session because its language field is nonsense would fail a payment over
+    /// a label; the resolver turns anything it cannot read into English instead.
+    func testAMalformedLocalePassesThroughAsAString() throws {
+        for tag in ["", "not a locale", "fr_CA", "FR", "zz-ZZ-ZZ"] {
+            let json = #"{"session_id":"s","status":"open","data":{"locale":"\#(tag)"}}"#
+            let session = try JSONDecoder().decode(SessionResponse.self, from: Data(json.utf8))
+            XCTAssertEqual(try XCTUnwrap(session.data).locale, tag)
+        }
+    }
+
     func testSavedCardMapsToThePresentationType() throws {
         let session = try JSONDecoder().decode(SessionResponse.self, from: Data(payload.utf8))
         let card = try XCTUnwrap(session.data?.savedCards?.first).presentable
