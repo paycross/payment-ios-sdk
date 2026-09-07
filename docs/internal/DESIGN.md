@@ -30,7 +30,6 @@ swift test
 
 Requires Swift 6.0+. On Linux, install a toolchain from swift.org — no Xcode needed.
 
-
 ## Deliberate divergences from Android
 
 - **`Recovery` is not `RawRepresentable`.** A `String` raw value would synthesise
