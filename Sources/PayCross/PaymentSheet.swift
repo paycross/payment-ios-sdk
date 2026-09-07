@@ -920,7 +920,7 @@ struct PaymentSheetView: View {
                     )
                 }
             }
-            .payCrossIdentifier(.sheet)
+            .payCrossContainerIdentifier(.sheet)
             .task { await model.load() }
             // The amount is the one string the sheet builds rather than looks
             // up, and `Payer €12.00` reads as a bug. SwiftUI's own formatting

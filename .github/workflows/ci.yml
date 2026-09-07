@@ -161,7 +161,7 @@ jobs:
           echo "checking $count identifiers"
 
           for name in $names; do
-            if ! grep -rqE "payCrossIdentifier\(\.$name\)|PayCrossTestIdentifiers\.$name\b" \
+            if ! grep -rqE "payCross(Container)?Identifier\(\.$name\)|PayCrossTestIdentifiers\.$name\b" \
                  --include='*.swift' Sources/PayCross --exclude=TestIdentifiers.swift; then
               echo "::error::PayCrossTestIdentifiers.$name is published and applied nowhere."
               status=1
@@ -179,6 +179,29 @@ jobs:
             if ! grep -rqE "PayCrossTestIdentifiers\.$helper\(" \
                  --include='*.swift' Sources/PayCross --exclude=TestIdentifiers.swift; then
               echo "::error::PayCrossTestIdentifiers.$helper is published and applied nowhere."
+              status=1
+            fi
+          done
+          exit $status
+
+      - name: A container's identifier leaves its children theirs
+        run: |
+          set -euo pipefail
+          # An identifier on a container is inherited by every descendant that is
+          # not already inside an element of its own, and the container's string
+          # wins. 0.7.0 published paycross.sheet on the Pay button and
+          # paycross.savedCards on every stored-card row this way. The container
+          # spelling makes the view an element first, so the identifier lands on
+          # it alone. List any new container here.
+          status=0
+          for name in sheet savedCards; do
+            if grep -rnF "payCrossIdentifier(.$name)" --include='*.swift' Sources/PayCross; then
+              echo "::error::.$name names a container: apply it with payCrossContainerIdentifier"
+              status=1
+            fi
+            if ! grep -rqF "payCrossContainerIdentifier(.$name)" \
+                 --include='*.swift' Sources/PayCross --exclude=TestIdentifiers.swift; then
+              echo "::error::.$name is no longer applied as a container."
               status=1
             fi
           done
