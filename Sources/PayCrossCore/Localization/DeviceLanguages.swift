@@ -15,6 +15,18 @@ import Foundation
 /// shopper's own order. An app that writes the key into its own domain to offer
 /// an in-app language switch shadows the global one, and that is the right
 /// answer: it has said what its user reads.
+///
+/// **What has been measured, and what has not.** On the simulator, with the key
+/// set in the app's own domain and a demo shipping only `Base.lproj`, the sheet
+/// renders French. A real device keeps the shopper's Settings language in the
+/// global domain instead, which the standard defaults also search; that half
+/// follows from the search list rather than from a measurement, and wants one
+/// check on hardware.
+///
+/// Reaching this rung at all takes a session that names no language the SDK
+/// ships: the API fills a session's `locale` with `en` when the merchant sets
+/// none, and that matches, so the ladder stops above here. See
+/// io.paycross#902.
 package enum DeviceLanguages {
 
     /// Where the system keeps the list.

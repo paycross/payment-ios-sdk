@@ -43,6 +43,16 @@ An app that writes `AppleLanguages` into its own defaults — the usual way to
 offer an in-app language switch — shadows the global list, and the sheet follows
 that app's choice. Overriding the words is a separate matter, below.
 
+**The rung only runs when the two above it have matched nothing, and today one
+of them always matches.** The API fills a session's `locale` with `en` when the
+merchant sets none, so a session created without one resolves to English before
+the device is ever asked: a French shopper on a French phone reads an English
+sheet. Two ways round it, until the API stops defaulting the field
+([io.paycross#902](https://github.com/paycross/io.paycross/issues/902)):
+set the session's `locale` to the language you want, or set
+`configure(locale:)` in the app. Neither is the shopper's own choice, which is
+what the device rung is for and what that issue restores.
+
 ```swift
 // Nothing set: the session decides, else the device, else English.
 PayCrossAPI.configure(environment: .sandbox)

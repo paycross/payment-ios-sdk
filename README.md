@@ -288,6 +288,13 @@ app hide a language the SDK ships. Set `AppleLanguages` in your own app's
 defaults, as an app offering an in-app language switch does, and the sheet
 follows that instead.
 
+**The rung only gets a turn when nothing above it has matched, and today
+something always does.** The session's own `locale` is asked first, and the API
+fills that field with `en` unless the merchant sets one, so a session created
+without a locale resolves to English and the device is never reached — French
+phone or not. Set the session's `locale` to the language you want until [the API
+stops defaulting it](https://github.com/paycross/io.paycross/issues/902).
+
 ```swift
 PayCrossAPI.configure(environment: .sandbox, locale: "fr")
 ```
