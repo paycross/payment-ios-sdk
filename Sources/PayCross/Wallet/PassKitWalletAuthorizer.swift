@@ -210,7 +210,7 @@ final class PassKitWalletAuthorizer: NSObject, WalletAuthorizing {
     ///
     /// `paymentMethod` is read too, and dropping it would be worse than
     /// untidy. The edge lifts three fields out of it
-    /// (`payment-submit-card/internal/handler/wallet.go:143-172`): `network`
+    /// (the card handler's wallet edge): `network`
     /// becomes the card brand the vault seals into the wallet credential and
     /// the provider forwards to the gateway, `displayName` becomes the masked
     /// digits, and `type` becomes the funding type the back office shows. Only

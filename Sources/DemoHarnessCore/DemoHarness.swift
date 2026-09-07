@@ -92,7 +92,7 @@ public enum HarnessError: Error, Sendable, Equatable {
 
 /// Reads an outcome out of a fetched session.
 ///
-/// Mirrors `getPrimaryPaymentTransaction` in payx-tkg, which the Android harness
+/// Mirrors `getPrimaryPaymentTransaction` on the server, which the Android harness
 /// also mirrors — the three implementations must agree or the same run reports
 /// differently depending on where it was observed.
 public enum SessionOutcome {
