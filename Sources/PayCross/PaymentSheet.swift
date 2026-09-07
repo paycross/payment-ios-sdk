@@ -56,7 +56,7 @@ public final class PaymentSheet {
         // installs it again the moment the fetch returns.
         SheetLanguage.install(LocaleResolution.resolve(
             override: configuration.locale,
-            device: Locale.preferredLanguages
+            device: DeviceLanguages.preferred()
         ))
 
         let model = PaymentSheetModel(
@@ -357,7 +357,7 @@ final class PaymentSheetModel: ObservableObject {
         SheetLanguage.install(LocaleResolution.resolve(
             override: configuration.locale,
             session: sessionLocale,
-            device: Locale.preferredLanguages
+            device: DeviceLanguages.preferred()
         ))
         formattingLocale = SheetLanguage.locale
         languageTag = SheetLanguage.tag
@@ -920,7 +920,7 @@ struct PaymentSheetView: View {
                     )
                 }
             }
-            .payCrossIdentifier(.sheet)
+            .payCrossContainerIdentifier(.sheet)
             .task { await model.load() }
             // The amount is the one string the sheet builds rather than looks
             // up, and `Payer €12.00` reads as a bug. SwiftUI's own formatting

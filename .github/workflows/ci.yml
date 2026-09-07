@@ -130,9 +130,44 @@ jobs:
         run: |
           set -euo pipefail
           # Strip comments first: the sources legitimately *discuss* these APIs.
-          if find Sources -name '*.swift' -exec sed -E 's://.*::' {} + \
+          # One file is held out and checked on its own terms below:
+          # DeviceLanguages takes a UserDefaults to read the shopper's
+          # AppleLanguages list from, which is one key the system owns.
+          seam=Sources/PayCrossCore/Localization/DeviceLanguages.swift
+          if find Sources -name '*.swift' ! -path "$seam" -exec sed -E 's://.*::' {} + \
              | grep -nE '@AppStorage|@SceneStorage|UserDefaults|SecItemAdd|UIPasteboard'; then
             echo "::error::persistence API referenced in SDK sources"
+            exit 1
+          fi
+          # Without this the exemption becomes a hole the moment the file moves.
+          test -f "$seam" || {
+            echo "::error::$seam is gone; the exemption above now covers nothing"
+            exit 1
+          }
+          if sed -E 's://.*::' "$seam" \
+             | grep -nE '@AppStorage|@SceneStorage|SecItemAdd|UIPasteboard'; then
+            echo "::error::persistence API referenced in $seam"
+            exit 1
+          fi
+          # It may be handed a UserDefaults. It may not reach for one itself
+          # beyond the default, and it may not write.
+          if sed -E 's://.*::' "$seam" | grep -n 'UserDefaults' \
+             | grep -vE 'defaults: UserDefaults = \.standard'; then
+            echo "::error::$seam may only take a UserDefaults to read from"
+            exit 1
+          fi
+          # An allowlist rather than a list of writes to forbid: the one member
+          # this file may reach for on the defaults it is handed is the read.
+          # A denylist let setPersistentDomain through, which needs no
+          # UserDefaults token of its own and so passed every check above.
+          if sed -E 's://.*::' "$seam" | grep -oE 'defaults\.[A-Za-z]+' \
+             | grep -v '^defaults\.stringArray$'; then
+            echo "::error::$seam may only read stringArray(forKey:) from the defaults it takes"
+            exit 1
+          fi
+          if sed -E 's://.*::' "$seam" \
+             | grep -nE '\.set\(|\.setValue\(|removeObject|PersistentDomain|register\(defaults'; then
+            echo "::error::$seam writes to UserDefaults"
             exit 1
           fi
           echo "ok"
@@ -161,7 +196,7 @@ jobs:
           echo "checking $count identifiers"
 
           for name in $names; do
-            if ! grep -rqE "payCrossIdentifier\(\.$name\)|PayCrossTestIdentifiers\.$name\b" \
+            if ! grep -rqE "payCross(Container)?Identifier\(\.$name\)|PayCrossTestIdentifiers\.$name\b" \
                  --include='*.swift' Sources/PayCross --exclude=TestIdentifiers.swift; then
               echo "::error::PayCrossTestIdentifiers.$name is published and applied nowhere."
               status=1
@@ -183,6 +218,66 @@ jobs:
             fi
           done
           exit $status
+
+      - name: A container's identifier leaves its children theirs
+        run: |
+          set -euo pipefail
+          # An identifier on a container is inherited by every descendant that is
+          # not already inside an element of its own, and the container's string
+          # wins. 0.7.0 published paycross.sheet on the Pay button and
+          # paycross.savedCards on every stored-card row this way. The container
+          # spelling makes the view an element first, so the identifier lands on
+          # it alone. List any new container here.
+          status=0
+          for name in sheet savedCards; do
+            if grep -rnF "payCrossIdentifier(.$name)" \
+                 --include='*.swift' Sources/PayCross --exclude=TestIdentifiers.swift; then
+              echo "::error::.$name names a container: apply it with payCrossContainerIdentifier"
+              status=1
+            fi
+            if ! grep -rqF "payCrossContainerIdentifier(.$name)" \
+                 --include='*.swift' Sources/PayCross --exclude=TestIdentifiers.swift; then
+              echo "::error::.$name is no longer applied as a container."
+              status=1
+            fi
+          done
+          exit $status
+
+      - name: A field's identifier is on its box, not on its column
+        run: |
+          set -euo pipefail
+          # The column around a server-driven field holds three things: the
+          # label, the input box and the validation message. An identifier on
+          # the column is inherited by all three, and it replaced the message's
+          # own `.error` — the same defect as the containers above, one level
+          # down, and the one change in that fix that deleted a published
+          # identifier rather than merely moving one. The field identifier
+          # belongs on the box, which is where Android tags it too.
+          file=Sources/PayCross/UI/FieldGroupsView.swift
+          test -f "$file" || {
+            echo "::error::$file is gone; this check would pass while checking nothing"
+            exit 1
+          }
+          marker='private var inputBox'
+          for pattern in "$marker" 'PayCrossTestIdentifiers\.field\(group:' \
+                         'PayCrossTestIdentifiers\.fieldError\(group:'; do
+            if [ "$(grep -cE "$pattern" "$file" || true)" -ne 1 ]; then
+              echo "::error::expected exactly one '$pattern' in $file"
+              exit 1
+            fi
+          done
+          box=$(grep -nE "$marker" "$file" | cut -d: -f1)
+          field=$(grep -nE 'PayCrossTestIdentifiers\.field\(group:' "$file" | cut -d: -f1)
+          error=$(grep -nE 'PayCrossTestIdentifiers\.fieldError\(group:' "$file" | cut -d: -f1)
+          if [ "$field" -lt "$box" ]; then
+            echo "::error::the field identifier is on the column again; it eats the message's .error"
+            exit 1
+          fi
+          if [ "$error" -gt "$box" ]; then
+            echo "::error::the validation message's identifier is no longer on the message"
+            exit 1
+          fi
+          echo "ok"
 
       - name: No identifier is set from a literal
         run: |

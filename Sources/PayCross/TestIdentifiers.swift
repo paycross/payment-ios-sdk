@@ -126,8 +126,29 @@ public enum PayCrossTestIdentifiers: String, CaseIterable, Sendable {
 extension View {
     /// Reads better than `accessibilityIdentifier(_.rawValue)` at two dozen call
     /// sites, and keeps the raw strings in one file.
+    ///
+    /// For a leaf. A view with children worth naming needs the container
+    /// spelling below.
     func payCrossIdentifier(_ identifier: PayCrossTestIdentifiers) -> some View {
         accessibilityIdentifier(identifier.rawValue)
+    }
+
+    /// The same, for a view whose children carry identifiers of their own.
+    ///
+    /// An identifier on a container is inherited by every descendant that is not
+    /// already inside an element of its own, and **the container's string wins**.
+    /// 0.7.0 named the sheet's content and the stored-card picker this way, and
+    /// published `paycross.sheet` on the Pay button and `paycross.savedCards` on
+    /// all three picker rows, their bins and `Use a new card`, so the README's
+    /// own `app.buttons[payButton]` example found nothing at all.
+    ///
+    /// `children: .contain` first makes the view an accessibility container, so
+    /// the identifier lands on the container itself and everything under it
+    /// keeps what it was given. The order is the fix: applied the other way
+    /// round it names the boundary and leaves the inheritance where it was.
+    func payCrossContainerIdentifier(_ identifier: PayCrossTestIdentifiers) -> some View {
+        accessibilityElement(children: .contain)
+            .payCrossIdentifier(identifier)
     }
 }
 #endif

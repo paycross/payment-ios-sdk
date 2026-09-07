@@ -10,11 +10,23 @@ import SwiftUI
 /// **What this cannot reach.** SwiftUI builds its accessibility elements only
 /// when the test bundle runs inside an app host. `PayCrossUITests` is a SwiftPM
 /// test target, which `xctest` loads with no host, so a `Text` or a `Button`
-/// carrying `.accessibilityIdentifier` appears nowhere in the hosted hierarchy —
-/// measured: the hosting view answers `accessibilityElements` with an empty
-/// array. The UIKit-backed leaves are a different matter, because their
-/// identifier is set on a `UIView` that exists whether anything is reading the
-/// accessibility tree or not, and those are asserted below on a real render.
+/// carrying `.accessibilityIdentifier` appears nowhere in the hosted hierarchy.
+/// Measured again on 2026-09-07, while fixing the containers below, because the
+/// fix would have been worth a rendered-tree test: on a hosted `PaymentSheetView`
+/// the whole window carries exactly three identifiers, the three `UITextField`s
+/// that set their own, and `accessibilityElements` answers with plain subviews
+/// rather than SwiftUI nodes. `UIApplication.shared.connectedScenes` is empty and
+/// `_AXSApplicationAccessibilityEnabled()` already answers true, so neither a
+/// scene nor the accessibility switch is what is missing. And SwiftUI does not
+/// write an inherited identifier down onto a `UIViewRepresentable`'s `UIView`
+/// either — a representable leaf under an identified container reports nil — so
+/// there is no UIKit-level shadow of the propagation to read.
+///
+/// The UIKit-backed leaves are a different matter, because their identifier is
+/// set on a `UIView` that exists whether anything is reading the accessibility
+/// tree or not, and those are asserted below on a real render. For everything
+/// SwiftUI draws, what can be asserted here is the composed *type* of the view,
+/// which is what the compiler hands SwiftUI to build the tree from.
 ///
 /// The rest is held by three other things: the Invariants job greps that every
 /// case in `PayCrossTestIdentifiers` is applied somewhere in `Sources/PayCross`
@@ -105,6 +117,70 @@ final class TestIdentifierTests: XCTestCase {
             PayCrossTestIdentifiers.savedCard(first.id),
             PayCrossTestIdentifiers.savedCard(second.id),
             "two cards that differ only by uuid must not share a row identifier"
+        )
+    }
+
+    // MARK: - Containers that keep their children
+
+    /// `payCrossContainerIdentifier` establishes the element boundary *before*
+    /// it names it.
+    ///
+    /// Order is the whole fix. A plain identifier on a container is inherited by
+    /// every descendant not already inside an element of its own, and the
+    /// container's string wins: 0.7.0 published `paycross.sheet` on the Pay
+    /// button and `paycross.savedCards` on all three picker rows, so the
+    /// README's own example found nothing. `children: .contain` applied first
+    /// makes the container an element, and the identifier lands on it alone.
+    /// Applied second it would name the boundary and leave the propagation
+    /// where it was.
+    ///
+    /// The composed type is the assertion because the rendered tree is not
+    /// readable here; see the note at the top of this file. `SwiftUI` names
+    /// these two modifiers, so a release that renames either fails this test
+    /// rather than the sheet — measure it again and rewrite this.
+    func testAContainerIdentifierEstablishesItsBoundaryFirst() throws {
+        let composed = String(describing: type(of:
+            Color.clear.payCrossContainerIdentifier(.savedCards)
+        ))
+        let boundary = try XCTUnwrap(
+            composed.range(of: "AccessibilityContainerModifier"),
+            "no element boundary: \(composed)"
+        )
+        let identifier = try XCTUnwrap(
+            composed.range(of: "AccessibilityAttachmentModifier"),
+            "no identifier: \(composed)"
+        )
+        XCTAssertLessThan(
+            boundary.lowerBound, identifier.lowerBound,
+            "the identifier is applied under the boundary rather than on it: \(composed)"
+        )
+    }
+
+    /// The picker, which published `paycross.savedCards` on every row.
+    func testTheStoredCardPickerIsAContainer() {
+        let picker = SavedCardPicker(
+            cards: [Self.storedCard],
+            selection: .newCard,
+            allowsRemoval: true,
+            isPaying: false,
+            onSelect: { _ in },
+            onRemoveRequested: { _ in }
+        )
+        XCTAssertTrue(
+            String(describing: type(of: picker.body)).contains("AccessibilityContainerModifier"),
+            "the rows, their bins and Use a new card are answering to paycross.savedCards "
+                + "again, or SwiftUI renamed the modifier; see the note at the top of this file"
+        )
+    }
+
+    /// The sheet's own content, which published `paycross.sheet` on the Pay
+    /// button and on the initial spinner.
+    func testTheSheetsContentIsAContainer() {
+        let view = PaymentSheetView(model: makeModel(isPreparing: false))
+        XCTAssertTrue(
+            String(describing: type(of: view.body)).contains("AccessibilityContainerModifier"),
+            "the Pay button is answering to paycross.sheet again, or SwiftUI renamed the "
+                + "modifier; see the note at the top of this file"
         )
     }
 

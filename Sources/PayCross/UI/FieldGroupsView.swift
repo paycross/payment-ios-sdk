@@ -62,7 +62,7 @@ private struct FieldRow: View {
     /// reason as the cardholder field: SwiftUI centres the control inside the
     /// frame instead of filling it, so the box has to hand the focus on.
     @FocusState private var focused: Bool
-    /// Carried only so the row and its message can be addressed as
+    /// Carried only so the box and its message can be addressed as
     /// `paycross.field.<group>.<name>`: two groups may name a field the same.
     let groupKey: String
     let field: FieldDefinition
@@ -99,9 +99,6 @@ private struct FieldRow: View {
                     )
             }
         }
-        .accessibilityIdentifier(
-            PayCrossTestIdentifiers.field(group: groupKey, name: field.name)
-        )
     }
 
     @ViewBuilder
@@ -145,6 +142,14 @@ private struct FieldRow: View {
         // take: a gesture over either would only eat the tap the sheet uses to
         // put the keypad away.
         .tapToFocus(isSelect || state.isReadOnly ? nil : { focused = true })
+        // On the box rather than on the column around it, which is where
+        // Android tags it too. On the column it was inherited by the label and
+        // by the validation message, whose own `.error` identifier it replaced,
+        // and `app.textFields[...]` matched the field only because the same
+        // inheritance carried it down to the control anyway.
+        .accessibilityIdentifier(
+            PayCrossTestIdentifiers.field(group: groupKey, name: field.name)
+        )
     }
 }
 #endif

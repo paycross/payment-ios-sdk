@@ -44,7 +44,7 @@ struct SavedCardPicker: View {
                 action: { onSelect(.newCard) }
             )
         }
-        .payCrossIdentifier(.savedCards)
+        .payCrossContainerIdentifier(.savedCards)
     }
 
     private func row(
