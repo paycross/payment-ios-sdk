@@ -20,13 +20,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   their own name and their children keep theirs. A UI test that worked around
   this by addressing `paycross.sheet` or `paycross.savedCards` and reading down
   from there must go back to the names in the
-  [table](README.md#test-identifiers).
+  [table](README.md#test-identifiers). **Both names also change element type**:
+  each now lands on a container element of its own rather than on the view it
+  happened to settle on, so `paycross.sheet` is `app.otherElements[...]` where it
+  used to answer as the sheet's scroll view.
 - **A server-driven field's validation message answers to its own identifier.**
   The same defect one level down: the column carried
   `paycross.field.<group>.<name>` and replaced the message's
   `paycross.field.<group>.<name>.error` with it. The field identifier moves onto
   the input box, which is where Android tags it, so the box and the message are
   two elements with two names. `app.textFields[...]` for a field is unchanged.
+  The label drawn above a field inherited the field's identifier in 0.7.0 and no
+  longer does, so a test matching it as `app.staticTexts[...]` must address the
+  box instead.
 - **The device language rung reads the shopper's list rather than the host
   app's.** `Locale.preferredLanguages` answers with the shopper's languages
   intersected with the host app's localizations, so a merchant app shipping only

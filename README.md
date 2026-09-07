@@ -394,7 +394,7 @@ While a payment is in flight the spinner is inside the Pay button, which keeps
 `paycross.sheet` and `paycross.savedCards` name **containers**, and everything
 inside them keeps its own identifier: the Pay button is
 `app.buttons[paycross.payButton]`, not part of the sheet. In 0.7.0 they were not,
-and a container's string replaced its children's; 0.7.1 fixes it.
+and a container's string replaced its children's.
 
 ## Accessibility
 

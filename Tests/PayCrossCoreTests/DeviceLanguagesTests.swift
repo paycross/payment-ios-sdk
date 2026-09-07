@@ -44,17 +44,42 @@ final class DeviceLanguagesTests: XCTestCase {
 
     // MARK: - The read
 
-    /// The key, spelled once. `AppleLanguages` is the raw list; the filtered one
-    /// the host app shapes is what this exists to stop reading.
-    func testTheListIsReadFromAppleLanguages() throws {
-        let suite = "com.paycross.tests.\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
+    /// The key, spelled once, and the list handed back untouched.
+    ///
+    /// **Nothing here writes a preference, and nothing may.** `AppleLanguages`
+    /// is a global-domain key: setting it through any `UserDefaults`, a private
+    /// suite included, lands in the device's own `.GlobalPreferences` and
+    /// relocalizes every later process on that simulator. Measured — a version
+    /// of this test that set the key in a suite and did not remove it left an
+    /// iPhone simulator in French, and the next run of this suite failed in
+    /// `KeyboardDismissalTests`, `LocalizedTests` and `PassKitAdapterTests` with
+    /// French strings. Removing the suite's persistent domain does not undo it,
+    /// because the value was never in the suite.
+    ///
+    /// So the defaults are stubbed rather than written to. What is left to pin
+    /// is what `preferred` asks for and what it does with the answer.
+    func testTheListIsReadFromAppleLanguagesAndKeptInOrder() {
+        let defaults = RecordingDefaults()
 
-        defaults.set(["fr-FR", "en-US"], forKey: "AppleLanguages")
         XCTAssertEqual(DeviceLanguages.preferred(defaults), ["fr-FR", "en-US"])
+        XCTAssertEqual(
+            defaults.askedFor, ["AppleLanguages"],
+            "the raw list is the one this reads; anything else is the filtered one"
+        )
+    }
 
-        defaults.removeObject(forKey: "AppleLanguages")
-        XCTAssertEqual(DeviceLanguages.preferred(defaults), Locale.preferredLanguages)
+    func testTheKeyIsTheOneTheSystemKeepsTheListUnder() {
+        XCTAssertEqual(DeviceLanguages.appleLanguagesKey, "AppleLanguages")
+    }
+}
+
+/// A `UserDefaults` that answers without owning a preference store, so a test
+/// can see which key was read without putting anything on the device.
+private final class RecordingDefaults: UserDefaults {
+    private(set) var askedFor: [String] = []
+
+    override func stringArray(forKey defaultName: String) -> [String]? {
+        askedFor.append(defaultName)
+        return ["fr-FR", "en-US"]
     }
 }

@@ -168,7 +168,8 @@ final class TestIdentifierTests: XCTestCase {
         )
         XCTAssertTrue(
             String(describing: type(of: picker.body)).contains("AccessibilityContainerModifier"),
-            "the rows, their bins and Use a new card are answering to paycross.savedCards again"
+            "the rows, their bins and Use a new card are answering to paycross.savedCards "
+                + "again, or SwiftUI renamed the modifier; see the note at the top of this file"
         )
     }
 
@@ -178,7 +179,8 @@ final class TestIdentifierTests: XCTestCase {
         let view = PaymentSheetView(model: makeModel(isPreparing: false))
         XCTAssertTrue(
             String(describing: type(of: view.body)).contains("AccessibilityContainerModifier"),
-            "the Pay button is answering to paycross.sheet again"
+            "the Pay button is answering to paycross.sheet again, or SwiftUI renamed the "
+                + "modifier; see the note at the top of this file"
         )
     }
 

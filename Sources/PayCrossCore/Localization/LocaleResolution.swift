@@ -78,7 +78,9 @@ package enum LocaleResolution {
     /// - Parameters:
     ///   - override: the merchant's `Configuration.locale`.
     ///   - session: `SessionData.locale`, exactly as the server sent it.
-    ///   - device: the shopper's ranked preferences, e.g. `Locale.preferredLanguages`.
+    ///   - device: the shopper's ranked preferences, e.g. `DeviceLanguages.preferred()`.
+    ///     Not `Locale.preferredLanguages`, which is that list narrowed to what
+    ///     the host app is localized into.
     ///   - supported: the languages to match against, in any case. A parameter so
     ///     a test can pin the rule without depending on what the SDK ships today.
     package static func resolve(
