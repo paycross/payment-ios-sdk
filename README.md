@@ -2,6 +2,12 @@
 
 Native iOS SDK for PayCross payments, mirroring [`payment-android-sdk`](https://github.com/paycross/payment-android-sdk).
 
+## Documentation
+
+From 0.7.2 the API reference is generated from the source and published with
+every release: [PayCross](https://docs.pay-cross.com/reference/ios/paycross/documentation/paycross/)
+and [PayCrossCore](https://docs.pay-cross.com/reference/ios/paycrosscore/documentation/paycrosscore/).
+
 ## Installation
 
 ### CocoaPods

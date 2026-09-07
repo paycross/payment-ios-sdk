@@ -1,0 +1,83 @@
+name: Reference
+
+# Not swift-docc-plugin: adding it to Package.swift would make it a resolved
+# dependency of every SPM consumer of PayCross. xcodebuild docbuild needs nothing.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build and attach the reference to, e.g. v0.7.1'
+        required: true
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  reference:
+    name: Build and attach the DocC reference
+    runs-on: macos-26
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          xcrun --find docc
+
+      - name: Build the documentation
+        run: |
+          set -euo pipefail
+          xcodebuild docbuild \
+            -scheme PayCross \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/dd-docc"
+
+      - name: Transform for static hosting
+        run: |
+          set -euo pipefail
+          DOCC=$(xcrun --find docc)
+          ARCHIVES="$RUNNER_TEMP/dd-docc/Build/Products/Debug-iphoneos"
+          # transform-for-static-hosting will not create its --output-path.
+          mkdir -p docc-out/paycross docc-out/paycrosscore
+          "$DOCC" process-archive transform-for-static-hosting \
+            "$ARCHIVES/PayCross.doccarchive" \
+            --output-path docc-out/paycross \
+            --hosting-base-path reference/ios/paycross
+          "$DOCC" process-archive transform-for-static-hosting \
+            "$ARCHIVES/PayCrossCore.doccarchive" \
+            --output-path docc-out/paycrosscore \
+            --hosting-base-path reference/ios/paycrosscore
+
+      - name: Package
+        run: |
+          set -euo pipefail
+          (cd docc-out && zip -qr "$GITHUB_WORKSPACE/paycross-ios-reference.zip" .)
+          ls -l paycross-ios-reference.zip
+
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create "$TAG" --title "$TAG" --notes "See CHANGELOG.md" || true
+          gh release upload "$TAG" paycross-ios-reference.zip --clobber
+
+      - name: The asset carries the entry points the portal links to
+        run: |
+          set -euo pipefail
+          # Listed to a file: grep -q exits early and the SIGPIPE fails pipefail.
+          unzip -l paycross-ios-reference.zip > "$RUNNER_TEMP/listing.txt"
+          grep -q 'paycross/documentation/paycross/index.html' "$RUNNER_TEMP/listing.txt"
+          grep -q 'paycrosscore/documentation/paycrosscore/index.html' "$RUNNER_TEMP/listing.txt"
