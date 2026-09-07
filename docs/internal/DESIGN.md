@@ -1,7 +1,7 @@
 # Design notes
 
 Maintainer notes for the PayCross iOS SDK. Merchant-facing documentation is
-the developer portal, at <https://docs.pay-cross.com/guides/ios/>; what follows
+the developer portal, at <https://developers.pay-cross.com/guides/ios/>; what follows
 is here because it is about the repository rather than the integration.
 
 ## Why the package is split in two

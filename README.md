@@ -41,14 +41,14 @@ case .cancelled(let transactionID): …
 
 ## Documentation
 
-- **[iOS guide](https://docs.pay-cross.com/guides/ios/)** — appearance, languages,
+- **[iOS guide](https://developers.pay-cross.com/guides/ios/)** — appearance, languages,
   saved cards, Apple Pay, test identifiers, accessibility and privacy labels.
 - **API reference** —
-  [`PayCross`](https://docs.pay-cross.com/reference/ios/paycross/documentation/paycross/) and
-  [`PayCrossCore`](https://docs.pay-cross.com/reference/ios/paycrosscore/documentation/paycrosscore/).
-- **[Changelog](https://docs.pay-cross.com/resources/changelogs/ios/)** —
+  [`PayCross`](https://developers.pay-cross.com/reference/ios/paycross/documentation/paycross/) and
+  [`PayCrossCore`](https://developers.pay-cross.com/reference/ios/paycrosscore/documentation/paycrosscore/).
+- **[Changelog](https://developers.pay-cross.com/resources/changelogs/ios/)** —
   mirrored from [`CHANGELOG.md`](CHANGELOG.md).
-- **[Support](https://docs.pay-cross.com/resources/support/)** — where questions go.
+- **[Support](https://developers.pay-cross.com/resources/support/)** — where questions go.
 
 Why the package is split in two, how to build it, and where it diverges from
 Android on purpose are in [`docs/internal/DESIGN.md`](docs/internal/DESIGN.md).
