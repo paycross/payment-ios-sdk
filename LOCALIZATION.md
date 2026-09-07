@@ -31,6 +31,18 @@ French sheet. When nothing matches, the sheet is English.
 Case does not matter and `_` is accepted in place of `-`, so `FR_ca` resolves. A
 tag that parses to nothing is skipped. No input to this makes it throw.
 
+**The third rung is the shopper's own list, not your app's.** It is read from the
+`AppleLanguages` preference, which is the ranked list the shopper set in
+Settings, unfiltered. The obvious call, `Locale.preferredLanguages`, answers with
+that list intersected with the **host app's** localizations first: an app shipping
+only `Base.lproj` reported `["en"]` on a phone set to French, and the French this
+SDK ships could not be reached from the device at all. The sheet's words are the
+SDK's, so what the app around it is translated into does not decide them.
+
+An app that writes `AppleLanguages` into its own defaults — the usual way to
+offer an in-app language switch — shadows the global list, and the sheet follows
+that app's choice. Overriding the words is a separate matter, below.
+
 ```swift
 // Nothing set: the session decides, else the device, else English.
 PayCrossAPI.configure(environment: .sandbox)

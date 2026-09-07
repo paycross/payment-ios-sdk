@@ -279,6 +279,15 @@ candidate it cannot speak is passed over rather than ending the search, so
 `locale: "de"` falls through to the session's language and then the device's.
 English when nothing matches. Nothing here throws.
 
+**The device rung is the shopper's own language list, whatever your app is
+localized into.** It is read from `AppleLanguages`, so a French phone gets the
+French sheet from an app that ships only English. That is deliberate: the sheet's
+words are ours, and `Locale.preferredLanguages` — which is your app's
+localizations intersected with the shopper's list — would have let an English-only
+app hide a language the SDK ships. Set `AppleLanguages` in your own app's
+defaults, as an app offering an in-app language switch does, and the sheet
+follows that instead.
+
 ```swift
 PayCrossAPI.configure(environment: .sandbox, locale: "fr")
 ```
@@ -381,6 +390,11 @@ names match Android's.
 
 While a payment is in flight the spinner is inside the Pay button, which keeps
 `paycross.payButton`. `paycross.loading` is the initial session fetch only.
+
+`paycross.sheet` and `paycross.savedCards` name **containers**, and everything
+inside them keeps its own identifier: the Pay button is
+`app.buttons[paycross.payButton]`, not part of the sheet. In 0.7.0 they were not,
+and a container's string replaced its children's; 0.7.1 fixes it.
 
 ## Accessibility
 
