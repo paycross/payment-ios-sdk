@@ -29,7 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   their own name and their children keep theirs. A UI test that worked around
   this by addressing `paycross.sheet` or `paycross.savedCards` and reading down
   from there must go back to the names in the
-  [table](README.md#test-identifiers). **Both names also change element type**:
+  [table](https://docs.pay-cross.com/guides/ios/test-identifiers/). **Both names also change element type**:
   each now lands on a container element of its own rather than on the view it
   happened to settle on, so `paycross.sheet` is `app.otherElements[...]` where it
   used to answer as the sheet's scroll view.
@@ -60,7 +60,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `paycross.useNewCard`, which is the name Android already used. A UI test
   matching any of the old strings stops finding its element — silently, the way
   a UI test does. The full table is in the
-  [README](README.md#test-identifiers); the old names are `amount`,
+  [the portal](https://docs.pay-cross.com/guides/ios/test-identifiers/); the old names are `amount`,
   `applePayButton`, `cardNumber`, `expiry`, `cvv`, `cardholderName`, `brand`,
   `errorBanner`, `payButton`, `threeDSCancel`, `keyboardDone` and
   `field-<name>`. Nothing keeps them: half a sheet under one scheme and half
@@ -88,12 +88,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Composed from the caption above it, which is now hidden from VoiceOver so it
   is not read twice.
 - **An accessibility floor**, documented in the
-  [README](README.md#accessibility): every control labelled, Dynamic Type
+  [the portal](https://docs.pay-cross.com/guides/ios/accessibility/): every control labelled, Dynamic Type
   honoured to `accessibility3`, layouts that stack rather than clip, and 44pt
   touch targets. One surface stays outside it and says so: the 3-D Secure
   challenge, whose page is the issuer's own web content.
 - **French.** The sheet ships `fr` alongside `en`, 32 keys each. See
-  [`LOCALIZATION.md`](LOCALIZATION.md) for every key, what it paints, and which
+  [`LOCALIZATION.md`](https://github.com/paycross/payment-ios-sdk/blob/main/LOCALIZATION.md) for every key, what it paints, and which
   carry a `%@`.
 - **A rule for which language a shopper sees.** `configure(locale:)`, then the
   session's `locale`, then the device's preferences in order. Candidates are

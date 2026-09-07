@@ -1,5 +1,7 @@
 # Localizing the PayCross iOS sheet
 
+This page is also on the developer portal, at <https://docs.pay-cross.com/guides/ios/languages/>.
+
 The payment sheet ships **English and French**. This file lists every string it
 draws, says what each one paints, and gives the rule that decides which language
 a shopper sees.
