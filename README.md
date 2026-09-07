@@ -48,7 +48,7 @@ case .cancelled(let transactionID): …
   [`PayCrossCore`](https://developers.pay-cross.com/reference/ios/paycrosscore/documentation/paycrosscore/).
 - **[Changelog](https://developers.pay-cross.com/resources/changelogs/ios/)** —
   mirrored from [`CHANGELOG.md`](CHANGELOG.md).
-- **[Support](https://developers.pay-cross.com/resources/support/)** — where questions go.
+- **[Support](https://developers.pay-cross.com/resources/support/)** — questions go to support@pay-cross.com.
 
 Why the package is split in two, how to build it, and where it diverges from
 Android on purpose are in [`docs/internal/DESIGN.md`](docs/internal/DESIGN.md).

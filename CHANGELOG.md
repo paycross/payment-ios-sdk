@@ -59,7 +59,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `paycross.`-prefixed camelCase ones, and `paycross.savedCard.new` becomes
   `paycross.useNewCard`, which is the name Android already used. A UI test
   matching any of the old strings stops finding its element — silently, the way
-  a UI test does. The full table is in the
+  a UI test does. The full table is on
   [the portal](https://developers.pay-cross.com/guides/ios/test-identifiers/); the old names are `amount`,
   `applePayButton`, `cardNumber`, `expiry`, `cvv`, `cardholderName`, `brand`,
   `errorBanner`, `payButton`, `threeDSCancel`, `keyboardDone` and
@@ -87,7 +87,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A label on the amount**, reading `Total, 25,99 €` rather than a bare number.
   Composed from the caption above it, which is now hidden from VoiceOver so it
   is not read twice.
-- **An accessibility floor**, documented in the
+- **An accessibility floor**, documented on
   [the portal](https://developers.pay-cross.com/guides/ios/accessibility/): every control labelled, Dynamic Type
   honoured to `accessibility3`, layouts that stack rather than clip, and 44pt
   touch targets. One surface stays outside it and says so: the 3-D Secure

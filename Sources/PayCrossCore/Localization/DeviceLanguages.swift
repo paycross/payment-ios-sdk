@@ -25,8 +25,8 @@ import Foundation
 ///
 /// Reaching this rung at all takes a session that names no language the SDK
 /// ships: the API fills a session's `locale` with `en` when the merchant sets
-/// none, and that matches, so the ladder stops above here. See
-/// io.paycross#902.
+/// none, and that matches, so the ladder stops above here. A pending API
+/// change stops it defaulting the field.
 package enum DeviceLanguages {
 
     /// Where the system keeps the list.
