@@ -3,11 +3,14 @@
 <plist version="1.0">
 <dict>
 	<!--
-	PayCrossCore audit (Sources/PayCrossCore/**/*.swift), 2026-08-20:
+	PayCrossCore audit (Sources/PayCrossCore/**/*.swift), re-run 2026-09-07:
 	grep -rnE "UserDefaults|NSUserDefaults|fileModificationDate|creationDate|
 	.systemUptime|ProcessInfo|systemBootTime|NSFileSystemFreeSize|
-	volumeAvailableCapacity" -> zero hits. No required-reason API usage,
-	so NSPrivacyAccessedAPITypes is empty.
+	volumeAvailableCapacity" -> one hit, DeviceLanguages, which reads the
+	AppleLanguages key so the sheet can offer its own French on a French
+	phone whatever the host app is localized into. One read of one key the
+	system owns; the SDK writes no defaults at all, which the CI job pins.
+	Declared below as CA92.1, the reason for reading the app's own defaults.
 	-->
 	<key>NSPrivacyTracking</key>
 	<false/>
@@ -65,6 +68,15 @@
 		</dict>
 	</array>
 	<key>NSPrivacyAccessedAPITypes</key>
-	<array/>
+	<array>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>CA92.1</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

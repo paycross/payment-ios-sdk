@@ -56,7 +56,7 @@ public final class PaymentSheet {
         // installs it again the moment the fetch returns.
         SheetLanguage.install(LocaleResolution.resolve(
             override: configuration.locale,
-            device: Locale.preferredLanguages
+            device: DeviceLanguages.preferred()
         ))
 
         let model = PaymentSheetModel(
@@ -357,7 +357,7 @@ final class PaymentSheetModel: ObservableObject {
         SheetLanguage.install(LocaleResolution.resolve(
             override: configuration.locale,
             session: sessionLocale,
-            device: Locale.preferredLanguages
+            device: DeviceLanguages.preferred()
         ))
         formattingLocale = SheetLanguage.locale
         languageTag = SheetLanguage.tag

@@ -130,9 +130,35 @@ jobs:
         run: |
           set -euo pipefail
           # Strip comments first: the sources legitimately *discuss* these APIs.
-          if find Sources -name '*.swift' -exec sed -E 's://.*::' {} + \
+          # One file is held out and checked on its own terms below:
+          # DeviceLanguages takes a UserDefaults to read the shopper's
+          # AppleLanguages list from, which is one key the system owns.
+          seam=Sources/PayCrossCore/Localization/DeviceLanguages.swift
+          if find Sources -name '*.swift' ! -path "$seam" -exec sed -E 's://.*::' {} + \
              | grep -nE '@AppStorage|@SceneStorage|UserDefaults|SecItemAdd|UIPasteboard'; then
             echo "::error::persistence API referenced in SDK sources"
+            exit 1
+          fi
+          # Without this the exemption becomes a hole the moment the file moves.
+          test -f "$seam" || {
+            echo "::error::$seam is gone; the exemption above now covers nothing"
+            exit 1
+          }
+          if sed -E 's://.*::' "$seam" \
+             | grep -nE '@AppStorage|@SceneStorage|SecItemAdd|UIPasteboard'; then
+            echo "::error::persistence API referenced in $seam"
+            exit 1
+          fi
+          # It may be handed a UserDefaults. It may not reach for one itself
+          # beyond the default, and it may not write.
+          if sed -E 's://.*::' "$seam" | grep -n 'UserDefaults' \
+             | grep -vE 'defaults: UserDefaults = \.standard'; then
+            echo "::error::$seam may only take a UserDefaults to read from"
+            exit 1
+          fi
+          if sed -E 's://.*::' "$seam" \
+             | grep -nE '\.set\(|\.setValue\(|removeObject|removePersistentDomain'; then
+            echo "::error::$seam writes to UserDefaults"
             exit 1
           fi
           echo "ok"
