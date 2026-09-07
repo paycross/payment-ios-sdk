@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The API reference is generated from the source on the release tag and
+  published as a release asset, `paycross-ios-reference.zip`, which the
+  developer portal serves at
+  <https://docs.pay-cross.com/reference/ios/paycross/documentation/paycross/>.
+
 ## [0.7.1] - 2026-09-07
 
 ### Fixed

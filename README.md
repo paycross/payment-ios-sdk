@@ -2,6 +2,12 @@
 
 Native iOS SDK for PayCross payments, mirroring [`payment-android-sdk`](https://github.com/paycross/payment-android-sdk).
 
+## Documentation
+
+From 0.7.2 the API reference is generated from the source and published with
+every release: [PayCross](https://docs.pay-cross.com/reference/ios/paycross/documentation/paycross/)
+and [PayCrossCore](https://docs.pay-cross.com/reference/ios/paycrosscore/documentation/paycrosscore/).
+
 ## Installation
 
 ### CocoaPods
@@ -514,12 +520,3 @@ app's privacy label, here is what the SDK actually does:
 Merchants should reflect card data, name, email and phone (as applicable to
 their session configuration) in their own App Store privacy label as data
 "used to track you: No" / "linked to you: Yes" / "app functionality."
-
-## Known documentation defects in the Android repo
-
-Found while porting; the Kotlin is correct and the docs are not:
-
-- `docs/DESIGN.md:174` describes abandoned exponential-backoff polling (1s→5s,
-  60 attempts). `docs/API.md:421` says "every 3 seconds". `PaymentViewModel.kt:365`
-  actually ships fixed 2000 ms interval, 480 s deadline, 5 submit attempts.
-  **This port follows the code.**
