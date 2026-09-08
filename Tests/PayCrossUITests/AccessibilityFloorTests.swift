@@ -242,6 +242,7 @@ final class AccessibilityFloorTests: XCTestCase {
             fieldGroups: fieldGroups,
             fieldValues: .constant([:]),
             fieldErrors: [],
+            language: SheetLanguage.tag,
             onPay: {}
         )
         return host(view.payCrossTypeScale(.unstyled).dynamicTypeSize(size))

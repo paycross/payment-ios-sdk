@@ -642,6 +642,7 @@ private struct FormHarness: View {
             fieldGroups: [],
             fieldValues: $fieldValues,
             fieldErrors: [],
+            language: SheetLanguage.tag,
             onPay: {},
             showsApplePayButton: showsApplePayButton,
             onApplePay: onApplePay
