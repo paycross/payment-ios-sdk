@@ -1,0 +1,3 @@
+paycross/api-docs:
+  - source: .sync/ios.md
+    dest: content/resources/changelogs/ios.md
