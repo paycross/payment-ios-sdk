@@ -51,6 +51,7 @@ final class DeclineBannerTests: XCTestCase {
             fieldGroups: fieldGroups(fieldGroupCount),
             fieldValues: .constant([:]),
             fieldErrors: [],
+            language: SheetLanguage.tag,
             onPay: {}
         )
 
@@ -69,37 +70,6 @@ final class DeclineBannerTests: XCTestCase {
         return UIGraphicsImageRenderer(bounds: window.bounds).image { context in
             window.layer.render(in: context.cgContext)
         }
-    }
-
-    /// How many pixels differ between two renders, ignoring alpha.
-    private func differingPixels(_ first: UIImage, _ second: UIImage) throws -> Int {
-        let a = try XCTUnwrap(first.cgImage)
-        let b = try XCTUnwrap(second.cgImage)
-        let width = min(a.width, b.width)
-        let height = min(a.height, b.height)
-
-        var left = [UInt8](repeating: 0, count: width * height * 4)
-        var right = left
-        let space = CGColorSpaceCreateDeviceRGB()
-        let info = CGImageAlphaInfo.premultipliedLast.rawValue
-        let bounds = CGRect(x: 0, y: 0, width: width, height: height)
-        CGContext(
-            data: &left, width: width, height: height, bitsPerComponent: 8,
-            bytesPerRow: width * 4, space: space, bitmapInfo: info
-        )?.draw(a, in: bounds)
-        CGContext(
-            data: &right, width: width, height: height, bitsPerComponent: 8,
-            bytesPerRow: width * 4, space: space, bitmapInfo: info
-        )?.draw(b, in: bounds)
-
-        var differing = 0
-        for index in stride(from: 0, to: left.count, by: 4)
-        where left[index] != right[index]
-            || left[index + 1] != right[index + 1]
-            || left[index + 2] != right[index + 2] {
-            differing += 1
-        }
-        return differing
     }
 
     /// The regression itself. With eight field groups the banner used to change

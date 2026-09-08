@@ -129,7 +129,10 @@ final class ScreenshotTests: XCTestCase {
         showsApplePayButton: Bool = false,
         allowsCardRemoval: Bool = false
     ) -> some View {
-        StatefulPreviewWrapper([String: [String: String]]()) { values in
+        // Read out here: the two wrappers take escaping closures, which are not
+        // on the main actor, and this is what the sheet hands the form anyway.
+        let language = SheetLanguage.tag
+        return StatefulPreviewWrapper([String: [String: String]]()) { values in
         StatefulPreviewWrapper(state) { binding in
             CardFormView(
                 state: binding,
@@ -140,6 +143,7 @@ final class ScreenshotTests: XCTestCase {
                 fieldGroups: fieldGroups,
                 fieldValues: values,
                 fieldErrors: fieldErrors,
+                language: language,
                 onPay: {},
                 showsApplePayButton: showsApplePayButton,
                 onApplePay: {}

@@ -331,12 +331,28 @@ package struct WireSavedCard: Codable, Sendable, Hashable {
 package struct FieldGroup: Codable, Sendable, Hashable {
     package let key: String
     package let label: String?
+    /// The same heading in each language the checkout renders, keyed by language
+    /// tag. Sent beside `label` rather than instead of it, and it does not
+    /// depend on the session's own locale.
+    package let labels: [String: String]?
     package let fields: [FieldDefinition]?
 
-    package init(key: String, label: String? = nil, fields: [FieldDefinition]? = nil) {
+    package init(
+        key: String,
+        label: String? = nil,
+        labels: [String: String]? = nil,
+        fields: [FieldDefinition]? = nil
+    ) {
         self.key = key
         self.label = label
+        self.labels = labels
         self.fields = fields
+    }
+
+    /// The heading in the sheet's language, or the singular value when the
+    /// session predates the maps or names no such language.
+    package func label(in language: String?) -> String? {
+        language.flatMap { labels?[$0] } ?? self.label
     }
 }
 
@@ -344,7 +360,12 @@ package struct FieldDefinition: Codable, Sendable, Hashable {
     package let name: String
     package let type: String?
     package let label: String?
+    /// The field's label in each language the checkout renders.
+    package let labels: [String: String]?
     package let placeholder: String?
+    /// The field's placeholder in each language. Absent whenever the field has
+    /// no placeholder at all, so a nil map is not an empty one.
+    package let placeholders: [String: String]?
     package let required: Bool?
     package let readonly: Bool?
     package let value: String?
@@ -356,7 +377,9 @@ package struct FieldDefinition: Codable, Sendable, Hashable {
         name: String,
         type: String? = nil,
         label: String? = nil,
+        labels: [String: String]? = nil,
         placeholder: String? = nil,
+        placeholders: [String: String]? = nil,
         required: Bool? = nil,
         readonly: Bool? = nil,
         value: String? = nil,
@@ -367,13 +390,26 @@ package struct FieldDefinition: Codable, Sendable, Hashable {
         self.name = name
         self.type = type
         self.label = label
+        self.labels = labels
         self.placeholder = placeholder
+        self.placeholders = placeholders
         self.required = required
         self.readonly = readonly
         self.value = value
         self.condition = condition
         self.options = options
         self.validation = validation
+    }
+
+    /// The label in the sheet's language, or the singular value when the session
+    /// predates the maps or names no such language.
+    package func label(in language: String?) -> String? {
+        language.flatMap { labels?[$0] } ?? self.label
+    }
+
+    /// The placeholder in the sheet's language, under the same rule.
+    package func placeholder(in language: String?) -> String? {
+        language.flatMap { placeholders?[$0] } ?? self.placeholder
     }
 }
 
@@ -406,10 +442,19 @@ package struct FieldCondition: Codable, Sendable, Hashable {
 package struct FieldOption: Codable, Sendable, Hashable {
     package let value: String
     package let label: String?
+    /// The option's label in each language the checkout renders.
+    package let labels: [String: String]?
 
-    package init(value: String, label: String? = nil) {
+    package init(value: String, label: String? = nil, labels: [String: String]? = nil) {
         self.value = value
         self.label = label
+        self.labels = labels
+    }
+
+    /// The label in the sheet's language, or the singular value when the session
+    /// predates the maps or names no such language.
+    package func label(in language: String?) -> String? {
+        language.flatMap { labels?[$0] } ?? self.label
     }
 }
 
@@ -417,20 +462,32 @@ package struct FieldValidation: Codable, Sendable, Hashable {
     package let pattern: String?
     package let maxLength: Int?
     package let messages: [String: String]?
+    /// The same sentences in each language, language outermost and the rule
+    /// name inside it — the opposite nesting to `messages`.
+    package let messagesI18n: [String: [String: String]]?
 
     enum CodingKeys: String, CodingKey {
         case maxLength = "max_length"
+        case messagesI18n = "messages_i18n"
         case pattern, messages
     }
 
     package init(
         pattern: String? = nil,
         maxLength: Int? = nil,
-        messages: [String: String]? = nil
+        messages: [String: String]? = nil,
+        messagesI18n: [String: [String: String]]? = nil
     ) {
         self.pattern = pattern
         self.maxLength = maxLength
         self.messages = messages
+        self.messagesI18n = messagesI18n
+    }
+
+    /// One rule's sentence in the sheet's language, or the singular value when
+    /// the session predates the maps or names no such language.
+    package func message(_ rule: String, in language: String?) -> String? {
+        language.flatMap { messagesI18n?[$0]?[rule] } ?? messages?[rule]
     }
 }
 

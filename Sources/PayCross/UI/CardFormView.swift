@@ -34,6 +34,10 @@ struct CardFormView: View {
     let fieldGroups: [FieldGroup]
     @Binding var fieldValues: [String: [String: String]]
     let fieldErrors: [FieldGroupError]
+    /// The language the sheet resolved, which picks the server's own wording for
+    /// the field groups. Not defaulted: a caller that forgot it would draw a
+    /// French sheet's fields in English and nothing would say so.
+    let language: String
     let onPay: () -> Void
     var showsApplePayButton: Bool = false
     var onApplePay: () -> Void = {}
@@ -105,11 +109,12 @@ struct CardFormView: View {
                         cvvField
                     }
 
-                        if !fieldGroups.isEmpty {
+                    if !fieldGroups.isEmpty {
                         FieldGroupsView(
                             groups: fieldGroups,
                             values: $fieldValues,
-                            errors: fieldErrors
+                            errors: fieldErrors,
+                            language: language
                         )
                     }
 

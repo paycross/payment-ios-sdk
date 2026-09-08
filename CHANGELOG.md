@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A server-driven field is drawn in the sheet's language.** The checkout API
+  now sends a field group's heading, each field's label and placeholder, each
+  select option's label and each of a field's own validation messages in every
+  language it renders, keyed by language tag, beside the single value it always
+  sent. The sheet reads the entry for the language it resolved, so a French
+  shopper no longer meets an English `Billing address` under French chrome. A
+  session carrying only the single value — every session minted before the API
+  change, and there are live ones — draws exactly what it drew before, in either
+  language.
+
 - The API reference is generated from the source on the release tag and
   published as a release asset, `paycross-ios-reference.zip`, which the
   developer portal serves at

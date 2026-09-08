@@ -295,6 +295,7 @@ final class TestIdentifierTests: XCTestCase {
             fieldGroups: [],
             fieldValues: .constant([:]),
             fieldErrors: [],
+            language: SheetLanguage.tag,
             onPay: {},
             showsApplePayButton: showsApplePayButton,
             onApplePay: {}

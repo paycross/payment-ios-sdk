@@ -32,6 +32,7 @@ final class KeyboardDismissalTests: XCTestCase {
             fieldGroups: [],
             fieldValues: .constant([:]),
             fieldErrors: [],
+            language: SheetLanguage.tag,
             onPay: {}
         )
         return host(NavigationStack { view })

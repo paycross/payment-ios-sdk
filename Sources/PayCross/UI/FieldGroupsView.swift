@@ -12,6 +12,10 @@ struct FieldGroupsView: View {
     let groups: [FieldGroup]
     @Binding var values: [String: [String: String]]
     let errors: [FieldGroupError]
+    /// The language the sheet resolved, handed down rather than read from
+    /// `SheetLanguage` here: the strings on this form come off the wire, and the
+    /// tag that picks them must be the one the rest of the chrome already speaks.
+    let language: String
 
     var body: some View {
         ForEach(groups, id: \.key) { group in
@@ -22,7 +26,7 @@ struct FieldGroupsView: View {
 
             if !visible.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
-                    if let label = group.label, !label.isEmpty {
+                    if let label = group.label(in: language), !label.isEmpty {
                         Text(label)
                             .font(style.font(.subheadline, weight: .semibold))
                     }
@@ -34,6 +38,7 @@ struct FieldGroupsView: View {
                         FieldRow(
                             groupKey: group.key,
                             field: field,
+                            language: language,
                             state: state,
                             value: binding(group: group.key, field: field.name),
                             error: error(group: group.key, field: field.name)
@@ -66,6 +71,7 @@ private struct FieldRow: View {
     /// `paycross.field.<group>.<name>`: two groups may name a field the same.
     let groupKey: String
     let field: FieldDefinition
+    let language: String
     let state: FieldState
     @Binding var value: String
     let error: String?
@@ -75,7 +81,7 @@ private struct FieldRow: View {
     private var isSelect: Bool { !(field.options ?? []).isEmpty }
 
     private var title: String {
-        let base = field.label ?? field.name
+        let base = field.label(in: language) ?? field.name
         return state.isRequired ? "\(base) *" : base
     }
 
@@ -111,14 +117,14 @@ private struct FieldRow: View {
                     // shopper appears to have chosen something they did not.
                     Text(verbatim: "—").tag("")
                     ForEach(options, id: \.value) { option in
-                        Text(option.label ?? option.value).tag(option.value)
+                        Text(option.label(in: language) ?? option.value).tag(option.value)
                     }
                 }
                 .pickerStyle(.menu)
                 .disabled(state.isReadOnly)
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                TextField(field.placeholder ?? "", text: $value)
+                TextField(field.placeholder(in: language) ?? "", text: $value)
                     .focused($focused)
                     .disabled(state.isReadOnly)
                     .keyboardType(field.type == "number" ? .numberPad : .default)
