@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-09-08
+
 ### Added
 
 - **A server-driven field is drawn in the sheet's language.** The checkout API
@@ -442,7 +444,8 @@ Initial public release.
   merchant-facing types; internal collaborators moved to package access.
 - The payments client no longer caches status poll responses.
 
-[Unreleased]: https://github.com/paycross/payment-ios-sdk/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/paycross/payment-ios-sdk/compare/v0.7.2...HEAD
+[0.7.2]: https://github.com/paycross/payment-ios-sdk/releases/tag/v0.7.2
 [0.7.1]: https://github.com/paycross/payment-ios-sdk/releases/tag/v0.7.1
 [0.7.0]: https://github.com/paycross/payment-ios-sdk/releases/tag/v0.7.0
 [0.6.0]: https://github.com/paycross/payment-ios-sdk/releases/tag/v0.6.0
