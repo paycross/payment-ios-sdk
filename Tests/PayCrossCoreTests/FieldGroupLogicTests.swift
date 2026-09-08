@@ -256,6 +256,31 @@ final class FieldGroupLogicTests: XCTestCase {
         )
     }
 
+    /// The same per-rule fallback as the reader has, through `validate`: the
+    /// French shopper reads the French `required` and the pattern sentence the
+    /// server wrote once, not our own wording for the second one.
+    func testARuleMissingFromItsLanguagesMapStillComesFromTheServer() {
+        let validation = FieldValidation(
+            pattern: "^[0-9]+$",
+            messages: ["required": "We need this", "pattern": "Digits only please"],
+            messagesI18n: ["fr": ["required": "Nous en avons besoin"]]
+        )
+        let groups = [FieldGroup(key: "b", fields: [
+            field("num", required: true, validation: validation)
+        ])]
+
+        XCTAssertEqual(
+            FieldGroupLogic.validate(groups: groups, values: [:], language: "fr").first?.message,
+            "Nous en avons besoin"
+        )
+        XCTAssertEqual(
+            FieldGroupLogic.validate(
+                groups: groups, values: ["b": ["num": "x"]], language: "fr"
+            ).first?.message,
+            "Digits only please"
+        )
+    }
+
     /// The fallback sentence names the field, so the name it uses has to be the
     /// label the shopper is actually looking at.
     func testTheFallbackSentenceNamesTheFieldInTheSheetsLanguage() {

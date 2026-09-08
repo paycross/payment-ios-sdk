@@ -13,18 +13,67 @@ import SwiftUI
 /// backend, which now sends each of them in every language it renders. Nothing
 /// in Core can prove the sheet reaches for the right one, because the tag comes
 /// from `SheetLanguage` and the reading is done by the view.
+///
+/// Each fixture below carries **one** kind of per-language string and nothing
+/// else, so a render that moves can only have moved for the reason the test is
+/// named after. The paired fixture with no maps at all is the control: with the
+/// language as the only differing input, that pair must be pixel-identical.
 @MainActor
 final class FieldGroupLanguageTests: XCTestCase {
 
     private let host = ViewHost()
+
+    /// The whole bundle shares one process and one `SheetLanguage`, so the
+    /// English chrome these renders draw around the fields is only English if
+    /// whatever ran before put the language back. This suite does not depend on
+    /// that.
+    override func setUp() async throws {
+        try await super.setUp()
+        SheetLanguage.reset()
+    }
 
     override func tearDown() async throws {
         host.release()
         try await super.tearDown()
     }
 
-    /// A group as the backend sends it today: a map beside every rendered string.
-    private let bilingual = FieldGroup(
+    // MARK: - Fixtures
+
+    /// Placeholders only. A placeholder reaches the `UITextField` under a
+    /// SwiftUI `TextField`, which is the one drawn string this bundle can read
+    /// back exactly.
+    private let placeholderGroup = FieldGroup(
+        key: "billing",
+        fields: [
+            FieldDefinition(
+                name: "postcode",
+                type: "text",
+                label: "Postcode",
+                placeholder: "SW1A 1AA",
+                placeholders: ["en": "SW1A 1AA", "fr": "75001"],
+                required: true
+            )
+        ]
+    )
+
+    /// The same field as a session minted before the maps carries it.
+    private let placeholderGroupSingular = FieldGroup(
+        key: "billing",
+        fields: [
+            FieldDefinition(
+                name: "postcode",
+                type: "text",
+                label: "Postcode",
+                placeholder: "SW1A 1AA",
+                required: true
+            )
+        ]
+    )
+
+    /// The heading and the field label, and no placeholder at all: a placeholder
+    /// is drawn by a different line than the labels are, and one that differed
+    /// by language would satisfy the comparison on its own.
+    private let labelGroup = FieldGroup(
         key: "billing",
         label: "Billing address",
         labels: ["en": "Billing address", "fr": "Adresse de facturation"],
@@ -34,29 +83,61 @@ final class FieldGroupLanguageTests: XCTestCase {
                 type: "text",
                 label: "Postcode",
                 labels: ["en": "Postcode", "fr": "Code postal"],
-                placeholder: "SW1A 1AA",
-                placeholders: ["en": "SW1A 1AA", "fr": "75001"],
                 required: true
             )
         ]
     )
 
-    /// The same group as a session minted before the maps existed carries it.
-    private let singular = FieldGroup(
+    private let labelGroupSingular = FieldGroup(
         key: "billing",
         label: "Billing address",
         fields: [
+            FieldDefinition(name: "postcode", type: "text", label: "Postcode", required: true)
+        ]
+    )
+
+    /// One select option. The field's own label is the same string in both
+    /// languages and carries no map, so the option's label is the only thing on
+    /// the form that can move.
+    private let optionGroup = FieldGroup(
+        key: "billing",
+        fields: [
             FieldDefinition(
-                name: "postcode",
-                type: "text",
-                label: "Postcode",
-                placeholder: "SW1A 1AA",
-                required: true
+                name: "state",
+                type: "select",
+                label: "State",
+                options: [
+                    FieldOption(
+                        value: "NY",
+                        label: "New York",
+                        labels: ["en": "New York", "fr": "État de New York"]
+                    )
+                ]
             )
         ]
     )
 
-    private func form(_ group: FieldGroup, language: String) -> UIWindow {
+    private let optionGroupSingular = FieldGroup(
+        key: "billing",
+        fields: [
+            FieldDefinition(
+                name: "state",
+                type: "select",
+                label: "State",
+                options: [FieldOption(value: "NY", label: "New York")]
+            )
+        ]
+    )
+
+    /// The option has to be the chosen one before a menu picker draws its label;
+    /// an unset select draws the empty tag instead.
+    private let chosenOption = ["billing": ["state": "NY"]]
+
+    private func form(
+        _ group: FieldGroup,
+        language: String,
+        values: [String: [String: String]] = [:]
+    ) -> UIWindow {
         var state = CardFormState()
         let view = CardFormView(
             state: Binding(get: { state }, set: { state = $0 }),
@@ -64,7 +145,7 @@ final class FieldGroupLanguageTests: XCTestCase {
             allowsSaving: false,
             isLoading: false,
             fieldGroups: [group],
-            fieldValues: .constant([:]),
+            fieldValues: .constant(values),
             fieldErrors: [],
             language: language,
             onPay: {}
@@ -72,31 +153,32 @@ final class FieldGroupLanguageTests: XCTestCase {
         return host(NavigationStack { view })
     }
 
-    /// SwiftUI hands a `TextField`'s title to the `UITextField` under it, which
-    /// is the one string on this form a hosted test can read back. The card
-    /// fields' own placeholders come with it, so an empty list means the read
-    /// stopped working rather than that the field lost its placeholder.
+    // MARK: - Placeholders, read back off the control
+
     private func placeholders(in window: UIWindow) -> [String] {
         textFields(in: window).compactMap {
             $0.placeholder ?? $0.attributedPlaceholder?.string
         }
     }
 
+    /// The card fields' own placeholders come back with the group's, so an empty
+    /// list means the read stopped working rather than that a field lost its
+    /// placeholder.
     func testTheReadItselfWorks() {
         XCTAssertTrue(
-            placeholders(in: form(bilingual, language: "en")).contains("NAME ON CARD"),
+            placeholders(in: form(placeholderGroup, language: "en")).contains("NAME ON CARD"),
             "no placeholder could be read at all; the assertions below prove nothing"
         )
     }
 
     func testAFrenchSheetDrawsTheServersFrenchPlaceholder() {
-        let drawn = placeholders(in: form(bilingual, language: "fr"))
+        let drawn = placeholders(in: form(placeholderGroup, language: "fr"))
         XCTAssertTrue(drawn.contains("75001"), "drew \(drawn)")
         XCTAssertFalse(drawn.contains("SW1A 1AA"), "the English placeholder is still on screen")
     }
 
     func testAnEnglishSheetDrawsTheEnglishOne() {
-        let drawn = placeholders(in: form(bilingual, language: "en"))
+        let drawn = placeholders(in: form(placeholderGroup, language: "en"))
         XCTAssertTrue(drawn.contains("SW1A 1AA"), "drew \(drawn)")
         XCTAssertFalse(drawn.contains("75001"))
     }
@@ -105,31 +187,60 @@ final class FieldGroupLanguageTests: XCTestCase {
     /// before, whatever language the sheet resolved.
     func testASessionWithoutTheMapsDrawsTheSingularValue() {
         XCTAssertTrue(
-            placeholders(in: form(singular, language: "fr")).contains("SW1A 1AA")
+            placeholders(in: form(placeholderGroupSingular, language: "fr")).contains("SW1A 1AA")
         )
     }
 
-    // MARK: - The labels
+    // MARK: - Labels, by rendering
 
-    /// The heading and the field label are SwiftUI `Text`, so they are asserted
-    /// by rendering. The same group with no maps is the control: that render
-    /// must not move, which is what makes a difference in the first one mean the
-    /// map rather than anything else the language reaches.
-    func testTheLabelsAreDrawnInTheSheetsLanguage() throws {
+    /// A heading, a field label and an option label are SwiftUI `Text`: drawn
+    /// into layers rather than into `UILabel`s, and this bundle has no app host
+    /// to build an accessibility tree from. So they are asserted by comparing
+    /// two renders of a fixture that carries nothing else per-language.
+    func testTheHeadingAndTheFieldLabelAreDrawnInTheSheetsLanguage() throws {
         XCTAssertGreaterThan(
-            try differingPixels(render(bilingual, "en"), render(bilingual, "fr")),
+            try differingPixels(render(labelGroup, "en"), render(labelGroup, "fr")),
             0,
-            "the French sheet drew the same labels as the English one"
-        )
-        XCTAssertEqual(
-            try differingPixels(render(singular, "en"), render(singular, "fr")),
-            0,
-            "a group with no maps must draw the same in either language"
+            "the French sheet drew the same heading and label as the English one"
         )
     }
 
-    private func render(_ group: FieldGroup, _ language: String) -> UIImage {
-        let window = form(group, language: language)
+    func testAGroupWithNoLabelMapsDrawsTheSameInEitherLanguage() throws {
+        XCTAssertEqual(
+            try differingPixels(
+                render(labelGroupSingular, "en"), render(labelGroupSingular, "fr")
+            ),
+            0
+        )
+    }
+
+    func testASelectOptionIsDrawnInTheSheetsLanguage() throws {
+        XCTAssertGreaterThan(
+            try differingPixels(
+                render(optionGroup, "en", chosenOption),
+                render(optionGroup, "fr", chosenOption)
+            ),
+            0,
+            "the picker drew the same option label in both languages"
+        )
+    }
+
+    func testAnOptionWithNoLabelMapDrawsTheSameInEitherLanguage() throws {
+        XCTAssertEqual(
+            try differingPixels(
+                render(optionGroupSingular, "en", chosenOption),
+                render(optionGroupSingular, "fr", chosenOption)
+            ),
+            0
+        )
+    }
+
+    private func render(
+        _ group: FieldGroup,
+        _ language: String,
+        _ values: [String: [String: String]] = [:]
+    ) -> UIImage {
+        let window = form(group, language: language, values: values)
         // Longer than the shared settle: a layer read before the text has drawn
         // compares two blank forms and passes the control while failing nothing.
         host.settle(0.4)

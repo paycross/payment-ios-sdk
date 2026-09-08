@@ -260,6 +260,19 @@ final class SessionDataTests: XCTestCase {
         XCTAssertEqual(option.label(in: "fr"), "New York")
     }
 
+    /// The fallback is per rule, not per language: the language is in the map and
+    /// carries one of the two sentences, and the rule it does not carry still
+    /// comes back rather than being lost with it.
+    func testARuleMissingFromItsLanguagesMapFallsBackToTheSingularSentence() {
+        let validation = FieldValidation(
+            messages: ["required": "This field is required", "pattern": "Wrong format"],
+            messagesI18n: ["fr": ["required": "Ce champ est obligatoire"]]
+        )
+
+        XCTAssertEqual(validation.message("required", in: "fr"), "Ce champ est obligatoire")
+        XCTAssertEqual(validation.message("pattern", in: "fr"), "Wrong format")
+    }
+
     /// A field with no placeholder at all sends no map for one, so a nil map is
     /// not an empty one and must not read as an empty string.
     func testAFieldWithNoPlaceholderReadsAsNilInEveryLanguage() throws {
