@@ -189,8 +189,9 @@ takes `MM/YY` digits in every language. It is a hint, not a format.
 | `paycross_field_invalid` | That field failed the server's pattern | the field's label |
 
 The server can send its own message for a field or a submission. When it does,
-that message wins over both languages: it is written for that one merchant and it
-is not translatable.
+that message wins over both of ours. A field's own messages arrive in every
+language the checkout renders and the sheet takes the one for the language it
+resolved; a submission message is a single sentence and is shown as it was sent.
 
 ### Apple Pay
 
@@ -205,6 +206,20 @@ is not translatable.
 SDK, not for a shopper: it names the app's Apple Pay entitlement and the merchant
 identifier the SDK asked with. It is translated so no shopper meets raw English,
 but the key still greps out of a French bug report.
+
+## The strings the server draws
+
+A field group's heading, each field's label and placeholder, each select option's
+label and a field's own validation messages are rendered by the checkout API.
+They are not in either `.strings` file and `configure(locale:)` does not reword
+them: they are the merchant's own copy, held by the API.
+
+They arrive in every language the checkout renders, keyed by language tag, beside
+the single value the API has always sent. The sheet reads the entry for the
+language it resolved by the rule at the top of this page, so these strings and
+the chrome around them are always in the same language. A session carrying only
+the single value — every session minted before the API sent the maps — draws that
+value whatever the language, which is what the sheet did for all of them before.
 
 ## Where these strings come from in the code
 
