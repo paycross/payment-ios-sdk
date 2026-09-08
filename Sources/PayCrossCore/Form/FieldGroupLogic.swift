@@ -76,11 +76,16 @@ package enum FieldGroupLogic {
     ///
     /// - Parameter messages: the fallback sentences, resolved by the sheet. A
     ///   message the server sent with the field still wins over both: it is
-    ///   written for that one field and it is never translatable.
+    ///   written for that one field.
+    /// - Parameter language: which of the server's own sentences to take. It
+    ///   sends each of them in every language the checkout renders; nil reads the
+    ///   single sentence, which is all a session minted before those existed
+    ///   carries.
     package static func validate(
         groups: [FieldGroup],
         values: [String: [String: String]],
-        messages: FlowMessages = .english
+        messages: FlowMessages = .english,
+        language: String? = nil
     ) -> [FieldGroupError] {
         var errors: [FieldGroupError] = []
 
@@ -97,8 +102,10 @@ package enum FieldGroupLogic {
                     errors.append(FieldGroupError(
                         groupKey: group.key,
                         fieldName: field.name,
-                        message: field.validation?.messages?["required"]
-                            ?? messages.requiredMessage(for: field.label ?? field.name)
+                        message: field.validation?.message("required", in: language)
+                            ?? messages.requiredMessage(
+                                for: field.label(in: language) ?? field.name
+                            )
                     ))
                     continue
                 }
@@ -108,8 +115,10 @@ package enum FieldGroupLogic {
                     errors.append(FieldGroupError(
                         groupKey: group.key,
                         fieldName: field.name,
-                        message: field.validation?.messages?["pattern"]
-                            ?? messages.invalidMessage(for: field.label ?? field.name)
+                        message: field.validation?.message("pattern", in: language)
+                            ?? messages.invalidMessage(
+                                for: field.label(in: language) ?? field.name
+                            )
                     ))
                 }
             }

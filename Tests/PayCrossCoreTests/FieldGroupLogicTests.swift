@@ -9,12 +9,13 @@ final class FieldGroupLogicTests: XCTestCase {
         readonly: Bool? = nil,
         value: String? = nil,
         label: String? = nil,
+        labels: [String: String]? = nil,
         condition: FieldCondition? = nil,
         validation: FieldValidation? = nil
     ) -> FieldDefinition {
         FieldDefinition(
-            name: name, label: label, required: required, readonly: readonly,
-            value: value, condition: condition, validation: validation
+            name: name, label: label, labels: labels, required: required,
+            readonly: readonly, value: value, condition: condition, validation: validation
         )
     }
 
@@ -203,6 +204,77 @@ final class FieldGroupLogicTests: XCTestCase {
         XCTAssertEqual(
             FieldGroupLogic.validate(groups: groups, values: [:], messages: french).first?.message,
             "We need this"
+        )
+    }
+
+    // MARK: - Validation in the sheet's language
+
+    /// The server sends its own sentences in every language it renders, so the
+    /// message that beats the resolved fallback is now the one for the language
+    /// the sheet resolved rather than the single string it used to send.
+    func testAServerMessageComesOutInTheSheetsLanguage() {
+        let validation = FieldValidation(
+            pattern: "^[0-9]+$",
+            messages: ["required": "We need this", "pattern": "Digits only please"],
+            messagesI18n: [
+                "en": ["required": "We need this", "pattern": "Digits only please"],
+                "fr": ["required": "Nous en avons besoin", "pattern": "Chiffres uniquement"]
+            ]
+        )
+        let groups = [FieldGroup(key: "b", fields: [
+            field("num", required: true, validation: validation)
+        ])]
+
+        XCTAssertEqual(
+            FieldGroupLogic.validate(groups: groups, values: [:], language: "fr").first?.message,
+            "Nous en avons besoin"
+        )
+        XCTAssertEqual(
+            FieldGroupLogic.validate(
+                groups: groups, values: ["b": ["num": "x"]], language: "fr"
+            ).first?.message,
+            "Chiffres uniquement"
+        )
+        XCTAssertEqual(
+            FieldGroupLogic.validate(groups: groups, values: [:], language: "en").first?.message,
+            "We need this"
+        )
+    }
+
+    /// A session minted before the maps existed, and a language the maps do not
+    /// name, both read the singular value.
+    func testAMessageWithNoMapForTheLanguageFallsBackToTheSingularOne() {
+        let groups = [FieldGroup(key: "b", fields: [
+            field(
+                "num", required: true,
+                validation: FieldValidation(messages: ["required": "We need this"])
+            )
+        ])]
+        XCTAssertEqual(
+            FieldGroupLogic.validate(groups: groups, values: [:], language: "fr").first?.message,
+            "We need this"
+        )
+    }
+
+    /// The fallback sentence names the field, so the name it uses has to be the
+    /// label the shopper is actually looking at.
+    func testTheFallbackSentenceNamesTheFieldInTheSheetsLanguage() {
+        let groups = [FieldGroup(key: "b", fields: [
+            field(
+                "postcode", required: true, label: "Postcode",
+                labels: ["en": "Postcode", "fr": "Code postal"]
+            )
+        ])]
+        let french = FlowMessages(fieldRequired: "Champ obligatoire : %@")
+        XCTAssertEqual(
+            FieldGroupLogic.validate(
+                groups: groups, values: [:], messages: french, language: "fr"
+            ).first?.message,
+            "Champ obligatoire : Code postal"
+        )
+        XCTAssertEqual(
+            FieldGroupLogic.validate(groups: groups, values: [:], language: "en").first?.message,
+            "Postcode is required"
         )
     }
 

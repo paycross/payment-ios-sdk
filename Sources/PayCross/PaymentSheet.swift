@@ -138,11 +138,13 @@ final class PaymentSheetModel: ObservableObject {
     @Published private(set) var formattingLocale: Locale = SheetLanguage.locale
     /// The language the sheet is drawing in.
     ///
-    /// Published for the repaint rather than read anywhere: `L` reads
+    /// Published for the repaint as much as for the read: `L` reads
     /// `SheetLanguage`, which is not observable, so a session that moves the
     /// language without moving the formatting locale — `configure(locale: "de")`
     /// over an `fr` session does exactly that — would otherwise repaint only
-    /// because `load()` happens to set `isPreparing` on every branch.
+    /// because `load()` happens to set `isPreparing` on every branch. It is read
+    /// too, by the form and by the validation, both of which pick their wording
+    /// out of maps the server sends rather than out of our own bundle.
     @Published private(set) var languageTag: String = SheetLanguage.tag
     @Published var fieldValues: [String: [String: String]] = [:]
     @Published private(set) var fieldErrors: [FieldGroupError] = []
@@ -510,7 +512,8 @@ final class PaymentSheetModel: ObservableObject {
         // Server-driven fields are validated here, not in the form reducer: only
         // visible fields count, and visibility depends on sibling values.
         fieldErrors = FieldGroupLogic.validate(
-            groups: fieldGroups, values: fieldValues, messages: flowMessages
+            groups: fieldGroups, values: fieldValues,
+            messages: flowMessages, language: languageTag
         )
         guard fieldErrors.isEmpty else { return }
 
@@ -557,7 +560,8 @@ final class PaymentSheetModel: ObservableObject {
         // has spent the shopper's authorisation on a rejection they could have
         // been shown first.
         fieldErrors = FieldGroupLogic.validate(
-            groups: fieldGroups, values: fieldValues, messages: flowMessages
+            groups: fieldGroups, values: fieldValues,
+            messages: flowMessages, language: languageTag
         )
         guard fieldErrors.isEmpty else { return }
 
@@ -913,6 +917,7 @@ struct PaymentSheetView: View {
                         fieldGroups: model.fieldGroups,
                         fieldValues: $model.fieldValues,
                         fieldErrors: model.fieldErrors,
+                        language: model.languageTag,
                         onPay: model.pay,
                         showsApplePayButton: model.showsApplePayButton,
                         onApplePay: { model.payWithApplePay() },

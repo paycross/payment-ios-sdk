@@ -142,6 +142,151 @@ final class SessionDataTests: XCTestCase {
         XCTAssertEqual(state.options?.first?.value, "NY")
     }
 
+    // MARK: - Per-language labels
+
+    /// The session as it is sent today: every rendered string carries a map of
+    /// its own beside the singular key.
+    private let bilingualPayload = """
+    {
+      "session_id": "sess_1",
+      "status": "open",
+      "data": {
+        "field_groups": [
+          {
+            "key": "billing",
+            "label": "Billing address",
+            "labels": { "en": "Billing address", "fr": "Adresse de facturation" },
+            "fields": [
+              {
+                "name": "email",
+                "type": "email",
+                "label": "Email address",
+                "labels": { "en": "Email address", "fr": "Adresse e-mail" },
+                "placeholder": "email@example.com",
+                "placeholders": { "en": "email@example.com", "fr": "email@example.com" },
+                "required": true,
+                "validation": {
+                  "max_length": 254,
+                  "messages": { "required": "This field is required" },
+                  "messages_i18n": {
+                    "en": { "required": "This field is required" },
+                    "fr": { "required": "Ce champ est obligatoire" }
+                  }
+                }
+              },
+              {
+                "name": "state",
+                "type": "select",
+                "options": [
+                  { "value": "NY", "label": "New York",
+                    "labels": { "en": "New York", "fr": "État de New York" } }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+    """
+
+    func testTheLanguageMapsDecode() throws {
+        let session = try JSONDecoder().decode(
+            SessionResponse.self, from: Data(bilingualPayload.utf8)
+        )
+        let group = try XCTUnwrap(session.data?.fieldGroups?.first)
+        let email = try XCTUnwrap(group.fields?.first)
+        let option = try XCTUnwrap(group.fields?.last?.options?.first)
+
+        XCTAssertEqual(group.labels?["fr"], "Adresse de facturation")
+        XCTAssertEqual(email.labels?["fr"], "Adresse e-mail")
+        XCTAssertEqual(email.placeholders?["fr"], "email@example.com")
+        XCTAssertEqual(option.labels?["fr"], "État de New York")
+        // Language outermost, rule inside it — the opposite nesting to
+        // `messages`, and a CodingKey the compiler cannot synthesise from the
+        // property name.
+        XCTAssertEqual(email.validation?.messagesI18n?["fr"]?["required"], "Ce champ est obligatoire")
+        XCTAssertEqual(email.validation?.messagesI18n?["en"]?["required"], "This field is required")
+    }
+
+    func testTheMapsAreReadByLanguageAndTheSingularKeysStillHoldTheirValues() throws {
+        let session = try JSONDecoder().decode(
+            SessionResponse.self, from: Data(bilingualPayload.utf8)
+        )
+        let group = try XCTUnwrap(session.data?.fieldGroups?.first)
+        let email = try XCTUnwrap(group.fields?.first)
+        let option = try XCTUnwrap(group.fields?.last?.options?.first)
+
+        XCTAssertEqual(group.label(in: "fr"), "Adresse de facturation")
+        XCTAssertEqual(group.label(in: "en"), "Billing address")
+        XCTAssertEqual(group.label, "Billing address", "the singular key keeps its value")
+        XCTAssertEqual(email.label(in: "fr"), "Adresse e-mail")
+        XCTAssertEqual(email.placeholder(in: "fr"), "email@example.com")
+        XCTAssertEqual(option.label(in: "fr"), "État de New York")
+        XCTAssertEqual(email.validation?.message("required", in: "fr"), "Ce champ est obligatoire")
+    }
+
+    /// A language the maps do not name, and a rule they do not name, both fall
+    /// back rather than blanking the label or losing the message.
+    func testAnUnnamedLanguageOrRuleFallsBackToTheSingularValue() throws {
+        let session = try JSONDecoder().decode(
+            SessionResponse.self, from: Data(bilingualPayload.utf8)
+        )
+        let email = try XCTUnwrap(session.data?.fieldGroups?.first?.fields?.first)
+
+        XCTAssertEqual(email.label(in: "de"), "Email address")
+        XCTAssertEqual(email.placeholder(in: "de"), "email@example.com")
+        XCTAssertEqual(email.validation?.message("required", in: "de"), "This field is required")
+        XCTAssertNil(email.validation?.message("pattern", in: "fr"))
+    }
+
+    /// Every session minted before the backend shipped the maps carries none of
+    /// them, and there are live ones. They decode, and every read answers with
+    /// the singular value the sheet used to draw.
+    func testASessionWithoutTheMapsStillDecodesAndReads() throws {
+        let session = try JSONDecoder().decode(SessionResponse.self, from: Data(payload.utf8))
+        let group = try XCTUnwrap(session.data?.fieldGroups?.first)
+        let postcode = try XCTUnwrap(group.fields?.first)
+        let option = try XCTUnwrap(group.fields?.last?.options?.first)
+
+        XCTAssertNil(group.labels)
+        XCTAssertNil(postcode.labels)
+        XCTAssertNil(postcode.placeholders)
+        XCTAssertNil(option.labels)
+        XCTAssertNil(postcode.validation?.messagesI18n)
+
+        XCTAssertEqual(group.label(in: "fr"), "Billing address")
+        XCTAssertEqual(postcode.label(in: "fr"), "Postcode")
+        XCTAssertNil(postcode.placeholder(in: "fr"), "this field never had a placeholder")
+        XCTAssertEqual(option.label(in: "fr"), "New York")
+    }
+
+    /// A field with no placeholder at all sends no map for one, so a nil map is
+    /// not an empty one and must not read as an empty string.
+    func testAFieldWithNoPlaceholderReadsAsNilInEveryLanguage() throws {
+        let field = FieldDefinition(
+            name: "postcode",
+            label: "Postcode",
+            labels: ["en": "Postcode", "fr": "Code postal"]
+        )
+        XCTAssertNil(field.placeholder(in: "fr"))
+        XCTAssertNil(field.placeholder(in: nil))
+        XCTAssertEqual(field.label(in: "fr"), "Code postal")
+    }
+
+    /// Nil is what Core is handed when nothing resolved a language, and it reads
+    /// the singular value rather than picking one of the maps' keys.
+    func testANilLanguageReadsTheSingularValue() throws {
+        let session = try JSONDecoder().decode(
+            SessionResponse.self, from: Data(bilingualPayload.utf8)
+        )
+        let group = try XCTUnwrap(session.data?.fieldGroups?.first)
+        let email = try XCTUnwrap(group.fields?.first)
+
+        XCTAssertEqual(group.label(in: nil), "Billing address")
+        XCTAssertEqual(email.label(in: nil), "Email address")
+        XCTAssertEqual(email.validation?.message("required", in: nil), "This field is required")
+    }
+
     /// A minimal session must not fail to decode: everything under `data` is
     /// optional, and a checkout with no saved cards and no extra fields is normal.
     func testMinimalSessionDecodes() throws {

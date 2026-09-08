@@ -77,4 +77,39 @@ private extension UIWindow {
 func textFields(in view: UIView) -> [UITextField] {
     (view.subviews.compactMap { $0 as? UITextField }) + view.subviews.flatMap(textFields(in:))
 }
+
+/// How many pixels differ between two renders, ignoring alpha.
+///
+/// The measurement of last resort, and the only one that answers for a SwiftUI
+/// `Text`: it is drawn into a layer rather than into a `UILabel`, and this
+/// bundle has no app host to build an accessibility tree from.
+func differingPixels(_ first: UIImage, _ second: UIImage) throws -> Int {
+    let a = try XCTUnwrap(first.cgImage)
+    let b = try XCTUnwrap(second.cgImage)
+    let width = min(a.width, b.width)
+    let height = min(a.height, b.height)
+
+    var left = [UInt8](repeating: 0, count: width * height * 4)
+    var right = left
+    let space = CGColorSpaceCreateDeviceRGB()
+    let info = CGImageAlphaInfo.premultipliedLast.rawValue
+    let bounds = CGRect(x: 0, y: 0, width: width, height: height)
+    CGContext(
+        data: &left, width: width, height: height, bitsPerComponent: 8,
+        bytesPerRow: width * 4, space: space, bitmapInfo: info
+    )?.draw(a, in: bounds)
+    CGContext(
+        data: &right, width: width, height: height, bitsPerComponent: 8,
+        bytesPerRow: width * 4, space: space, bitmapInfo: info
+    )?.draw(b, in: bounds)
+
+    var differing = 0
+    for index in stride(from: 0, to: left.count, by: 4)
+    where left[index] != right[index]
+        || left[index + 1] != right[index + 1]
+        || left[index + 2] != right[index + 2] {
+        differing += 1
+    }
+    return differing
+}
 #endif
