@@ -284,6 +284,22 @@ final class FieldGroupLanguageTests: XCTestCase {
         ]
     )
 
+    /// A session that sends the placeholder as an empty string. Not the same
+    /// shape as sending none: the read returns `""` rather than nil.
+    private let selectWithEmptyPlaceholder = FieldGroup(
+        key: "billing",
+        fields: [
+            FieldDefinition(
+                name: "country",
+                type: "select",
+                label: "Country",
+                placeholder: "",
+                placeholders: ["en": "", "fr": ""],
+                options: [FieldOption(value: "US", label: "United States")]
+            )
+        ]
+    )
+
     private let chosenCountry = ["billing": ["country": "US"]]
 
     /// The country placeholder is usually the one entry in the session's
@@ -321,6 +337,18 @@ final class FieldGroupLanguageTests: XCTestCase {
             ),
             0,
             "an unset select with no placeholder no longer draws the em dash"
+        )
+    }
+
+    /// An empty string is not a placeholder. Reading it as one draws a blank
+    /// where the dash belongs, which is a select with nothing in it at all.
+    func testASelectWhosePlaceholderIsEmptyDrawsTheDash() throws {
+        XCTAssertEqual(
+            try differingPixels(
+                render(selectWithEmptyPlaceholder, "en"), render(selectWithoutPlaceholder, "en")
+            ),
+            0,
+            "an empty placeholder drew a blank empty row instead of the em dash"
         )
     }
 

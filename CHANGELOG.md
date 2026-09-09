@@ -22,13 +22,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   spells out; required-ness is read from the field's resolved state, so a field
   a condition makes required says it too.
 
+  The heading itself is now hidden from assistive technologies. It was a stop of
+  its own sitting immediately before the control, so with the control finally
+  carrying the same words, every field on the form would have been read out
+  twice. It is still drawn, `*` and all, for the shopper who reads it.
+
 - **A select draws the placeholder the session sent for it.** The empty row of a
   select was a hardcoded em dash, and the field's `placeholders` map was read for
   text fields only, so a country select showed `—` where the session said
   `Select a country...` and, in French, `Sélectionnez un pays...`. That entry is
   often the only genuinely translated string on the form: the address examples a
   merchant configures tend to be one string in both languages. The dash remains
-  for a field the session sends no placeholder for. Nothing about selection,
+  for a field the session sends no placeholder for, and for one that sends an
+  empty string, which is not a placeholder either. Nothing about selection,
   validation or what is submitted changes; the empty row's tag is still `""`.
 
 ## [0.7.2] - 2026-09-08

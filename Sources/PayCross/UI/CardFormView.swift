@@ -335,6 +335,10 @@ private struct LabeledField<Content: View, Trailing: View>: View {
             Text(title)
                 .font(style.font(.footnote, weight: .medium))
                 .foregroundStyle(style.foreground(\.textSecondary, default: .secondary))
+                // All four fields this wraps now carry the same words as their
+                // own name, so a visible heading here is the field announced
+                // twice. Same reason the amount's caption is hidden.
+                .accessibilityHidden(true)
             HStack {
                 content
                     // On the field rather than around it. A `UITextField` is one

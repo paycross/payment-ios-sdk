@@ -71,7 +71,11 @@ package enum FieldGroupLogic {
         requiredTemplate: String,
         language: String? = nil
     ) -> String {
-        let base = field.label(in: language) ?? field.name
+        // An empty label is not a name. Without this the one field the fix is
+        // for — the one nothing on screen identifies — would get an explicitly
+        // empty name instead of falling through to what the server called it.
+        let labelled = field.label(in: language).flatMap { $0.isEmpty ? nil : $0 }
+        let base = labelled ?? field.name
         return state.isRequired ? Template.fill(requiredTemplate, with: base) : base
     }
 

@@ -96,6 +96,15 @@ struct FieldRow: View {
         return state.isRequired ? "\(base) *" : base
     }
 
+    /// What the select's empty row draws before the shopper has chosen.
+    ///
+    /// An empty string is not a placeholder: a session that sends `""`, or an
+    /// empty entry for one language, would otherwise draw a blank row where the
+    /// dash belongs. Same guard the group heading above uses.
+    private var emptyRowText: String {
+        field.placeholder(in: language).flatMap { $0.isEmpty ? nil : $0 } ?? "—"
+    }
+
     /// What the field is called out loud. The drawn `*` above says "required" to
     /// a shopper who can see it and nothing to one who cannot, so the spoken
     /// name says the word.
@@ -116,6 +125,12 @@ struct FieldRow: View {
             Text(title)
                 .font(style.font(.footnote, weight: .medium))
                 .foregroundStyle(style.foreground(\.textSecondary, default: .secondary))
+                // Its words are the control's name below, and the `*` in it is
+                // the word "required" there. Left visible it is a stop of its
+                // own immediately before the control, so every field on the
+                // form is read out twice. Same reason the amount's caption is
+                // hidden.
+                .accessibilityHidden(true)
 
             inputBox
 
@@ -142,7 +157,7 @@ struct FieldRow: View {
                     // select is usually the one string on the form the merchant
                     // has genuinely translated; the dash is for a field that
                     // carries none.
-                    Text(verbatim: field.placeholder(in: language) ?? "—").tag("")
+                    Text(verbatim: emptyRowText).tag("")
                     ForEach(options, id: \.value) { option in
                         Text(option.label(in: language) ?? option.value).tag(option.value)
                     }

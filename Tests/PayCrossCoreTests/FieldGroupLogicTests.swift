@@ -447,6 +447,21 @@ final class FieldGroupLogicTests: XCTestCase {
         )
     }
 
+    /// An empty label is not a name. This is the field the whole fix is for —
+    /// the one nothing on screen identifies — so handing it an explicitly empty
+    /// name would leave it exactly as unnamed as the placeholder fallback did.
+    func testAFieldWhoseLabelIsEmptyIsSpokenAsItsName() {
+        let blank = FieldDefinition(
+            name: "first_name", label: "", labels: ["en": "", "fr": ""]
+        )
+        XCTAssertEqual(
+            FieldGroupLogic.accessibleName(
+                for: blank, state: optional, requiredTemplate: requiredEN, language: "en"
+            ),
+            "first_name"
+        )
+    }
+
     /// Required-ness comes from the state, not from `field.required`. A field a
     /// condition makes required carries `required: nil` on the wire, so reading
     /// the flag would leave the shopper who most needs the word without it.
