@@ -61,7 +61,16 @@ struct FieldGroupsView: View {
     }
 }
 
-private struct FieldRow: View {
+/// One server-driven field: its heading, its control and its message.
+///
+/// Internal rather than private so the two names it computes — the one it draws
+/// and the one it speaks — can be asserted directly; nothing but this file draws
+/// one. That seam exists because SwiftUI keeps its accessibility tree out of
+/// reach of a unit-test bundle, measured: a hosted `TextField` reports a nil
+/// `accessibilityLabel` on the `UITextField` under it however the modifier is
+/// applied, and the container protocol hands back no elements at all without an
+/// assistive technology running. The string is the most a test here can hold.
+struct FieldRow: View {
     @Environment(\.payCrossAppearance) private var style
     /// One per row, so a tap on this row's box reaches this row's field. Same
     /// reason as the cardholder field: SwiftUI centres the control inside the
@@ -80,9 +89,32 @@ private struct FieldRow: View {
     /// no tap gesture over it.
     private var isSelect: Bool { !(field.options ?? []).isEmpty }
 
-    private var title: String {
+    /// What the field is called on screen. The `*` is the sighted shopper's
+    /// required marker; `accessibleName` carries the same fact in words.
+    var title: String {
         let base = field.label(in: language) ?? field.name
         return state.isRequired ? "\(base) *" : base
+    }
+
+    /// What the select's empty row draws before the shopper has chosen.
+    ///
+    /// An empty string is not a placeholder: a session that sends `""`, or an
+    /// empty entry for one language, would otherwise draw a blank row where the
+    /// dash belongs. Same guard the group heading above uses.
+    private var emptyRowText: String {
+        field.placeholder(in: language).flatMap { $0.isEmpty ? nil : $0 } ?? "—"
+    }
+
+    /// What the field is called out loud. The drawn `*` above says "required" to
+    /// a shopper who can see it and nothing to one who cannot, so the spoken
+    /// name says the word.
+    var accessibleName: String {
+        FieldGroupLogic.accessibleName(
+            for: field,
+            state: state,
+            requiredTemplate: L("paycross_field_required_accessibility", "%@, required"),
+            language: language
+        )
     }
 
     var body: some View {
@@ -93,6 +125,12 @@ private struct FieldRow: View {
             Text(title)
                 .font(style.font(.footnote, weight: .medium))
                 .foregroundStyle(style.foreground(\.textSecondary, default: .secondary))
+                // Its words are the control's name below, and the `*` in it is
+                // the word "required" there. Left visible it is a stop of its
+                // own immediately before the control, so every field on the
+                // form is read out twice. Same reason the amount's caption is
+                // hidden.
+                .accessibilityHidden(true)
 
             inputBox
 
@@ -111,11 +149,15 @@ private struct FieldRow: View {
     private var inputBox: some View {
         Group {
             if isSelect, let options = field.options {
-                Picker(title, selection: $value) {
+                Picker(accessibleName, selection: $value) {
                     // An empty tag so an unset optional select has somewhere to sit;
                     // without it SwiftUI silently picks the first option and the
-                    // shopper appears to have chosen something they did not.
-                    Text(verbatim: "—").tag("")
+                    // shopper appears to have chosen something they did not. It
+                    // draws the session's own placeholder, which for a country
+                    // select is usually the one string on the form the merchant
+                    // has genuinely translated; the dash is for a field that
+                    // carries none.
+                    Text(verbatim: emptyRowText).tag("")
                     ForEach(options, id: \.value) { option in
                         Text(option.label(in: language) ?? option.value).tag(option.value)
                     }
@@ -125,6 +167,10 @@ private struct FieldRow: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 TextField(field.placeholder(in: language) ?? "", text: $value)
+                    // Without this the spoken name is the first argument above:
+                    // the shopper hears "123 Main St" on the billing line, and
+                    // nothing at all on a field the merchant left no example for.
+                    .accessibilityLabel(accessibleName)
                     .focused($focused)
                     .disabled(state.isReadOnly)
                     .keyboardType(field.type == "number" ? .numberPad : .default)

@@ -98,3 +98,8 @@
 
 /* The same field failed the server's pattern. %@ is the same label */
 "paycross_field_invalid" = "%@ is invalid";
+
+/* VoiceOver name for a required server-driven field. %@ is the field's own
+   label, e.g. "Address line 1". The sheet draws a "*" beside that label, which
+   an assistive technology either skips or spells out */
+"paycross_field_required_accessibility" = "%@, required";

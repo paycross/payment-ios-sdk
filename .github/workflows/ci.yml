@@ -279,6 +279,80 @@ jobs:
           fi
           echo "ok"
 
+      - name: Every field on the sheet is named once
+        run: |
+          set -euo pipefail
+          # None of this is reachable from a unit test. SwiftUI builds no
+          # accessibility tree in a test bundle — a hosted TextField reports a
+          # nil accessibilityLabel however the modifier is applied, and the
+          # container protocol hands back no elements at all — so every line
+          # below is proved on a simulator and held here.
+          #
+          # Two halves. Every control must carry the field's name, or its
+          # spoken name falls back to the example text inside it: the billing
+          # line announced "123 Main St" and the security code announced three
+          # bullets. And the heading above it must NOT be exposed, or the same
+          # words are a stop of their own immediately before the control and
+          # every field is read out twice. The two halves depend on each other:
+          # hiding a heading over a control that has lost its name leaves the
+          # field with no name at all.
+          status=0
+          sheet=Sources/PayCross/UI/FieldGroupsView.swift
+          card=Sources/PayCross/UI/CardFormView.swift
+          numeric=Sources/PayCross/UI/NumericField.swift
+          for f in "$sheet" "$card" "$numeric"; do
+            test -f "$f" || {
+              echo "::error::$f is gone; this check would pass while checking nothing"
+              exit 1
+            }
+          done
+
+          # The name on each control.
+          if [ "$(grep -cF 'Picker(accessibleName' "$sheet")" -ne 1 ]; then
+            echo "::error::the select must be built with accessibleName, not with the drawn title"
+            status=1
+          fi
+          if grep -nF 'Picker(title' "$sheet"; then
+            echo "::error::the drawn title carries a '*'; the spoken name must say the word"
+            status=1
+          fi
+          if [ "$(grep -cF '.accessibilityLabel(accessibleName)' "$sheet")" -ne 1 ]; then
+            echo "::error::the server-driven text field has lost its accessible name"
+            status=1
+          fi
+          # Once in makeUIView, once in updateUIView: the heading is looked up
+          # in a language that is installed twice per payment.
+          if [ "$(grep -cF 'field.accessibilityLabel = accessibleName' "$numeric")" -ne 2 ]; then
+            echo "::error::the UIKit-backed card fields must be named on build AND on update"
+            status=1
+          fi
+          # The cardholder field is the one SwiftUI TextField among the card
+          # fields, so it is named at its call site rather than in NumericField.
+          if [ "$(grep -cF '.accessibilityLabel(cardholderTitle)' "$card")" -ne 1 ]; then
+            echo "::error::the cardholder field has lost its accessible name; it would announce only its placeholder"
+            status=1
+          fi
+
+          # And every drawn heading hidden from the tree. Comments and the
+          # blank lines they leave behind are dropped before the window is
+          # measured: the modifier sits three lines under the heading once they
+          # are gone, and a comment written between the two must not come back
+          # as "the heading is not hidden".
+          for f in "$sheet" "$card"; do
+            headings=$(grep -cF 'Text(title)' "$f")
+            if [ "$headings" -lt 1 ]; then
+              echo "::error::no 'Text(title)' in $f; this check now covers nothing"
+              exit 1
+            fi
+            hidden=$(sed -E 's://.*::' "$f" | grep -vE '^[[:space:]]*$' \
+              | grep -A6 -F 'Text(title)' | grep -cF '.accessibilityHidden(true)' || true)
+            if [ "$hidden" -ne "$headings" ]; then
+              echo "::error::$f draws $headings heading(s) and hides $hidden; a visible heading is the field announced twice"
+              status=1
+            fi
+          done
+          exit $status
+
       - name: No identifier is set from a literal
         run: |
           set -euo pipefail

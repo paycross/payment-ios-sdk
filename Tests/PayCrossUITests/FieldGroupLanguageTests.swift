@@ -235,6 +235,136 @@ final class FieldGroupLanguageTests: XCTestCase {
         )
     }
 
+    // MARK: - The empty row of a select
+
+    /// A country select the session sends a placeholder for. Every other string
+    /// on this fixture is one string in both languages, so the empty row is the
+    /// only thing on the form that can move with the language.
+    private let selectWithPlaceholder = FieldGroup(
+        key: "billing",
+        fields: [
+            FieldDefinition(
+                name: "country",
+                type: "select",
+                label: "Country",
+                placeholder: "Select a country...",
+                placeholders: [
+                    "en": "Select a country...", "fr": "Sélectionnez un pays..."
+                ],
+                options: [FieldOption(value: "US", label: "United States")]
+            )
+        ]
+    )
+
+    /// The same select as a merchant who configured no placeholder sends it.
+    private let selectWithoutPlaceholder = FieldGroup(
+        key: "billing",
+        fields: [
+            FieldDefinition(
+                name: "country",
+                type: "select",
+                label: "Country",
+                options: [FieldOption(value: "US", label: "United States")]
+            )
+        ]
+    )
+
+    /// The fallback written out as a placeholder, so the em dash can be pinned
+    /// without reading a glyph off a layer.
+    private let selectWithDashPlaceholder = FieldGroup(
+        key: "billing",
+        fields: [
+            FieldDefinition(
+                name: "country",
+                type: "select",
+                label: "Country",
+                placeholder: "—",
+                options: [FieldOption(value: "US", label: "United States")]
+            )
+        ]
+    )
+
+    /// A session that sends the placeholder as an empty string. Not the same
+    /// shape as sending none: the read returns `""` rather than nil.
+    private let selectWithEmptyPlaceholder = FieldGroup(
+        key: "billing",
+        fields: [
+            FieldDefinition(
+                name: "country",
+                type: "select",
+                label: "Country",
+                placeholder: "",
+                placeholders: ["en": "", "fr": ""],
+                options: [FieldOption(value: "US", label: "United States")]
+            )
+        ]
+    )
+
+    private let chosenCountry = ["billing": ["country": "US"]]
+
+    /// The country placeholder is usually the one entry in the session's
+    /// per-language maps that is genuinely translated; the address examples
+    /// beside it tend to be the same string in both.
+    func testAnUnsetSelectDrawsThePlaceholderInTheSheetsLanguage() throws {
+        XCTAssertGreaterThan(
+            try differingPixels(
+                render(selectWithPlaceholder, "en"), render(selectWithPlaceholder, "fr")
+            ),
+            0,
+            "the French sheet drew the same empty row as the English one"
+        )
+    }
+
+    /// What the bug looked like: the empty row was a literal em dash, so a
+    /// select with a placeholder and one without drew the same thing.
+    func testAnUnsetSelectDrawsThePlaceholderRatherThanTheDash() throws {
+        XCTAssertGreaterThan(
+            try differingPixels(
+                render(selectWithPlaceholder, "en"), render(selectWithoutPlaceholder, "en")
+            ),
+            0,
+            "the select ignored the placeholder the session sent for it"
+        )
+    }
+
+    /// And the fallback survives: a field the session sends no placeholder for
+    /// still draws the dash, which is what an unset optional select needs to
+    /// sit on.
+    func testASelectWithNoPlaceholderStillDrawsTheDash() throws {
+        XCTAssertEqual(
+            try differingPixels(
+                render(selectWithoutPlaceholder, "en"), render(selectWithDashPlaceholder, "en")
+            ),
+            0,
+            "an unset select with no placeholder no longer draws the em dash"
+        )
+    }
+
+    /// An empty string is not a placeholder. Reading it as one draws a blank
+    /// where the dash belongs, which is a select with nothing in it at all.
+    func testASelectWhosePlaceholderIsEmptyDrawsTheDash() throws {
+        XCTAssertEqual(
+            try differingPixels(
+                render(selectWithEmptyPlaceholder, "en"), render(selectWithoutPlaceholder, "en")
+            ),
+            0,
+            "an empty placeholder drew a blank empty row instead of the em dash"
+        )
+    }
+
+    /// The placeholder belongs to the empty row alone. A select the shopper has
+    /// answered draws their answer, whether or not the field carries one.
+    func testAChosenOptionIsDrawnWhicheverPlaceholderTheFieldCarries() throws {
+        XCTAssertEqual(
+            try differingPixels(
+                render(selectWithPlaceholder, "en", chosenCountry),
+                render(selectWithoutPlaceholder, "en", chosenCountry)
+            ),
+            0,
+            "the placeholder is leaking into a select that has a value"
+        )
+    }
+
     private func render(
         _ group: FieldGroup,
         _ language: String,

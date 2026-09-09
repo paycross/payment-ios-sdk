@@ -17,6 +17,11 @@ struct NumericField: UIViewRepresentable {
     @Environment(\.payCrossAppearance) private var style
     let placeholder: String
     @Binding var text: String
+    /// What the field is called out loud, which is the heading drawn above it.
+    /// Without it `UITextField` falls back to its placeholder, so the card
+    /// number announces its own example digits and the security code announces
+    /// three bullets.
+    let accessibleName: String
     var isSecure = false
     var contentType: UITextContentType?
     let identifier: String
@@ -36,6 +41,7 @@ struct NumericField: UIViewRepresentable {
         field.adjustsFontForContentSizeCategory = false
         applyStyle(to: field)
         field.accessibilityIdentifier = identifier
+        field.accessibilityLabel = accessibleName
         field.delegate = context.coordinator
         field.inputAccessoryView = context.coordinator.doneBar
         field.addTarget(
@@ -56,6 +62,10 @@ struct NumericField: UIViewRepresentable {
         // The binding is captured per render, so the coordinator has to be handed
         // the current one or edits write into a stale view's state.
         context.coordinator.text = $text
+        // Re-applied on every render for the same reason the style is: the
+        // heading is looked up in the sheet's language, which is installed
+        // twice per payment.
+        field.accessibilityLabel = accessibleName
         applyStyle(to: field)
         if field.text != text {
             field.text = text
