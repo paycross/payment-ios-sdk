@@ -379,4 +379,91 @@ final class FieldGroupLogicTests: XCTestCase {
             "only fields the server declared may be submitted"
         )
     }
+
+    // MARK: - The name an assistive technology speaks
+
+    /// The sheet's own copy, as it reaches Core already looked up.
+    private let requiredEN = "%@, required"
+    private let requiredFR = "%@, obligatoire"
+
+    private let optional = FieldState(isVisible: true, isRequired: false, isReadOnly: false)
+    private let required = FieldState(isVisible: true, isRequired: true, isReadOnly: false)
+
+    private let line1 = FieldDefinition(
+        name: "line1",
+        label: "Address line 1",
+        labels: ["en": "Address line 1", "fr": "Ligne d'adresse 1"],
+        placeholder: "123 Main St",
+        placeholders: ["en": "123 Main St", "fr": "123 Main St"]
+    )
+
+    /// The bug this replaces: the spoken name was the placeholder, so the
+    /// billing line announced the example address instead of the field.
+    func testAnOptionalFieldIsSpokenAsItsLabel() {
+        XCTAssertEqual(
+            FieldGroupLogic.accessibleName(
+                for: line1, state: optional, requiredTemplate: requiredEN, language: "en"
+            ),
+            "Address line 1"
+        )
+    }
+
+    func testARequiredFieldIsSpokenWithTheWordRatherThanTheStar() {
+        let spoken = FieldGroupLogic.accessibleName(
+            for: line1, state: required, requiredTemplate: requiredEN, language: "en"
+        )
+        XCTAssertEqual(spoken, "Address line 1, required")
+        XCTAssertFalse(spoken.contains("*"), "the visual marker must not reach the spoken name")
+    }
+
+    func testTheSpokenNameFollowsTheSheetsLanguage() {
+        XCTAssertEqual(
+            FieldGroupLogic.accessibleName(
+                for: line1, state: required, requiredTemplate: requiredFR, language: "fr"
+            ),
+            "Ligne d'adresse 1, obligatoire"
+        )
+    }
+
+    /// A session minted before the per-language maps existed still has a name.
+    func testASessionWithoutTheMapsIsSpokenAsItsSingularLabel() {
+        let singular = FieldDefinition(name: "line1", label: "Address line 1")
+        XCTAssertEqual(
+            FieldGroupLogic.accessibleName(
+                for: singular, state: optional, requiredTemplate: requiredFR, language: "fr"
+            ),
+            "Address line 1"
+        )
+    }
+
+    /// The last resort. A field the merchant labelled nothing announced nothing
+    /// at all before, because its placeholder was null too.
+    func testAFieldWithNoLabelIsSpokenAsItsName() {
+        XCTAssertEqual(
+            FieldGroupLogic.accessibleName(
+                for: field("first_name"), state: optional, requiredTemplate: requiredEN
+            ),
+            "first_name"
+        )
+    }
+
+    /// Required-ness comes from the state, not from `field.required`. A field a
+    /// condition makes required carries `required: nil` on the wire, so reading
+    /// the flag would leave the shopper who most needs the word without it.
+    func testAFieldMadeRequiredByItsConditionIsSpokenAsRequired() {
+        let state = FieldGroupLogic.fieldState(
+            for: field("state", condition: FieldCondition(
+                whenField: "country", whenIn: ["US"], display: "required", default: "hidden"
+            )),
+            groupValues: ["country": "US"]
+        )
+        XCTAssertEqual(
+            FieldGroupLogic.accessibleName(
+                for: field("state", label: "State / Province"),
+                state: state,
+                requiredTemplate: requiredEN
+            ),
+            "State / Province, required"
+        )
+    }
 }

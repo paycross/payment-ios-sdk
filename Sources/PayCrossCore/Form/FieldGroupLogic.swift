@@ -54,6 +54,27 @@ package enum FieldGroupLogic {
         )
     }
 
+    /// What an assistive technology should call a field.
+    ///
+    /// The drawn heading marks a required field with a trailing `*`, which is a
+    /// glyph VoiceOver either skips or spells out as "star"; the spoken name has
+    /// to carry the word instead. Required-ness is read off the `FieldState`
+    /// rather than off `field.required`, because a condition can make an
+    /// otherwise optional field required.
+    ///
+    /// - Parameter requiredTemplate: the sheet's own "%@, required" copy,
+    ///   already looked up. Handed in for the same reason `FlowMessages` is:
+    ///   Core ships no strings and cannot reach the merchant-first lookup.
+    package static func accessibleName(
+        for field: FieldDefinition,
+        state: FieldState,
+        requiredTemplate: String,
+        language: String? = nil
+    ) -> String {
+        let base = field.label(in: language) ?? field.name
+        return state.isRequired ? Template.fill(requiredTemplate, with: base) : base
+    }
+
     /// Server-supplied starting values, keyed by group. Empty groups are dropped.
     package static func initialValues(_ groups: [FieldGroup]) -> [String: [String: String]] {
         var out: [String: [String: String]] = [:]

@@ -149,12 +149,19 @@ struct CardFormView: View {
     }
 
     private var newCardFields: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        // Each heading is read into a local and used twice: drawn above the box,
+        // and spoken as the field's name. A control whose only accessible name
+        // is its placeholder announces the example rather than the field.
+        let cardholderTitle = L("paycross_cardholder_name", "Cardholder Name")
+        let cardNumberTitle = L("paycross_card_number", "Card Number")
+
+        return VStack(alignment: .leading, spacing: 14) {
             LabeledField(
-                title: L("paycross_cardholder_name", "Cardholder Name"),
+                title: cardholderTitle,
                 focus: { cardholderFocused = true }
             ) {
                 TextField(L("paycross_name_on_card", "NAME ON CARD"), text: binding(\.cardholderName, event: CardFormEvent.nameChanged))
+                    .accessibilityLabel(cardholderTitle)
                     .textContentType(.name)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.characters)
@@ -162,7 +169,7 @@ struct CardFormView: View {
                     .payCrossIdentifier(.cardholderName)
             }
 
-            LabeledField(title: L("paycross_card_number", "Card Number"), trailing: BrandBadge(brand: state.brand)) {
+            LabeledField(title: cardNumberTitle, trailing: BrandBadge(brand: state.brand)) {
                 // NOTE: Android uses KeyboardType.NumberPassword here, which
                 // makes the framework withhold the field's contents from the
                 // keyboard process. UIKeyboardType has no such variation, so
@@ -171,6 +178,7 @@ struct CardFormView: View {
                 NumericField(
                     placeholder: "1234 5678 9012 3456",
                     text: panBinding,
+                    accessibleName: cardNumberTitle,
                     contentType: .creditCardNumber,
                     identifier: PayCrossTestIdentifiers.cardNumber.rawValue
                 )
@@ -195,20 +203,24 @@ struct CardFormView: View {
     }
 
     private var expiryField: some View {
-        LabeledField(title: L("paycross_expiry_label", "MM/YY")) {
+        let title = L("paycross_expiry_label", "MM/YY")
+        return LabeledField(title: title) {
             NumericField(
                 placeholder: "12/30",
                 text: expiryBinding,
+                accessibleName: title,
                 identifier: PayCrossTestIdentifiers.expiry.rawValue
             )
         }
     }
 
     private var cvvField: some View {
-        LabeledField(title: L("paycross_cvv", "CVV")) {
+        let title = L("paycross_cvv", "CVV")
+        return LabeledField(title: title) {
             NumericField(
                 placeholder: String(repeating: "•", count: state.cvvBrand.cvvLength),
                 text: cvvBinding,
+                accessibleName: title,
                 isSecure: true,
                 identifier: PayCrossTestIdentifiers.cvv.rawValue
             )

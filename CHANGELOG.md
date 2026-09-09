@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Every field on the sheet now says its own name to VoiceOver.** A field's
+  heading is drawn as a separate line above the control, and nothing associated
+  the two, so the control's spoken name fell back to the example text inside it:
+  the billing address line announced `123 Main St`, the card number announced
+  `1234 5678 9012 3456` and the security code announced three bullets. A
+  merchant field the checkout session sends no placeholder for — a first or last
+  name, typically — announced nothing identifying at all. Every text field and
+  every select now carries its heading as an explicit accessible name, in the
+  language the sheet resolved. A required field says the word `required` rather
+  than the `*` the heading draws, which an assistive technology either skips or
+  spells out; required-ness is read from the field's resolved state, so a field
+  a condition makes required says it too.
+
+- **A select draws the placeholder the session sent for it.** The empty row of a
+  select was a hardcoded em dash, and the field's `placeholders` map was read for
+  text fields only, so a country select showed `—` where the session said
+  `Select a country...` and, in French, `Sélectionnez un pays...`. That entry is
+  often the only genuinely translated string on the form: the address examples a
+  merchant configures tend to be one string in both languages. The dash remains
+  for a field the session sends no placeholder for. Nothing about selection,
+  validation or what is submitted changes; the empty row's tag is still `""`.
+
 ## [0.7.2] - 2026-09-08
 
 ### Added

@@ -61,7 +61,16 @@ struct FieldGroupsView: View {
     }
 }
 
-private struct FieldRow: View {
+/// One server-driven field: its heading, its control and its message.
+///
+/// Internal rather than private so the two names it computes — the one it draws
+/// and the one it speaks — can be asserted directly; nothing but this file draws
+/// one. That seam exists because SwiftUI keeps its accessibility tree out of
+/// reach of a unit-test bundle, measured: a hosted `TextField` reports a nil
+/// `accessibilityLabel` on the `UITextField` under it however the modifier is
+/// applied, and the container protocol hands back no elements at all without an
+/// assistive technology running. The string is the most a test here can hold.
+struct FieldRow: View {
     @Environment(\.payCrossAppearance) private var style
     /// One per row, so a tap on this row's box reaches this row's field. Same
     /// reason as the cardholder field: SwiftUI centres the control inside the
@@ -80,9 +89,23 @@ private struct FieldRow: View {
     /// no tap gesture over it.
     private var isSelect: Bool { !(field.options ?? []).isEmpty }
 
-    private var title: String {
+    /// What the field is called on screen. The `*` is the sighted shopper's
+    /// required marker; `accessibleName` carries the same fact in words.
+    var title: String {
         let base = field.label(in: language) ?? field.name
         return state.isRequired ? "\(base) *" : base
+    }
+
+    /// What the field is called out loud. The drawn `*` above says "required" to
+    /// a shopper who can see it and nothing to one who cannot, so the spoken
+    /// name says the word.
+    var accessibleName: String {
+        FieldGroupLogic.accessibleName(
+            for: field,
+            state: state,
+            requiredTemplate: L("paycross_field_required_accessibility", "%@, required"),
+            language: language
+        )
     }
 
     var body: some View {
@@ -111,11 +134,15 @@ private struct FieldRow: View {
     private var inputBox: some View {
         Group {
             if isSelect, let options = field.options {
-                Picker(title, selection: $value) {
+                Picker(accessibleName, selection: $value) {
                     // An empty tag so an unset optional select has somewhere to sit;
                     // without it SwiftUI silently picks the first option and the
-                    // shopper appears to have chosen something they did not.
-                    Text(verbatim: "—").tag("")
+                    // shopper appears to have chosen something they did not. It
+                    // draws the session's own placeholder, which for a country
+                    // select is usually the one string on the form the merchant
+                    // has genuinely translated; the dash is for a field that
+                    // carries none.
+                    Text(verbatim: field.placeholder(in: language) ?? "—").tag("")
                     ForEach(options, id: \.value) { option in
                         Text(option.label(in: language) ?? option.value).tag(option.value)
                     }
@@ -125,6 +152,10 @@ private struct FieldRow: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 TextField(field.placeholder(in: language) ?? "", text: $value)
+                    // Without this the spoken name is the first argument above:
+                    // the shopper hears "123 Main St" on the billing line, and
+                    // nothing at all on a field the merchant left no example for.
+                    .accessibilityLabel(accessibleName)
                     .focused($focused)
                     .disabled(state.isReadOnly)
                     .keyboardType(field.type == "number" ? .numberPad : .default)

@@ -90,8 +90,8 @@ final class LocalizedTests: XCTestCase {
     }
 
     func testBothFilesCarryEveryKeyTheSheetUses() throws {
-        XCTAssertEqual(try keys(in: "en").count, 32)
-        XCTAssertEqual(try keys(in: "fr").count, 32)
+        XCTAssertEqual(try keys(in: "en").count, 33)
+        XCTAssertEqual(try keys(in: "fr").count, 33)
     }
 
     /// The prefix is the whole reason a merchant override is deliberate rather
@@ -122,7 +122,7 @@ final class LocalizedTests: XCTestCase {
         }
     }
 
-    /// Six keys carry one. Naming the count pins the sheet against a seventh
+    /// Seven keys carry one. Naming them pins the sheet against an eighth
     /// arriving in one language only.
     func testThePlaceholderKeysAreTheOnesWeExpect() throws {
         let carrying = try values(in: "en").filter { $0.value.contains("%@") }.keys
@@ -132,6 +132,7 @@ final class LocalizedTests: XCTestCase {
             "paycross_remove_card_message",
             "paycross_error_apple_pay_presentation",
             "paycross_field_required",
+            "paycross_field_required_accessibility",
             "paycross_field_invalid"
         ])
     }

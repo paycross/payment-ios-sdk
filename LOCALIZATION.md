@@ -188,6 +188,18 @@ takes `MM/YY` digits in every language. It is a hint, not a format.
 | `paycross_field_required` | A required server-driven field was left blank | the field's label |
 | `paycross_field_invalid` | That field failed the server's pattern | the field's label |
 
+### Accessibility
+
+| Key | What it paints | `%@` |
+|---|---|---|
+| `paycross_field_required_accessibility` | VoiceOver name of a required server-driven field | the field's label |
+
+Every field on the form is named to an assistive technology by the heading drawn
+above it, which for a server-driven field is the merchant's own label and needs
+no key of its own. This one key is the wording around it: the heading marks a
+required field with a `*`, which VoiceOver either skips or spells out, so the
+spoken name carries the word instead.
+
 The server can send its own message for a field or a submission. When it does,
 that message wins over both of ours. A field's own messages arrive in every
 language the checkout renders and the sheet takes the one for the language it
@@ -211,6 +223,8 @@ but the key still greps out of a French bug report.
 
 A field group's heading, each field's label and placeholder, each select option's
 label and a field's own validation messages are rendered by the checkout API.
+A select's placeholder is what its empty row draws before the shopper has chosen
+anything; a field the API sends none for draws an em dash there.
 They are not in either `.strings` file and `configure(locale:)` does not reword
 them: they are the merchant's own copy, held by the API.
 
