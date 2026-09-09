@@ -285,15 +285,17 @@ jobs:
           # None of this is reachable from a unit test. SwiftUI builds no
           # accessibility tree in a test bundle — a hosted TextField reports a
           # nil accessibilityLabel however the modifier is applied, and the
-          # container protocol hands back no elements at all — so these four
-          # lines are proved on a simulator and held here.
+          # container protocol hands back no elements at all — so every line
+          # below is proved on a simulator and held here.
           #
-          # Two halves. The control must carry the field's name, or its spoken
-          # name falls back to the example text inside it: the billing line
-          # announced "123 Main St" and the security code announced three
+          # Two halves. Every control must carry the field's name, or its
+          # spoken name falls back to the example text inside it: the billing
+          # line announced "123 Main St" and the security code announced three
           # bullets. And the heading above it must NOT be exposed, or the same
           # words are a stop of their own immediately before the control and
-          # every field is read out twice.
+          # every field is read out twice. The two halves depend on each other:
+          # hiding a heading over a control that has lost its name leaves the
+          # field with no name at all.
           status=0
           sheet=Sources/PayCross/UI/FieldGroupsView.swift
           card=Sources/PayCross/UI/CardFormView.swift
@@ -324,15 +326,26 @@ jobs:
             echo "::error::the UIKit-backed card fields must be named on build AND on update"
             status=1
           fi
+          # The cardholder field is the one SwiftUI TextField among the card
+          # fields, so it is named at its call site rather than in NumericField.
+          if [ "$(grep -cF '.accessibilityLabel(cardholderTitle)' "$card")" -ne 1 ]; then
+            echo "::error::the cardholder field has lost its accessible name; it would announce only its placeholder"
+            status=1
+          fi
 
-          # And every drawn heading hidden from the tree.
+          # And every drawn heading hidden from the tree. Comments and the
+          # blank lines they leave behind are dropped before the window is
+          # measured: the modifier sits three lines under the heading once they
+          # are gone, and a comment written between the two must not come back
+          # as "the heading is not hidden".
           for f in "$sheet" "$card"; do
             headings=$(grep -cF 'Text(title)' "$f")
             if [ "$headings" -lt 1 ]; then
               echo "::error::no 'Text(title)' in $f; this check now covers nothing"
               exit 1
             fi
-            hidden=$(grep -A8 -F 'Text(title)' "$f" | grep -cF '.accessibilityHidden(true)' || true)
+            hidden=$(sed -E 's://.*::' "$f" | grep -vE '^[[:space:]]*$' \
+              | grep -A6 -F 'Text(title)' | grep -cF '.accessibilityHidden(true)' || true)
             if [ "$hidden" -ne "$headings" ]; then
               echo "::error::$f draws $headings heading(s) and hides $hidden; a visible heading is the field announced twice"
               status=1
