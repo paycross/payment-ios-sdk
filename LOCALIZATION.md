@@ -194,11 +194,15 @@ takes `MM/YY` digits in every language. It is a hint, not a format.
 |---|---|---|
 | `paycross_field_required_accessibility` | VoiceOver name of a required server-driven field | the field's label |
 
-Every field on the form is named to an assistive technology by the heading drawn
-above it, which for a server-driven field is the merchant's own label and needs
-no key of its own. This one key is the wording around it: the heading marks a
-required field with a `*`, which VoiceOver either skips or spells out, so the
-spoken name carries the word instead.
+Every field on the form is named to an assistive technology by the words of the
+heading drawn above it, which for a server-driven field is the merchant's own
+label and needs no key of its own. The heading element itself is hidden, because
+it sits immediately before the control and would otherwise be a second stop
+saying the same thing.
+
+This one key is the wording around the name: the heading marks a required field
+with a `*`, which VoiceOver either skips or spells out, so the spoken name
+carries the word instead.
 
 The server can send its own message for a field or a submission. When it does,
 that message wins over both of ours. A field's own messages arrive in every
