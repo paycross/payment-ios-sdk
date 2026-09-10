@@ -7,6 +7,3 @@ xcuserdata/
 
 # Reference SDKs cloned for comparison; not part of this project.
 tmp/
-
-# Composed in CI by the changelog sync.
-.sync/
