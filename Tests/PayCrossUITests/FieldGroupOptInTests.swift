@@ -173,7 +173,7 @@ final class FieldGroupOptInTests: XCTestCase {
             model.fieldErrors, [],
             "a shopper who declined the shipping group was still blocked by its required fields"
         )
-        let body = try await submittedBody(transport)
+        let body = try await submittedBody(transport, model)
         let groups = body["field_groups"] as? [String: Any]
         XCTAssertNil(
             groups?["shipping_address"],
@@ -202,7 +202,7 @@ final class FieldGroupOptInTests: XCTestCase {
         payWithACard(model)
 
         XCTAssertEqual(model.fieldErrors, [])
-        let body = try await submittedBody(transport)
+        let body = try await submittedBody(transport, model)
         let groups = try XCTUnwrap(body["field_groups"] as? [String: Any])
         let shipped = try XCTUnwrap(groups["shipping_address"] as? [String: Any])
         XCTAssertEqual(shipped["line1"] as? String, "1 Rue de Rivoli")
@@ -218,7 +218,7 @@ final class FieldGroupOptInTests: XCTestCase {
 
         payWithACard(model)
 
-        let body = try await submittedBody(transport)
+        let body = try await submittedBody(transport, model)
         let groups = body["field_groups"] as? [String: Any]
         XCTAssertNil(groups?["shipping_address"])
         XCTAssertEqual(
@@ -249,11 +249,29 @@ final class FieldGroupOptInTests: XCTestCase {
         model.pay()
     }
 
-    private func submittedBody(_ transport: StubTransport) async throws -> [String: Any] {
-        await transport.hasBeenAsked(for: 2)
-        let sent = await transport.sent
+    /// The submitted body, or a failed test.
+    ///
+    /// Polled to a deadline rather than simply awaited: a regression that stops
+    /// the payment being submitted at all -- which is exactly what a declined
+    /// group blocking validation would do -- must fail this test rather than
+    /// hang it.
+    private func submittedBody(
+        _ transport: StubTransport, _ model: PaymentSheetModel
+    ) async throws -> [String: Any] {
+        let deadline = Date().addingTimeInterval(5)
+        while await transport.sent.count < 2, Date() < deadline {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
         // The second request, by index. The submission is followed by polls,
         // and `last` would read whichever of those happened to have landed.
+        let sent = await transport.sent
+        guard sent.count > 1 else {
+            XCTFail(
+                "the payment was never submitted; it was blocked by "
+                    + model.fieldErrors.map(\.fieldName).description
+            )
+            return [:]
+        }
         let submitted = try XCTUnwrap(sent[1].httpBody, "nothing was submitted")
         return try XCTUnwrap(JSONSerialization.jsonObject(with: submitted) as? [String: Any])
     }
