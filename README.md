@@ -47,7 +47,7 @@ case .cancelled(let transactionID): …
   [`PayCross`](https://developers.pay-cross.com/reference/ios/paycross/documentation/paycross/) and
   [`PayCrossCore`](https://developers.pay-cross.com/reference/ios/paycrosscore/documentation/paycrosscore/).
 - **[Changelog](https://developers.pay-cross.com/resources/changelogs/ios/)** —
-  mirrored from [`CHANGELOG.md`](CHANGELOG.md).
+  built from this repo's [`CHANGELOG.md`](CHANGELOG.md) at the latest released version.
 - **[Support](https://developers.pay-cross.com/resources/support/)** — questions go to support@pay-cross.com.
 
 Why the package is split in two, how to build it, and where it diverges from
