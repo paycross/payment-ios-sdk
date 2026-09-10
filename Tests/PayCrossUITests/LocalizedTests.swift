@@ -90,8 +90,8 @@ final class LocalizedTests: XCTestCase {
     }
 
     func testBothFilesCarryEveryKeyTheSheetUses() throws {
-        XCTAssertEqual(try keys(in: "en").count, 33)
-        XCTAssertEqual(try keys(in: "fr").count, 33)
+        XCTAssertEqual(try keys(in: "en").count, 34)
+        XCTAssertEqual(try keys(in: "fr").count, 34)
     }
 
     /// The prefix is the whole reason a merchant override is deliberate rather
@@ -122,8 +122,8 @@ final class LocalizedTests: XCTestCase {
         }
     }
 
-    /// Seven keys carry one. Naming them pins the sheet against an eighth
-    /// arriving in one language only.
+    /// Eight keys carry one. Naming them pins the sheet against a ninth arriving
+    /// in one language only.
     func testThePlaceholderKeysAreTheOnesWeExpect() throws {
         let carrying = try values(in: "en").filter { $0.value.contains("%@") }.keys
         XCTAssertEqual(Set(carrying), [
@@ -133,8 +133,40 @@ final class LocalizedTests: XCTestCase {
             "paycross_error_apple_pay_presentation",
             "paycross_field_required",
             "paycross_field_required_accessibility",
-            "paycross_field_invalid"
+            "paycross_field_invalid",
+            "paycross_field_max_length"
         ])
+    }
+
+    /// One key carries two, and a translation that keeps only the first passes
+    /// every check above while losing the limit the shopper needs. The length
+    /// message is the only string the SDK ships with more than one placeholder,
+    /// which is exactly why nothing else would have caught it.
+    func testATranslationKeepsAsManyPlaceholdersAsTheEnglishHas() throws {
+        let english = try values(in: "en")
+        let french = try values(in: "fr")
+
+        for (key, value) in english {
+            XCTAssertEqual(
+                french[key]?.components(separatedBy: "%@").count,
+                value.components(separatedBy: "%@").count,
+                "the French \(key) carries a different number of placeholders"
+            )
+        }
+    }
+
+    /// Filled the way the sheet fills it: the sheet looks the template up and
+    /// Core, which ships no strings, puts the two values into it.
+    func testTheLengthMessageNamesTheFieldAndTheLimitInBothLanguages() {
+        XCTAssertEqual(
+            Template.fill(L("paycross_field_max_length", "MISSING"), with: "Notes", "254"),
+            "Notes must be 254 characters or fewer"
+        )
+        SheetLanguage.install(LocaleResolution.resolve(override: "fr"))
+        XCTAssertEqual(
+            Template.fill(L("paycross_field_max_length", "MISSING"), with: "Remarques", "254"),
+            "Champ trop long : Remarques (254 caractères maximum)"
+        )
     }
 
     // MARK: - The installed language is what the sheet reads
@@ -344,14 +376,26 @@ final class LocalizedTests: XCTestCase {
     /// Every key that carries a `%@` goes through the filling lookup, in both
     /// languages, so none of them can reach a shopper with the placeholder still
     /// in it.
+    ///
+    /// Each key is filled with as many values as it carries placeholders, which
+    /// for all but one of them is one. `paycross_field_max_length` names the
+    /// field and the limit and is filled by Core rather than by `L`, so it is
+    /// filled here the way Core fills it.
     func testEveryPlaceholderKeyFillsInBothLanguages() throws {
         for language in ["en", "fr"] {
             SheetLanguage.install(ResolvedLocale(language: language, formattingTag: language))
-            for key in try values(in: language).filter({ $0.value.contains("%@") }).keys {
-                let filled = L(key, "MISSING", "SUBSTITUTED")
+            for (key, value) in try values(in: language).filter({ $0.value.contains("%@") }) {
+                let placeholders = value.components(separatedBy: "%@").count - 1
+                let filled = placeholders > 1
+                    ? Template.fill(L(key, "MISSING"), with: "SUBSTITUTED", "ALSO")
+                    : L(key, "MISSING", "SUBSTITUTED")
                 XCTAssertTrue(
                     filled.contains("SUBSTITUTED"),
                     "\(language) \(key) did not fill its placeholder: \(filled)"
+                )
+                XCTAssertEqual(
+                    placeholders > 1, filled.contains("ALSO"),
+                    "\(language) \(key) did not fill its second placeholder: \(filled)"
                 )
                 XCTAssertFalse(
                     filled.contains("%@"), "\(language) \(key) kept a %@ after filling"

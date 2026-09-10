@@ -121,6 +121,14 @@ public enum PayCrossTestIdentifiers: String, CaseIterable, Sendable {
     public static func fieldError(group: String, name: String) -> String {
         "\(field(group: group, name: name)).error"
     }
+
+    /// The toggle that offers one opt-in field group -- the shipping address a
+    /// merchant asks for only if the shopper wants it delivered elsewhere.
+    /// `group` is the group's key from the session, under the same no-dots rule
+    /// as `field`. Present only on a group the session marked opt-in.
+    public static func groupOptIn(group: String) -> String {
+        "paycross.group.\(group).optIn"
+    }
 }
 
 extension View {

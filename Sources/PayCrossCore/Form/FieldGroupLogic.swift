@@ -54,6 +54,29 @@ package enum FieldGroupLogic {
         )
     }
 
+    /// Whether a group's fields are drawn, validated and submitted at all.
+    ///
+    /// An opt-in group is none of those until the shopper ticks it: the
+    /// merchant asked to offer that group, not to require it. Every other group
+    /// always counts, whatever the set holds -- the flag on the group is what
+    /// makes it declinable, not membership of a set a caller happens to carry.
+    package static func isActive(_ group: FieldGroup, optedIn: Set<String>) -> Bool {
+        !group.isOptIn || optedIn.contains(group.key)
+    }
+
+    /// The groups that count right now, in the order the server sent them.
+    ///
+    /// Filtering here rather than teaching `validate` and `submissionValues`
+    /// about opt-in separately: those two must always agree about which groups
+    /// exist, and a caller that forgets to filter gets the behaviour the SDK
+    /// had before opt-in rather than a shipping address quietly dropped from a
+    /// submission the shopper did fill in.
+    package static func activeGroups(
+        _ groups: [FieldGroup], optedIn: Set<String>
+    ) -> [FieldGroup] {
+        groups.filter { isActive($0, optedIn: optedIn) }
+    }
+
     /// What an assistive technology should call a field.
     ///
     /// The drawn heading marks a required field with a trailing `*`, which is a
@@ -94,7 +117,8 @@ package enum FieldGroupLogic {
         return out
     }
 
-    /// Validates visible fields only.
+    /// Validates visible fields only: required, then the server's length limit,
+    /// then its pattern, and at most one complaint per field.
     ///
     /// Ordered deterministically — group order then field order, as the server
     /// sent them — so the first error shown to a shopper is stable.
@@ -135,7 +159,30 @@ package enum FieldGroupLogic {
                     continue
                 }
 
-                guard !isBlank, let pattern = field.validation?.pattern else { continue }
+                // A blank value is nobody's business but the required rule's:
+                // it is never too long, it is dropped before submission, and an
+                // optional field left alone must not be told it failed a pattern.
+                guard !isBlank else { continue }
+
+                // Counted in UTF-16 code units, which is what Kotlin's
+                // `String.length` and JavaScript's `String.slice` count, so one
+                // `max_length` means one limit on all three clients. Swift's own
+                // `count` is grapheme clusters, and a shopper pasting an
+                // accented name would otherwise be told a different thing here
+                // than on the checkout page.
+                if let limit = field.validation?.maxLength, value.utf16.count > limit {
+                    errors.append(FieldGroupError(
+                        groupKey: group.key,
+                        fieldName: field.name,
+                        message: field.validation?.message("max_length", in: language)
+                            ?? messages.tooLongMessage(
+                                for: field.label(in: language) ?? field.name, limit: limit
+                            )
+                    ))
+                    continue
+                }
+
+                guard let pattern = field.validation?.pattern else { continue }
                 if !matches(value, pattern: pattern) {
                     errors.append(FieldGroupError(
                         groupKey: group.key,

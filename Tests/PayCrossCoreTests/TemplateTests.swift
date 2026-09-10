@@ -48,4 +48,36 @@ final class TemplateTests: XCTestCase {
     func testAnEmptyValueLeavesTheRestOfTheSentence() {
         XCTAssertEqual(Template.fill("%@ is required", with: ""), " is required")
     }
+
+    // MARK: - Two values
+
+    /// The length message names the field and the limit, and is the only string
+    /// the SDK ships that carries two placeholders.
+    func testBothPlaceholdersAreFilledInOrder() {
+        XCTAssertEqual(
+            Template.fill("%@ must be %@ characters or fewer", with: "Notes", "254"),
+            "Notes must be 254 characters or fewer"
+        )
+    }
+
+    func testTheSecondValueIsNotSubstitutedIntoTheFirst() {
+        XCTAssertEqual(Template.fill("%@ and %@", with: "%@", "second"), "%@ and second")
+    }
+
+    func testATemplateShortOfASecondPlaceholderLosesTheSecondValue() {
+        XCTAssertEqual(
+            Template.fill("Champ trop long : %@", with: "Remarques", "254"),
+            "Champ trop long : Remarques"
+        )
+    }
+
+    func testATemplateWithNoPlaceholderIsUntouchedByEither() {
+        XCTAssertEqual(Template.fill("Champ trop long", with: "Remarques", "254"), "Champ trop long")
+    }
+
+    /// A merchant override that grew a third loses the extra rather than
+    /// repeating a value into it.
+    func testAThirdPlaceholderIsLeftAlone() {
+        XCTAssertEqual(Template.fill("%@ %@ %@", with: "one", "two"), "one two %@")
+    }
 }

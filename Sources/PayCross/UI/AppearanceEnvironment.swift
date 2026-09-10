@@ -62,6 +62,11 @@ struct DynamicPalette: Sendable {
     let onBrand: UIColor?
     let surface: UIColor?
     let component: UIColor?
+    /// What a read-only box draws instead, derived rather than named: a merchant
+    /// who themed `component` gets a muted box that still belongs to their
+    /// palette, and one who themed nothing gets the platform's own fill muted by
+    /// the same rule. Never nil, because there is always a fill to mute.
+    let componentMuted: UIColor
     let componentBorder: UIColor?
     let text: UIColor?
     let textSecondary: UIColor?
@@ -92,7 +97,21 @@ struct DynamicPalette: Sendable {
         brand = dynamic(\.brand)
         onBrand = dynamic(\.onBrand)
         surface = dynamic(\.surface)
-        component = dynamic(\.component)
+
+        let componentFill = dynamic(\.component)
+        component = componentFill
+        // Resolved at draw time rather than muted up front, because the colour
+        // being muted may be the platform's: `secondarySystemGroupedBackground`
+        // is near-white in one appearance and near-black in the other, and only
+        // the traits in hand say which. A fill with no RGB reading at all -- a
+        // pattern colour -- is left exactly as it is rather than guessed at.
+        componentMuted = UIColor { traits in
+            let base = (componentFill ?? .secondarySystemGroupedBackground)
+                .resolvedColor(with: traits)
+            guard let packed = base.payCrossColor else { return base }
+            return AppearanceResolver.muted(packed).uiColor
+        }
+
         componentBorder = dynamic(\.componentBorder)
         text = dynamic(\.text)
         textSecondary = dynamic(\.textSecondary)
@@ -187,6 +206,15 @@ struct AppearanceStyle: Sendable, Equatable {
     ) -> AnyShapeStyle {
         color(role).map { AnyShapeStyle($0) } ?? AnyShapeStyle(fallback)
     }
+
+    /// The fill a read-only box draws: whatever an editable one would draw,
+    /// muted.
+    ///
+    /// Answers a colour always, unlike the role accessors, so it has an
+    /// accessor of its own rather than a keypath into the palette: the roles
+    /// are nil when the merchant named nothing and the call site keeps the
+    /// system colour, and here the system colour is the thing being muted.
+    var readOnlyComponent: Color { Color(palette.componentMuted) }
 
     /// The radius for inputs, rows, groups and the banner. The fallback is the
     /// literal the call site used before it asked.
@@ -312,17 +340,40 @@ extension View {
     /// radius and border arrive at every box that is meant to have them and at
     /// none of the ones that are not. The border is drawn only when a width was
     /// asked for, because the sheet has never drawn one.
-    func payCrossComponentBackground(_ style: AppearanceStyle) -> some View {
+    ///
+    /// `muted` is the read-only variant of the same box. It stays on this seam
+    /// rather than becoming a second one so that a locked field cannot drift
+    /// away from the shape, radius and border of the fields beside it: the only
+    /// thing that differs is the fill.
+    func payCrossComponentBackground(
+        _ style: AppearanceStyle, muted: Bool = false
+    ) -> some View {
         let shape = RoundedRectangle(cornerRadius: style.cornerRadius(or: 10))
-        return background(
-            style.color(\.component) ?? Color(.secondarySystemGroupedBackground), in: shape
-        )
+        let fill = muted
+            ? style.readOnlyComponent
+            : style.color(\.component) ?? Color(.secondarySystemGroupedBackground)
+        return background(fill, in: shape)
         .overlay {
             if let width = style.borderWidth {
                 shape.strokeBorder(
                     style.color(\.componentBorder) ?? Color(.separator), lineWidth: width
                 )
             }
+        }
+    }
+
+    /// Drops text to the supporting colour, and only when asked.
+    ///
+    /// Conditional rather than a ternary at the call site so that the field
+    /// this does not apply to keeps exactly the colour it drew before: an
+    /// editable field inherits the sheet's own text colour, and naming
+    /// `.primary` there would be a different answer dressed as the same one.
+    @ViewBuilder
+    func payCrossMutedForeground(_ style: AppearanceStyle, _ isMuted: Bool) -> some View {
+        if isMuted {
+            foregroundStyle(style.foreground(\.textSecondary, default: .secondary))
+        } else {
+            self
         }
     }
 

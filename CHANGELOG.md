@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A checkout session can now offer a field group instead of requiring it.** A
+  group the session marks `opt_in` is drawn as a toggle captioned by the group's
+  own heading, off to begin with. While it is off the group's fields are not
+  drawn, not validated and not sent — the group is left out of the submission
+  entirely rather than sent as an empty object. Turning it on makes the group
+  behave exactly like any other. This is what a merchant means by "ship to a
+  different address": before it, a shipping group with required fields left
+  every shopper filling in a complete address or unable to pay, with no control
+  anywhere on the sheet to decline.
+
+  A session that does not mark a group is unchanged in every respect, so nothing
+  moves for a merchant who does not use opt-in groups and nothing moves against a
+  backend that does not send the flag.
+
+  The toggle carries the accessibility identifier
+  `paycross.group.<group key>.optIn`, for a merchant's own UI tests.
+
+### Fixed
+
+- **A read-only field no longer looks editable.** A field the session locks was
+  drawn with the same fill, the same border and the same text colour as the
+  field beside it that the shopper could type in, so the only way to discover
+  the lock was to tap it and watch nothing happen. VoiceOver users were told,
+  because the control is genuinely disabled; sighted users were not. A locked
+  field now draws on a muted ground in the supporting text colour, both derived
+  from the appearance system, so a themed sheet mutes into the merchant's own
+  palette rather than dropping a grey box into a branded form.
+
+  A locked field with no value no longer draws its placeholder either. A grey
+  `New York` inside a box nothing can be typed into reads as a city the merchant
+  filled in rather than as an example, which left the shopper believing the form
+  was answered. A locked select, which has to draw something in its closed row,
+  draws the em dash an unset select has always sat on.
+
+- **A value longer than the server's `max_length` is now reported instead of
+  being silently cut off.** The sheet used to trim what the shopper typed on
+  every keystroke, so a long address lost its end with nothing said and a
+  merchant's own "too long" sentence could never appear, because no value ever
+  got long enough to fail. The limit is checked when Pay is pressed, and the
+  message is the one the session sent for that field in the sheet's language,
+  falling back to the SDK's own wording, which names the field and the limit.
+  This is what the Android SDK and the hosted checkout page do. Length is
+  counted in UTF-16 code units, matching both of them.
+
+  New localizable key: `paycross_field_max_length`, in English and French. It is
+  the one string the SDK ships that carries two `%@`: the field's label, then
+  the limit.
+
 ## [0.7.3] - 2026-09-09
 
 ### Fixed

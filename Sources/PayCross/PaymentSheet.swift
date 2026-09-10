@@ -147,6 +147,12 @@ final class PaymentSheetModel: ObservableObject {
     /// out of maps the server sends rather than out of our own bundle.
     @Published private(set) var languageTag: String = SheetLanguage.tag
     @Published var fieldValues: [String: [String: String]] = [:]
+    /// The opt-in groups the shopper has ticked, empty until they tick one.
+    ///
+    /// On the model rather than in the form, because the toggle decides what is
+    /// validated when Pay is pressed and what goes on the wire, and neither of
+    /// those is a question the view is asked.
+    @Published var optedInGroups: Set<String> = []
     @Published private(set) var fieldErrors: [FieldGroupError] = []
     /// Drives the "Cancel Payment?" confirmation. On the model rather than in the
     /// view because a 3DS challenge covers the toolbar, so the request also
@@ -172,6 +178,18 @@ final class PaymentSheetModel: ObservableObject {
 
     var fieldGroups: [FieldGroup] {
         sessionData?.fieldGroups ?? []
+    }
+
+    /// The groups that count right now: every mandatory one, plus the opt-in
+    /// ones the shopper has ticked.
+    ///
+    /// What gets validated and what gets submitted, and the two read the same
+    /// list on purpose -- a group validated but not sent, or sent but not
+    /// validated, is the shape of bug this filter exists to make impossible.
+    /// The form is handed `fieldGroups` instead, because a declined group is
+    /// still on screen: its toggle is how the shopper changes their mind.
+    var activeFieldGroups: [FieldGroup] {
+        FieldGroupLogic.activeGroups(fieldGroups, optedIn: optedInGroups)
     }
 
     /// Whether to offer the button, decided by Core and asked three questions:
@@ -376,7 +394,10 @@ final class PaymentSheetModel: ObservableObject {
             networkError: L("paycross_error_network", "Network error. Please try again."),
             submissionFailed: L("paycross_error_submission_failed", "Payment submission failed"),
             fieldRequired: L("paycross_field_required", "%@ is required"),
-            fieldInvalid: L("paycross_field_invalid", "%@ is invalid")
+            fieldInvalid: L("paycross_field_invalid", "%@ is invalid"),
+            fieldTooLong: L(
+                "paycross_field_max_length", "%@ must be %@ characters or fewer"
+            )
         )
     }
 
@@ -391,6 +412,10 @@ final class PaymentSheetModel: ObservableObject {
         )
         warnAboutContrast()
         fieldValues = FieldGroupLogic.initialValues(data.fieldGroups ?? [])
+        // Off to begin with, every time the session is read. An opt-in group is
+        // a question the shopper answers, and a session refreshed mid-payment
+        // must not arrive with it answered for them.
+        optedInGroups = []
         form.savedCards = data.savedCards?.map(\.presentable) ?? []
 
         // Preselection is a merchant opt-in, and safe under one because a saved
@@ -512,7 +537,7 @@ final class PaymentSheetModel: ObservableObject {
         // Server-driven fields are validated here, not in the form reducer: only
         // visible fields count, and visibility depends on sibling values.
         fieldErrors = FieldGroupLogic.validate(
-            groups: fieldGroups, values: fieldValues,
+            groups: activeFieldGroups, values: fieldValues,
             messages: flowMessages, language: languageTag
         )
         guard fieldErrors.isEmpty else { return }
@@ -560,7 +585,7 @@ final class PaymentSheetModel: ObservableObject {
         // has spent the shopper's authorisation on a rejection they could have
         // been shown first.
         fieldErrors = FieldGroupLogic.validate(
-            groups: fieldGroups, values: fieldValues,
+            groups: activeFieldGroups, values: fieldValues,
             messages: flowMessages, language: languageTag
         )
         guard fieldErrors.isEmpty else { return }
@@ -695,7 +720,7 @@ final class PaymentSheetModel: ObservableObject {
             // Only visible, non-blank values go on the wire; a hidden field's
             // stale value must not be submitted.
             fieldGroups: FieldGroupLogic.submissionValues(
-                groups: fieldGroups, values: fieldValues
+                groups: activeFieldGroups, values: fieldValues
             ).nilIfEmpty
         )
         return await runner.run(request)
@@ -711,7 +736,7 @@ final class PaymentSheetModel: ObservableObject {
             walletToken: walletToken,
             browserInfo: await DeviceInfo.browserInfo(),
             fieldGroups: FieldGroupLogic.submissionValues(
-                groups: fieldGroups, values: fieldValues
+                groups: activeFieldGroups, values: fieldValues
             ).nilIfEmpty
         )
         return await runner.run(request)
@@ -916,6 +941,7 @@ struct PaymentSheetView: View {
                         isLoading: model.isLoading,
                         fieldGroups: model.fieldGroups,
                         fieldValues: $model.fieldValues,
+                        optedInGroups: $model.optedInGroups,
                         fieldErrors: model.fieldErrors,
                         language: model.languageTag,
                         onPay: model.pay,

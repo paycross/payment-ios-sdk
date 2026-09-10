@@ -335,19 +335,58 @@ package struct FieldGroup: Codable, Sendable, Hashable {
     /// tag. Sent beside `label` rather than instead of it, and it does not
     /// depend on the session's own locale.
     package let labels: [String: String]?
+    /// Whether the shopper may decline this group.
+    ///
+    /// Set on a group the merchant offers rather than requires -- a shipping
+    /// address the shopper only fills in when it differs from the billing one.
+    /// Absent on every other group, and on every session minted before the flag
+    /// existed, so nil and false say the same thing: the group is mandatory and
+    /// behaves exactly as it always has.
+    package let optIn: Bool?
     package let fields: [FieldDefinition]?
+
+    enum CodingKeys: String, CodingKey {
+        case optIn = "opt_in"
+        case key, label, labels, fields
+    }
 
     package init(
         key: String,
         label: String? = nil,
         labels: [String: String]? = nil,
+        optIn: Bool? = nil,
         fields: [FieldDefinition]? = nil
     ) {
         self.key = key
         self.label = label
         self.labels = labels
+        self.optIn = optIn
         self.fields = fields
     }
+
+    /// Decoded by hand so that a flag this SDK cannot read costs only the flag.
+    ///
+    /// `field_groups` is one array inside one `SessionData`, so a throw here
+    /// takes every group on the sheet down with it and `PaymentSheet` swallows
+    /// that and draws a form the server never described. Losing `opt_in` alone
+    /// leaves the group mandatory, which is the direction a shopper can still
+    /// pay in. Same reasoning as `wallets` and `saved_cards_config` above, and
+    /// the same lenient reading: `true`, `"true"` and `1` are all yes.
+    ///
+    /// Anything added to `CodingKeys` has to be decoded here as well; there is
+    /// no longer a synthesised initialiser to fall back on.
+    package init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        key = try container.decode(String.self, forKey: .key)
+        label = try container.decodeIfPresent(String.self, forKey: .label)
+        labels = try container.decodeIfPresent([String: String].self, forKey: .labels)
+        optIn = container.decodeLenientBoolIfPresent(forKey: .optIn)
+        fields = try container.decodeIfPresent([FieldDefinition].self, forKey: .fields)
+    }
+
+    /// Whether the shopper has to ask for this group before it counts.
+    package var isOptIn: Bool { optIn == true }
 
     /// The heading in the sheet's language, or the singular value when the
     /// session predates the maps or names no such language.

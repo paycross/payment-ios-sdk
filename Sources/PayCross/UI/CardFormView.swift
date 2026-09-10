@@ -33,6 +33,11 @@ struct CardFormView: View {
     let isLoading: Bool
     let fieldGroups: [FieldGroup]
     @Binding var fieldValues: [String: [String: String]]
+    /// Which opt-in groups the shopper has ticked. A plain `Binding` rather
+    /// than `@Binding` so it can carry a default: only a session with an
+    /// opt-in group has anything to say here, and this view never reads the
+    /// set -- it hands it to the one below that does.
+    var optedInGroups: Binding<Set<String>> = .constant([])
     let fieldErrors: [FieldGroupError]
     /// The language the sheet resolved, which picks the server's own wording for
     /// the field groups. Not defaulted: a caller that forgot it would draw a
@@ -113,6 +118,7 @@ struct CardFormView: View {
                         FieldGroupsView(
                             groups: fieldGroups,
                             values: $fieldValues,
+                            optedInGroups: optedInGroups,
                             errors: fieldErrors,
                             language: language
                         )
