@@ -8,7 +8,7 @@ sheet. Your app hands it a payment session token and gets a result back.
 ### CocoaPods
 
 ```ruby
-pod 'PayCross', '~> 0.7.3'
+pod 'PayCross', '~> 0.8.0'
 ```
 
 ### Swift Package Manager
@@ -16,7 +16,7 @@ pod 'PayCross', '~> 0.7.3'
 ```swift
 .package(
     url: "https://github.com/paycross/payment-ios-sdk.git",
-    .upToNextMinor(from: "0.7.3")
+    .upToNextMinor(from: "0.8.0")
 )
 ```
 

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-09-10
+
 ### Added
 
 - **A checkout session can now offer a field group instead of requiring it.** A
@@ -526,7 +528,8 @@ Initial public release.
   merchant-facing types; internal collaborators moved to package access.
 - The payments client no longer caches status poll responses.
 
-[Unreleased]: https://github.com/paycross/payment-ios-sdk/compare/v0.7.3...HEAD
+[Unreleased]: https://github.com/paycross/payment-ios-sdk/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/paycross/payment-ios-sdk/releases/tag/v0.8.0
 [0.7.3]: https://github.com/paycross/payment-ios-sdk/releases/tag/v0.7.3
 [0.7.2]: https://github.com/paycross/payment-ios-sdk/releases/tag/v0.7.2
 [0.7.1]: https://github.com/paycross/payment-ios-sdk/releases/tag/v0.7.1

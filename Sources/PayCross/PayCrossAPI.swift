@@ -12,7 +12,7 @@ import PayCrossCore
 public enum PayCrossAPI {
 
     /// The SDK version, stamped into the User-Agent.
-    public static let version = "0.7.3"
+    public static let version = "0.8.0"
 
     private static let state = ConfigurationBox()
 
