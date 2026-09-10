@@ -153,6 +153,23 @@ final class ReadOnlyFieldTests: XCTestCase {
         )
     }
 
+    /// The fill and the text colour are two changes, and the render comparison
+    /// above would pass on either one alone. The text colour reaches the
+    /// `UITextField` under the SwiftUI field, so it can be read back exactly.
+    func testALockedFieldDrawsItsTextInTheSupportingColour() throws {
+        // The group's own field is the last on the form; the card fields are
+        // drawn above it. Comparing the same field both ways rather than
+        // against a card field, so nothing but the lock differs.
+        let locked = try XCTUnwrap(textFields(in: form(group(readOnly: true), filled)).last)
+        let editable = try XCTUnwrap(textFields(in: form(group(readOnly: false), filled)).last)
+        XCTAssertFalse(locked.isEnabled, "the last field on the form is not the locked one")
+        XCTAssertTrue(editable.isEnabled)
+        XCTAssertNotEqual(
+            locked.textColor?.payCrossColor, editable.textColor?.payCrossColor,
+            "a locked field draws its text in the same colour an editable one does"
+        )
+    }
+
     /// The caret needs no code of its own and never did: a disabled control
     /// takes no first responder, and the row hands it no tap to focus with.
     /// Pinned here because the fix is described as three things, and this is
