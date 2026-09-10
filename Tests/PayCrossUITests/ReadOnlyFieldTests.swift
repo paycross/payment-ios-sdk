@@ -76,6 +76,7 @@ final class ReadOnlyFieldTests: XCTestCase {
             isLoading: false,
             fieldGroups: [group],
             fieldValues: .constant(values),
+            optedInGroups: .constant([]),
             fieldErrors: [],
             language: "en",
             onPay: {}

@@ -33,11 +33,15 @@ struct CardFormView: View {
     let isLoading: Bool
     let fieldGroups: [FieldGroup]
     @Binding var fieldValues: [String: [String: String]]
-    /// Which opt-in groups the shopper has ticked. A plain `Binding` rather
-    /// than `@Binding` so it can carry a default: only a session with an
-    /// opt-in group has anything to say here, and this view never reads the
-    /// set -- it hands it to the one below that does.
-    var optedInGroups: Binding<Set<String>> = .constant([])
+    /// Which opt-in groups the shopper has ticked.
+    ///
+    /// Not defaulted, for the reason `language` below is not: a caller that
+    /// forgot it would draw the wrong thing and nothing would say so. Here the
+    /// ending is worse than a silently wrong string. A `.constant` binding
+    /// swallows every write, so the toggle would render and refuse to turn on,
+    /// leaving the shopper exactly where issue #60 found them but now with a
+    /// control that looks like the way out.
+    @Binding var optedInGroups: Set<String>
     let fieldErrors: [FieldGroupError]
     /// The language the sheet resolved, which picks the server's own wording for
     /// the field groups. Not defaulted: a caller that forgot it would draw a
@@ -118,7 +122,7 @@ struct CardFormView: View {
                         FieldGroupsView(
                             groups: fieldGroups,
                             values: $fieldValues,
-                            optedInGroups: optedInGroups,
+                            optedInGroups: $optedInGroups,
                             errors: fieldErrors,
                             language: language
                         )

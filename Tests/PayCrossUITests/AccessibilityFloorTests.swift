@@ -241,6 +241,7 @@ final class AccessibilityFloorTests: XCTestCase {
             isLoading: false,
             fieldGroups: fieldGroups,
             fieldValues: .constant([:]),
+            optedInGroups: .constant([]),
             fieldErrors: [],
             language: SheetLanguage.tag,
             onPay: {}

@@ -152,7 +152,22 @@ final class PaymentSheetModel: ObservableObject {
     /// On the model rather than in the form, because the toggle decides what is
     /// validated when Pay is pressed and what goes on the wire, and neither of
     /// those is a question the view is asked.
-    @Published var optedInGroups: Set<String> = []
+    ///
+    /// Declining a group drops whatever it was complaining about. Nothing draws
+    /// those messages today — an error is drawn under its own field and a
+    /// declined group draws none — so this changes nothing on screen. It is
+    /// here for the reading that comes later: an error summary or a
+    /// scroll-to-first-error would take this list wholesale and put a complaint
+    /// about the shipping address back in front of a shopper whose answer to it
+    /// was to decline the group. Being told the row is gone and being told it
+    /// is still wrong are contradictory, and only one of them is true.
+    @Published var optedInGroups: Set<String> = [] {
+        didSet {
+            guard optedInGroups != oldValue else { return }
+            let active = Set(activeFieldGroups.map(\.key))
+            fieldErrors.removeAll { !active.contains($0.groupKey) }
+        }
+    }
     @Published private(set) var fieldErrors: [FieldGroupError] = []
     /// Drives the "Cancel Payment?" confirmation. On the model rather than in the
     /// view because a 3DS challenge covers the toolbar, so the request also

@@ -142,6 +142,7 @@ final class ScreenshotTests: XCTestCase {
                 isLoading: isLoading,
                 fieldGroups: fieldGroups,
                 fieldValues: values,
+                optedInGroups: .constant([]),
                 fieldErrors: fieldErrors,
                 language: language,
                 onPay: {},

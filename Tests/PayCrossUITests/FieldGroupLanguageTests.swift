@@ -146,6 +146,7 @@ final class FieldGroupLanguageTests: XCTestCase {
             isLoading: false,
             fieldGroups: [group],
             fieldValues: .constant(values),
+            optedInGroups: .constant([]),
             fieldErrors: [],
             language: language,
             onPay: {}

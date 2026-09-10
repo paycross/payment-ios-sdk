@@ -228,6 +228,54 @@ final class FieldGroupOptInTests: XCTestCase {
         model.cancel()
     }
 
+    /// A shopper shown "Address line 1 is required" under the shipping group,
+    /// who answers it by declining the group, has answered it. The row goes
+    /// with the tick, so an error left in the list is one nothing on screen can
+    /// show and nothing can clear.
+    ///
+    /// Nothing draws it today, which is the point: this is the assertion that
+    /// stops an error summary or a scroll-to-first-error, added later, from
+    /// putting a complaint about a declined group back in front of the shopper
+    /// with no test going red.
+    func testUntickingAGroupAfterAFailedSubmitTakesItsErrorsWithIt() async throws {
+        let (model, _) = try await sheet()
+        model.optedInGroups = ["shipping_address"]
+        // The mandatory group fails too, so this can tell pruning the declined
+        // group's errors apart from simply emptying the list.
+        model.fieldValues["billing_address"] = [:]
+
+        payWithACard(model)
+        XCTAssertEqual(
+            Set(model.fieldErrors.map(\.groupKey)), ["billing_address", "shipping_address"],
+            "the fixture failed neither group or only one; this test would prove nothing"
+        )
+
+        model.optedInGroups = []
+
+        // By group and field, not by message: both groups name a field `line1`
+        // and label it "Address line 1", so the sentence alone cannot say which
+        // of the two is still complaining.
+        XCTAssertEqual(
+            model.fieldErrors.map { "\($0.groupKey).\($0.fieldName)" },
+            ["billing_address.line1"],
+            "a complaint about a group the shopper declined outlived the untick"
+        )
+    }
+
+    /// And the other direction leaves the mandatory groups alone: ticking a
+    /// group is not a reason to forget what the shopper was already told.
+    func testTickingAGroupKeepsTheErrorsAlreadyOnScreen() async throws {
+        let (model, _) = try await sheet()
+        model.fieldValues["billing_address"] = [:]
+
+        payWithACard(model)
+        XCTAssertEqual(model.fieldErrors.map(\.groupKey), ["billing_address"])
+
+        model.optedInGroups = ["shipping_address"]
+
+        XCTAssertEqual(model.fieldErrors.map(\.groupKey), ["billing_address"])
+    }
+
     // MARK: - Plumbing
 
     private func render(_ group: FieldGroup, _ language: String) -> UIImage {

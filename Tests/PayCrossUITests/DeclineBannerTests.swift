@@ -50,6 +50,7 @@ final class DeclineBannerTests: XCTestCase {
             isLoading: false,
             fieldGroups: fieldGroups(fieldGroupCount),
             fieldValues: .constant([:]),
+            optedInGroups: .constant([]),
             fieldErrors: [],
             language: SheetLanguage.tag,
             onPay: {}
