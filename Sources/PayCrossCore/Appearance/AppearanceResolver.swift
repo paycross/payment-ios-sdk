@@ -17,6 +17,39 @@ package enum AppearanceResolver {
         relativeLuminance(of: background) > 0.179 ? .black : .white
     }
 
+    /// How far toward black or white a muted colour travels.
+    ///
+    /// Enough that a locked box reads as a different box beside an editable one
+    /// at a glance, and not so far that a merchant's component colour stops
+    /// looking like their component colour.
+    package static let mutedFraction = 0.12
+
+    /// A muted reading of a component colour, for a box the shopper may not
+    /// type in.
+    ///
+    /// Moves the colour toward whichever of black and white it is further from,
+    /// so a near-white field recedes into a grey and a near-black one lifts
+    /// instead of disappearing into the sheet behind it. The direction is
+    /// decided off the same luminance crossover `onBrand` uses, which is what
+    /// lets one rule serve a light palette and a dark one. Alpha is carried
+    /// across untouched: how muted a box is and how far through it you can see
+    /// are separate questions.
+    package static func muted(_ color: PayCrossColor) -> PayCrossColor {
+        let target: Double = relativeLuminance(of: color) > 0.179 ? 0 : 255
+
+        func mix(_ component: UInt8) -> UInt8 {
+            let value = Double(component)
+            return UInt8((value + (target - value) * mutedFraction).rounded())
+        }
+
+        return PayCrossColor(
+            red: mix(color.red),
+            green: mix(color.green),
+            blue: mix(color.blue),
+            alpha: color.alpha
+        )
+    }
+
     /// WCAG relative luminance, which is what Compose's `Color.luminance()`
     /// computes on the Android side. Alpha is ignored: what a translucent fill
     /// composites over is not knowable here.

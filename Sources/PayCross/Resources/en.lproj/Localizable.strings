@@ -103,3 +103,8 @@
    label, e.g. "Address line 1". The sheet draws a "*" beside that label, which
    an assistive technology either skips or spells out */
 "paycross_field_required_accessibility" = "%@, required";
+
+/* The same field is longer than the server's max_length. The first %@ is the
+   field's label, the second the limit in characters. A message the server sent
+   with the field wins over this one */
+"paycross_field_max_length" = "%@ must be %@ characters or fewer";

@@ -353,6 +353,39 @@ jobs:
           done
           exit $status
 
+      - name: The shopper's typing is never cut short
+        run: |
+          set -euo pipefail
+          # The sheet used to trim a value to the server's max_length on every
+          # keystroke, so a shopper pasting a long address watched the end of it
+          # vanish with nothing said, and a merchant's own "too long" sentence
+          # could never be shown because no value ever got long enough to fail.
+          # The limit is a validation rule now, checked when Pay is pressed,
+          # which is where Android and the checkout page check theirs.
+          #
+          # Held here because no test in this repo can see the difference: the
+          # trimming and the rule agree about every value that reaches a
+          # submission, and they disagree only about what the shopper watched
+          # happen on the way there.
+          status=0
+          file=Sources/PayCross/UI/FieldGroupsView.swift
+          test -f "$file" || {
+            echo "::error::$file is gone; this check would pass while checking nothing"
+            exit 1
+          }
+          if grep -nE '\.prefix\(|onChange\(of: value' "$file"; then
+            echo "::error::the sheet is cutting the shopper's typing short again"
+            status=1
+          fi
+          # And the rule it moved to is still applied, so this step cannot pass
+          # by the limit having been dropped altogether.
+          core=Sources/PayCrossCore/Form/FieldGroupLogic.swift
+          if ! grep -q 'validation?.maxLength' "$core"; then
+            echo "::error::$core no longer enforces the server's max_length"
+            status=1
+          fi
+          exit $status
+
       - name: No identifier is set from a literal
         run: |
           set -euo pipefail

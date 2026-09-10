@@ -11,6 +11,12 @@ struct FieldGroupsView: View {
     @Environment(\.payCrossAppearance) private var style
     let groups: [FieldGroup]
     @Binding var values: [String: [String: String]]
+    /// Which opt-in groups the shopper has ticked.
+    ///
+    /// Held by the sheet rather than here, because the same set decides three
+    /// things and this view answers only one of them: what is drawn, what is
+    /// validated when Pay is pressed, and what goes on the wire.
+    @Binding var optedInGroups: Set<String>
     let errors: [FieldGroupError]
     /// The language the sheet resolved, handed down rather than read from
     /// `SheetLanguage` here: the strings on this form come off the wire, and the
@@ -20,13 +26,30 @@ struct FieldGroupsView: View {
     var body: some View {
         ForEach(groups, id: \.key) { group in
             let groupValues = values[group.key] ?? [:]
-            let visible = (group.fields ?? []).filter {
-                FieldGroupLogic.fieldState(for: $0, groupValues: groupValues).isVisible
-            }
+            // A group the shopper has declined draws no fields at all, which is
+            // the same answer Core gives the validation and the submission.
+            let visible = FieldGroupLogic.isActive(group, optedIn: optedInGroups)
+                ? (group.fields ?? []).filter {
+                    FieldGroupLogic.fieldState(for: $0, groupValues: groupValues).isVisible
+                }
+                : []
 
-            if !visible.isEmpty {
+            // An opt-in group is on screen even with nothing drawn under it:
+            // its toggle is the whole point, and a shopper who cannot see the
+            // offer cannot take it.
+            if group.isOptIn || !visible.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
-                    if let label = group.label(in: language), !label.isEmpty {
+                    if group.isOptIn {
+                        // The toggle carries the group's own heading, so the
+                        // heading is not drawn again above it. A switch and a
+                        // title saying the same words are one thing to read,
+                        // not two.
+                        Toggle(optInCaption(group), isOn: optInBinding(group.key))
+                            .font(style.font(.subheadline, weight: .semibold))
+                            .accessibilityIdentifier(
+                                PayCrossTestIdentifiers.groupOptIn(group: group.key)
+                            )
+                    } else if let label = group.label(in: language), !label.isEmpty {
                         Text(label)
                             .font(style.font(.subheadline, weight: .semibold))
                     }
@@ -47,6 +70,33 @@ struct FieldGroupsView: View {
                 }
             }
         }
+    }
+
+    /// What the toggle offering a group is called.
+    ///
+    /// The group's own heading, in the sheet's language. The merchant already
+    /// wrote "Shipping address" there and the backend already translates it; an
+    /// SDK string would be a second name for the same group, in our words
+    /// rather than theirs, and would stop matching the moment they reword one.
+    ///
+    /// The key is the last resort, under the same "an empty string is not a
+    /// value" rule the heading and the select's empty row use: a switch with no
+    /// name at all is a switch nobody can be asked about.
+    private func optInCaption(_ group: FieldGroup) -> String {
+        group.label(in: language).flatMap { $0.isEmpty ? nil : $0 } ?? group.key
+    }
+
+    private func optInBinding(_ key: String) -> Binding<Bool> {
+        Binding(
+            get: { optedInGroups.contains(key) },
+            set: { isOn in
+                if isOn {
+                    optedInGroups.insert(key)
+                } else {
+                    optedInGroups.remove(key)
+                }
+            }
+        )
     }
 
     private func binding(group: String, field: String) -> Binding<String> {
@@ -102,7 +152,21 @@ struct FieldRow: View {
     /// empty entry for one language, would otherwise draw a blank row where the
     /// dash belongs. Same guard the group heading above uses.
     private var emptyRowText: String {
-        field.placeholder(in: language).flatMap { $0.isEmpty ? nil : $0 } ?? "—"
+        // A locked select draws the dash whatever the session sent for it, for
+        // the reason a locked text field draws nothing: a placeholder is an
+        // invitation to type, and this one cannot be taken up.
+        guard !state.isReadOnly else { return "—" }
+        return field.placeholder(in: language).flatMap { $0.isEmpty ? nil : $0 } ?? "—"
+    }
+
+    /// What an empty box shows before the shopper has typed.
+    ///
+    /// Nothing at all when the field is read-only. A locked, empty `city`
+    /// drawing a grey `New York` reads as a value the merchant filled in rather
+    /// than as an example, which is worse than the box merely looking editable:
+    /// the shopper believes the form is answered.
+    private var placeholderText: String {
+        state.isReadOnly ? "" : field.placeholder(in: language) ?? ""
     }
 
     /// What the field is called out loud. The drawn `*` above says "required" to
@@ -166,7 +230,7 @@ struct FieldRow: View {
                 .disabled(state.isReadOnly)
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                TextField(field.placeholder(in: language) ?? "", text: $value)
+                TextField(placeholderText, text: $value)
                     // Without this the spoken name is the first argument above:
                     // the shopper hears "123 Main St" on the billing line, and
                     // nothing at all on a field the merchant left no example for.
@@ -176,20 +240,21 @@ struct FieldRow: View {
                     .keyboardType(field.type == "number" ? .numberPad : .default)
                     .textInputAutocapitalization(field.type == "email" ? .never : .sentences)
                     .autocorrectionDisabled(field.type == "email")
-                    .onChange(of: value) { newValue in
-                        // Enforce the server's max length as the shopper types.
-                        if let max = field.validation?.maxLength, newValue.count > max {
-                            value = String(newValue.prefix(max))
-                        }
-                    }
             }
         }
         // Same 44pt floor and the same reason as the card fields: the padding
         // around a `TextField` is not part of the control, so a tap in it
         // focused nothing.
         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        // Supporting text and a muted box, for a control that is already
+        // disabled and already refuses the focus. Those two carried the whole
+        // message before, and neither of them draws anything: a locked field
+        // was the editable box exactly, so the only way to discover the lock
+        // was to tap it and watch nothing happen. The caret is absent for free,
+        // because a disabled field takes no first responder.
+        .payCrossMutedForeground(style, state.isReadOnly)
         .padding(.horizontal, 12)
-        .payCrossComponentBackground(style)
+        .payCrossComponentBackground(style, muted: state.isReadOnly)
         // A select handles its own box, and a disabled field has no focus to
         // take: a gesture over either would only eat the tap the sheet uses to
         // put the keypad away.

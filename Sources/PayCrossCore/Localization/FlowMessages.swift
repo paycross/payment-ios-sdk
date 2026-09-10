@@ -31,18 +31,26 @@ package struct FlowMessages: Sendable, Equatable {
     /// the same label.
     package var fieldInvalid: String
 
+    /// The field is longer than the server's `max_length`. The first `%@` is
+    /// the label, the second the limit -- a sentence that names one without the
+    /// other tells the shopper either which field to shorten or how far, never
+    /// both.
+    package var fieldTooLong: String
+
     package init(
         paymentFailed: String = "Payment failed. Please try again.",
         networkError: String = "Network error. Please try again.",
         submissionFailed: String = "Payment submission failed",
         fieldRequired: String = "%@ is required",
-        fieldInvalid: String = "%@ is invalid"
+        fieldInvalid: String = "%@ is invalid",
+        fieldTooLong: String = "%@ must be %@ characters or fewer"
     ) {
         self.paymentFailed = paymentFailed
         self.networkError = networkError
         self.submissionFailed = submissionFailed
         self.fieldRequired = fieldRequired
         self.fieldInvalid = fieldInvalid
+        self.fieldTooLong = fieldTooLong
     }
 
     /// What the SDK says when nobody has localized it.
@@ -54,5 +62,9 @@ package struct FlowMessages: Sendable, Equatable {
 
     package func invalidMessage(for label: String) -> String {
         Template.fill(fieldInvalid, with: label)
+    }
+
+    package func tooLongMessage(for label: String, limit: Int) -> String {
+        Template.fill(fieldTooLong, with: label, String(limit))
     }
 }

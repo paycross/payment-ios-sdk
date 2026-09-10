@@ -187,6 +187,19 @@ takes `MM/YY` digits in every language. It is a hint, not a format.
 | `paycross_error_submission_failed` | Banner when the server refused it and sent no sentence of its own | |
 | `paycross_field_required` | A required server-driven field was left blank | the field's label |
 | `paycross_field_invalid` | That field failed the server's pattern | the field's label |
+| `paycross_field_max_length` | That field is longer than the server's `max_length` | the field's label, then the limit |
+
+`paycross_field_max_length` is the one string the SDK ships that carries **two**
+`%@`: the field's label first, then the limit. A translation that keeps only the
+first still reads as a sentence and still leaves the shopper guessing how much
+to delete, so keep both. Length is counted in UTF-16 code units, which is what
+the Android SDK and the checkout page count, so one `max_length` means one limit
+on every client.
+
+All three of these are fallbacks. A `validation.messages` entry the checkout
+session sends with the field — `required`, `pattern` or `max_length` — is
+written for that one field and wins over the SDK's wording, in the language the
+sheet resolved.
 
 ### Accessibility
 
@@ -243,9 +256,14 @@ value whatever the language, which is what the sheet did for all of them before.
 
 Most are looked up in the SwiftUI views through `L(key, englishFallback)`.
 
-Five live in `PayCrossCore`, which is free of UIKit so it builds on Linux and
+Six live in `PayCrossCore`, which is free of UIKit so it builds on Linux and
 therefore cannot call `L` at all: `paycross_error_payment_failed`,
 `paycross_error_network`, `paycross_error_submission_failed`,
-`paycross_field_required` and `paycross_field_invalid`. The sheet resolves those
-five on the main actor and hands them to Core as a `FlowMessages` value before a
-payment starts.
+`paycross_field_required`, `paycross_field_invalid` and
+`paycross_field_max_length`. The sheet resolves those six on the main actor and
+hands them to Core as a `FlowMessages` value before a payment starts.
+
+One string on the sheet is never looked up here at all: the caption on the
+toggle that offers an opt-in field group. That is the group's own heading, sent
+by the checkout session in each language it renders, for the same reason a
+field's label is — it names the merchant's group, in the merchant's words.

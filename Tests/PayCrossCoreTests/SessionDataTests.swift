@@ -142,6 +142,101 @@ final class SessionDataTests: XCTestCase {
         XCTAssertEqual(state.options?.first?.value, "NY")
     }
 
+    // MARK: - Opt-in groups
+
+    /// A session carrying the flag, positioned on the wire where the backend
+    /// sends it: after the group's labels and before its fields.
+    private let optInPayload = """
+    {
+      "session_id": "sess_2",
+      "data": {
+        "field_groups": [
+          {
+            "key": "billing_address",
+            "label": "Billing Address",
+            "fields": [{ "name": "line1", "label": "Address line 1", "required": true }]
+          },
+          {
+            "key": "shipping_address",
+            "label": "Shipping Address",
+            "labels": { "en": "Shipping Address", "fr": "Adresse de livraison" },
+            "opt_in": true,
+            "fields": [{ "name": "line1", "label": "Address line 1", "required": true }]
+          }
+        ]
+      }
+    }
+    """
+
+    private func groups(in json: String) throws -> [FieldGroup] {
+        let session = try JSONDecoder().decode(SessionResponse.self, from: Data(json.utf8))
+        return try XCTUnwrap(session.data?.fieldGroups)
+    }
+
+    func testTheOptInFlagDecodesOnTheGroupThatCarriesIt() throws {
+        let decoded = try groups(in: optInPayload)
+        XCTAssertEqual(decoded.count, 2)
+        XCTAssertEqual(decoded.last?.optIn, true)
+        XCTAssertEqual(decoded.last?.isOptIn, true)
+        XCTAssertEqual(decoded.last?.label(in: "fr"), "Adresse de livraison")
+    }
+
+    /// The flag is absent on every group the merchant did not mark and on every
+    /// session minted before it existed, and both must read as mandatory. Nil
+    /// rather than false, so "the server said nothing" stays distinguishable
+    /// from "the server said no" if that difference ever matters.
+    func testAGroupWithoutTheFlagDecodesAsMandatory() throws {
+        XCTAssertNil(try groups(in: optInPayload).first?.optIn)
+        XCTAssertEqual(try groups(in: optInPayload).first?.isOptIn, false)
+        XCTAssertEqual(try groups(in: payload).first?.isOptIn, false)
+    }
+
+    /// Read leniently, like every other boolean on this wire: the backend has
+    /// spelled flags as strings and as numbers before.
+    func testTheFlagIsReadWhicheverWayTheServerSpelledIt() throws {
+        for spelling in ["true", "\"true\"", "1"] {
+            let json = optInPayload.replacingOccurrences(
+                of: "\"opt_in\": true", with: "\"opt_in\": \(spelling)"
+            )
+            XCTAssertEqual(
+                try groups(in: json).last?.isOptIn, true, "opt_in: \(spelling) was not read"
+            )
+        }
+        for spelling in ["false", "\"false\"", "0", "null"] {
+            let json = optInPayload.replacingOccurrences(
+                of: "\"opt_in\": true", with: "\"opt_in\": \(spelling)"
+            )
+            XCTAssertEqual(
+                try groups(in: json).last?.isOptIn, false, "opt_in: \(spelling) was read as yes"
+            )
+        }
+    }
+
+    /// `field_groups` is one array inside one `SessionData`, so a flag this SDK
+    /// cannot parse must cost the flag and nothing else. Throwing would take
+    /// every group on the sheet with it and leave the sheet drawing a form the
+    /// server never described.
+    func testAnUnreadableFlagCostsTheFlagRatherThanTheWholeForm() throws {
+        let json = optInPayload.replacingOccurrences(
+            of: "\"opt_in\": true", with: "\"opt_in\": { \"who\": \"knows\" }"
+        )
+        let decoded = try groups(in: json)
+        XCTAssertEqual(decoded.count, 2, "the whole form was lost with the flag")
+        XCTAssertEqual(
+            decoded.last?.isOptIn, false,
+            "an unreadable flag must leave the group mandatory, which a shopper can still pay through"
+        )
+        XCTAssertEqual(decoded.last?.fields?.count, 1)
+    }
+
+    /// The group is still `Codable` both ways, and the hand-written decode must
+    /// not have dropped a key the encode still writes.
+    func testAGroupRoundTripsThroughItsOwnEncoding() throws {
+        let original = try XCTUnwrap(try groups(in: optInPayload).last)
+        let encoded = try JSONEncoder().encode(original)
+        XCTAssertEqual(try JSONDecoder().decode(FieldGroup.self, from: encoded), original)
+    }
+
     // MARK: - Per-language labels
 
     /// The session as it is sent today: every rendered string carries a map of

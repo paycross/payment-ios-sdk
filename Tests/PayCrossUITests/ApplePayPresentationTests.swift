@@ -632,6 +632,7 @@ private struct FormHarness: View {
 
     @State private var state = CardFormState()
     @State private var fieldValues: [String: [String: String]] = [:]
+    @State private var optedInGroups: Set<String> = []
 
     var body: some View {
         CardFormView(
@@ -641,6 +642,7 @@ private struct FormHarness: View {
             isLoading: isLoading,
             fieldGroups: [],
             fieldValues: $fieldValues,
+            optedInGroups: $optedInGroups,
             fieldErrors: [],
             language: SheetLanguage.tag,
             onPay: {},

@@ -22,6 +22,53 @@ final class AppearanceResolverTests: XCTestCase {
         XCTAssertEqual(PayCrossColor(red: 1, green: 2, blue: 3).argb, 0xFF01_0203)
     }
 
+    // MARK: - The muted component fill
+
+    /// A read-only box is the editable box with its fill moved away from the
+    /// text, so the shopper can see the difference without tapping it. The rule
+    /// has to answer in both appearances, which is why it turns on luminance
+    /// rather than on a fixed direction.
+    func testALightFillIsMutedDarker() {
+        let muted = AppearanceResolver.muted(.white)
+        XCTAssertLessThan(muted.red, 255)
+        XCTAssertEqual(muted.red, muted.green)
+        XCTAssertEqual(muted.green, muted.blue, "a grey must stay grey")
+    }
+
+    func testADarkFillIsMutedLighter() {
+        XCTAssertGreaterThan(AppearanceResolver.muted(.black).red, 0)
+    }
+
+    /// The point of the whole exercise: whatever the merchant's component
+    /// colour, the locked box is a different colour from the editable one.
+    func testAMutedFillNeverMatchesTheFillItCameFrom() {
+        for color in [
+            PayCrossColor.white,
+            PayCrossColor.black,
+            PayCrossColor(red: 0x1E, green: 0x88, blue: 0xE5),
+            PayCrossColor(red: 0xF5, green: 0xF5, blue: 0xF0),
+            PayCrossColor(red: 0x1C, green: 0x1C, blue: 0x1E)
+        ] {
+            XCTAssertNotEqual(AppearanceResolver.muted(color), color)
+        }
+    }
+
+    /// How muted a box is and how far through it you can see are separate
+    /// questions; a translucent component colour must not quietly become opaque.
+    func testMutingCarriesTheAlphaAcross() {
+        let translucent = PayCrossColor(red: 0xFF, green: 0xFF, blue: 0xFF, alpha: 0x80)
+        XCTAssertEqual(AppearanceResolver.muted(translucent).alpha, 0x80)
+    }
+
+    /// Muting moves a colour, it does not replace it: a merchant's blue box
+    /// still reads as their blue when it is locked.
+    func testAMutedFillStaysRecognisablyTheSameColour() {
+        let brand = PayCrossColor(red: 0x1E, green: 0x88, blue: 0xE5)
+        let muted = AppearanceResolver.muted(brand)
+        XCTAssertLessThan(muted.blue, brand.blue)
+        XCTAssertGreaterThan(muted.blue, muted.red, "the hue was thrown away")
+    }
+
     // MARK: - Label contrast
 
     func testWhiteBackgroundTakesBlackLabel() {
