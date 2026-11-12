@@ -25,7 +25,7 @@ package struct ApplePayRequestSpec: Sendable, Hashable {
 
     package var currencyCode: String { amount.currencyCode.uppercased() }
 
-    // WHY: `Decimal`, not `Double`: a hundredth lost to binary floating point is a hundredth the shopper did not agree to.
+    // `Decimal`, not `Double`: a hundredth lost to binary floating point is a hundredth the shopper did not agree to.
     package var amountMajorUnits: Decimal { Amounts.majorUnits(amount) }
 
     package static func make(
@@ -35,7 +35,7 @@ package struct ApplePayRequestSpec: Sendable, Hashable {
     ) -> ApplePayRequestSpec {
         ApplePayRequestSpec(
             merchantIdentifier: merchantIdentifier,
-            // WHY: Apple refuses a request with no country, and the session may name none; US is a default, not an inference about the shopper.
+            // Apple refuses a request with no country, and the session may name none; US is a default, not an inference about the shopper.
             countryCode: (data?.merchantCountry ?? "US").uppercased(),
             amount: claims.amount,
             // The sheet shows the merchant's name from its Apple Merchant ID; the SDK adds none, so it must not invent one.

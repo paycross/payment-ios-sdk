@@ -44,7 +44,7 @@ struct CardFormView: View {
                             Text(L("paycross_or_pay_with_card", "Or pay with card"))
                                 .font(style.font(.footnote))
                                 .foregroundStyle(style.foreground(\.textSecondary, default: .secondary))
-                                // WHY: layoutPriority rather than fixedSize, so the caption wraps at accessibility sizes instead of overflowing.
+                                // LayoutPriority rather than fixedSize, so the caption wraps at accessibility sizes instead of overflowing.
                                 .layoutPriority(1)
                             VStack { Divider() }
                         }
@@ -120,7 +120,7 @@ struct CardFormView: View {
             }
 
             LabeledField(title: cardNumberTitle, trailing: BrandBadge(brand: state.brand)) {
-                // WHY: UIKeyboardType has no equivalent of Android's NumberPassword, so iOS gives this field no keyboard-side protection.
+                // UIKeyboardType has no equivalent of Android's NumberPassword, so iOS gives this field no keyboard-side protection.
                 NumericField(
                     placeholder: "1234 5678 9012 3456",
                     text: panBinding,
@@ -130,7 +130,7 @@ struct CardFormView: View {
                 )
             }
 
-            // WHY: ViewThatFits would always pick the side-by-side layout, because NumericField sets low hugging and compression resistance.
+            // ViewThatFits would always pick the side-by-side layout, because NumericField sets low hugging and compression resistance.
             if dynamicTypeSize.isAccessibilitySize {
                 expiryField
                 cvvField
@@ -229,7 +229,7 @@ private struct AmountHeader: View {
                 .font(style.font(.footnote, weight: .medium))
                 .foregroundStyle(style.foreground(\.textSecondary, default: .secondary))
                 .textCase(.uppercase)
-                // WHY: VoiceOver spells uppercase text letter by letter, and the amount label below already says the words.
+                // VoiceOver spells uppercase text letter by letter, and the amount label below already says the words.
                 .accessibilityHidden(true)
             Text(total)
                 .font(style.font(.largeTitle, weight: .semibold))
@@ -265,11 +265,11 @@ private struct LabeledField<Content: View, Trailing: View>: View {
             Text(title)
                 .font(style.font(.footnote, weight: .medium))
                 .foregroundStyle(style.foreground(\.textSecondary, default: .secondary))
-                // WHY: each field's own accessibility label already says these words.
+                // Each field's own accessibility label already says these words.
                 .accessibilityHidden(true)
             HStack {
                 content
-                    // WHY: a UITextField is only one line tall, so the 44pt tap target is set on the field itself.
+                    // A UITextField is only one line tall, so the 44pt tap target is set on the field itself.
                     .frame(minHeight: 44)
                     .font(style.font(.body).monospacedDigit())
                 trailing
@@ -310,7 +310,7 @@ struct ErrorBanner: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            // WHY: the icon carries the meaning too, so colour is not the only cue.
+            // The icon carries the meaning too, so colour is not the only cue.
             Image(systemName: "exclamationmark.triangle.fill")
             Text(message)
         }

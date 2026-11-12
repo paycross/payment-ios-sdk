@@ -1,6 +1,6 @@
 import Foundation
 
-// WHY: This module cannot look a string up itself: the merchant-bundle lookup sits behind `#if os(iOS)` and a closure holding a `Bundle` is not `Sendable`, so the sheet resolves these strings before the flow starts.
+// This module cannot look a string up itself: the merchant-bundle lookup sits behind `#if os(iOS)` and a closure holding a `Bundle` is not `Sendable`, so the sheet resolves these strings before the flow starts.
 package struct FlowMessages: Sendable, Equatable {
     package var paymentFailed: String
 

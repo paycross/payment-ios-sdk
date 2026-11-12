@@ -3,9 +3,9 @@ import Foundation
 import PassKit
 import PayCrossCore
 
-// WHY: PassKit reports the authorisation and the dismissal through two delegate callbacks, so
+// PassKit reports the authorisation and the dismissal through two delegate callbacks, so
 // the continuation is resumed only by the second.
-// WHY: authorize witnesses a nonisolated async requirement; without @MainActor it would present
+// Authorize witnesses a nonisolated async requirement; without @MainActor it would present
 // UIKit from a background thread while PassKit writes the state from the main queue.
 @MainActor
 final class PassKitWalletAuthorizer: NSObject, WalletAuthorizing {
@@ -14,14 +14,14 @@ final class PassKitWalletAuthorizer: NSObject, WalletAuthorizing {
     private var outcome: WalletAuthorizationOutcome = .cancelled
     private var controller: PKPaymentAuthorizationController?
 
-    // WHY: The bare canMakePayments() is true for a device with an empty Wallet.
-    // WHY: nonisolated, because the model reads it from a property getter.
+    // The bare canMakePayments() is true for a device with an empty Wallet.
+    // Nonisolated, because the model reads it from a property getter.
     nonisolated static func canMakePayments(networks: [ApplePayNetwork]) -> Bool {
         PKPaymentAuthorizationController.canMakePayments(usingNetworks: networks.map(paymentNetwork))
     }
 
     func authorize(_ spec: ApplePayRequestSpec) async -> WalletAuthorizationOutcome {
-        // WHY: A second sheet would overwrite the continuation, and its caller would wait forever.
+        // A second sheet would overwrite the continuation, and its caller would wait forever.
         guard continuation == nil else {
             return .failed(L(
                 "paycross_error_apple_pay_busy",
@@ -43,7 +43,7 @@ final class PassKitWalletAuthorizer: NSObject, WalletAuthorizing {
         return await awaitDelegateOutcome()
     }
 
-    // WHY: present() returns a bare false for a misconfigured request, so this message is the only clue.
+    // Present() returns a bare false for a misconfigured request, so this message is the only clue.
     static func presentationFailureMessage(for spec: ApplePayRequestSpec) -> String {
         L(
             "paycross_error_apple_pay_presentation",
@@ -70,7 +70,7 @@ final class PassKitWalletAuthorizer: NSObject, WalletAuthorizing {
         return request
     }
 
-    // WHY: Repeats authorize's guard, since two callers can both pass it and suspend on present()
+    // Repeats authorize's guard, since two callers can both pass it and suspend on present()
     // before either arrives here.
     func awaitDelegateOutcome() async -> WalletAuthorizationOutcome {
         guard continuation == nil else {
@@ -88,14 +88,14 @@ final class PassKitWalletAuthorizer: NSObject, WalletAuthorizing {
     var isAwaitingOutcome: Bool { continuation != nil }
 
     private func resume(_ value: WalletAuthorizationOutcome) {
-        // WHY: Cleared before resuming, so a second delegate callback cannot resume it again.
+        // Cleared before resuming, so a second delegate callback cannot resume it again.
         guard let continuation else { return }
         self.continuation = nil
         self.controller = nil
         continuation.resume(returning: value)
     }
 
-    // WHY: nonisolated, because Swift 6 rejects passing an isolated function to map as a plain
+    // Nonisolated, because Swift 6 rejects passing an isolated function to map as a plain
     // (ApplePayNetwork) -> PKPaymentNetwork.
     nonisolated private static func paymentNetwork(_ network: ApplePayNetwork) -> PKPaymentNetwork {
         switch network {
@@ -115,7 +115,7 @@ final class PassKitWalletAuthorizer: NSObject, WalletAuthorizing {
         }
     }
 
-    // WHY: The server reads paymentData from the top level and paymentMethod for the card brand,
+    // The server reads paymentData from the top level and paymentMethod for the card brand,
     // the masked digits and the funding type.
     static func tokenJSON(_ token: PKPaymentToken) -> JSONValue? {
         guard let paymentData = try? JSONDecoder().decode(JSONValue.self, from: token.paymentData) else {
@@ -156,7 +156,7 @@ extension PassKitWalletAuthorizer: PKPaymentAuthorizationControllerDelegate {
         didAuthorizePayment payment: PKPayment,
         handler completion: @escaping (PKPaymentAuthorizationResult) -> Void
     ) {
-        // WHY: Success means the token is well formed; the payment is submitted afterwards and can still decline.
+        // Success means the token is well formed; the payment is submitted afterwards and can still decline.
         if let token = Self.tokenJSON(payment.token) {
             outcome = .authorized(token)
             completion(PKPaymentAuthorizationResult(status: .success, errors: nil))
@@ -170,8 +170,8 @@ extension PassKitWalletAuthorizer: PKPaymentAuthorizationControllerDelegate {
     }
 
     func paymentAuthorizationControllerDidFinish(_ controller: PKPaymentAuthorizationController) {
-        // WHY: Resumed only here, after an authorisation, a cancel or a dismissal.
-        // WHY: The dismissal is not waited on: its completion is not promised to run, and the form
+        // Resumed only here, after an authorisation, a cancel or a dismissal.
+        // The dismissal is not waited on: its completion is not promised to run, and the form
         // would stay locked on isLoading.
         controller.dismiss(completion: nil)
         resume(outcome)

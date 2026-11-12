@@ -59,7 +59,7 @@ extension TypeSizeStep {
 }
 
 extension View {
-    // WHY: The clamp wraps the reader, so the merchant's size factor multiplies the clamped size, not the device's raw one.
+    // The clamp wraps the reader, so the merchant's size factor multiplies the clamped size, not the device's raw one.
     func payCrossTypeScale(_ style: AppearanceStyle) -> some View {
         TypeScaledAppearance(style: style) { self }
             .dynamicTypeSize(...TypeSizeStep.ceiling.dynamicTypeSize)

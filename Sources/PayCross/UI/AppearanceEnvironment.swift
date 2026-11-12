@@ -100,7 +100,7 @@ struct DynamicPalette: Sendable {
 
         let componentFill = dynamic(\.component)
         component = componentFill
-        // WHY: System colours have no fixed RGB, so the muted fill resolves at draw time from the traits.
+        // System colours have no fixed RGB, so the muted fill resolves at draw time from the traits.
         componentMuted = UIColor { traits in
             let base = (componentFill ?? .secondarySystemGroupedBackground)
                 .resolvedColor(with: traits)
@@ -196,7 +196,7 @@ struct AppearanceStyle: Sendable, Equatable {
         }
     }
 
-    // WHY: A Font built from a UIFont is not scaled again by SwiftUI, so the merchant's factor is applied to the clamped size here.
+    // A Font built from a UIFont is not scaled again by SwiftUI, so the merchant's factor is applied to the clamped size here.
     func font(_ style: Font.TextStyle, weight: Font.Weight? = nil) -> Font {
         let scale = resolved.sizeScaleFactor
         guard scale != 1 else {
@@ -303,7 +303,7 @@ extension View {
         }
     }
 
-    // WHY: tint(nil) clears a tint the host app set on the window, so an unset colour keeps self.
+    // Tint(nil) clears a tint the host app set on the window, so an unset colour keeps self.
     @ViewBuilder
     func payCrossTint(_ color: Color?) -> some View {
         if let color {

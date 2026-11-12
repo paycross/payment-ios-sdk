@@ -46,7 +46,7 @@ struct SavedCardPicker: View {
         remove: (() -> Void)? = nil,
         removeIdentifier: String = ""
     ) -> some View {
-        // WHY: Nested buttons share one tap area in SwiftUI, so the trash is a sibling of the selection button.
+        // Nested buttons share one tap area in SwiftUI, so the trash is a sibling of the selection button.
         HStack(spacing: 0) {
             Button(action: action) {
                 HStack {

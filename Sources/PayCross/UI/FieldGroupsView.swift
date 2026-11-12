@@ -8,7 +8,7 @@ struct FieldGroupsView: View {
     @Binding var values: [String: [String: String]]
     @Binding var optedInGroups: Set<String>
     let errors: [FieldGroupError]
-    // WHY: The sheet passes the language in, since wire strings must match the language tag of the rest of the chrome.
+    // The sheet passes the language in, since wire strings must match the language tag of the rest of the chrome.
     let language: String
 
     var body: some View {
@@ -21,11 +21,11 @@ struct FieldGroupsView: View {
                 }
                 : []
 
-            // WHY: An opt-in group stays on screen with no fields, since its toggle is the only way to opt in.
+            // An opt-in group stays on screen with no fields, since its toggle is the only way to opt in.
             if group.isOptIn || !visible.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
                     if group.isOptIn {
-                        // WHY: The toggle carries the group's heading, so the heading is not drawn again above it.
+                        // The toggle carries the group's heading, so the heading is not drawn again above it.
                         Toggle(optInCaption(group), isOn: optInBinding(group.key))
                             .font(style.font(.subheadline, weight: .semibold))
                             .accessibilityIdentifier(
@@ -85,9 +85,9 @@ struct FieldGroupsView: View {
 
 struct FieldRow: View {
     @Environment(\.payCrossAppearance) private var style
-    // WHY: SwiftUI centres the control in its frame, so the box hands the tap on to the field.
+    // SwiftUI centres the control in its frame, so the box hands the tap on to the field.
     @FocusState private var focused: Bool
-    // WHY: Two groups may name a field the same, so the identifiers need the group key.
+    // Two groups may name a field the same, so the identifiers need the group key.
     let groupKey: String
     let field: FieldDefinition
     let language: String
@@ -103,17 +103,17 @@ struct FieldRow: View {
     }
 
     private var emptyRowText: String {
-        // WHY: A locked select draws the dash, since a placeholder invites typing that a locked field cannot take up.
+        // A locked select draws the dash, since a placeholder invites typing that a locked field cannot take up.
         guard !state.isReadOnly else { return "—" }
         return field.placeholder(in: language).flatMap { $0.isEmpty ? nil : $0 } ?? "—"
     }
 
-    // WHY: A read-only field shows no placeholder, or it reads as a value the merchant filled in.
+    // A read-only field shows no placeholder, or it reads as a value the merchant filled in.
     private var placeholderText: String {
         state.isReadOnly ? "" : field.placeholder(in: language) ?? ""
     }
 
-    // WHY: The drawn * means "required" only to a sighted shopper, so the spoken name carries the word.
+    // The drawn * means "required" only to a sighted shopper, so the spoken name carries the word.
     var accessibleName: String {
         FieldGroupLogic.accessibleName(
             for: field,
@@ -124,12 +124,12 @@ struct FieldRow: View {
     }
 
     var body: some View {
-        // WHY: The label sits above the box, as on the card fields, so every form uses one field shape.
+        // The label sits above the box, as on the card fields, so every form uses one field shape.
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
                 .font(style.font(.footnote, weight: .medium))
                 .foregroundStyle(style.foreground(\.textSecondary, default: .secondary))
-                // WHY: The label's words are the control's name below, so VoiceOver would read the field twice.
+                // The label's words are the control's name below, so VoiceOver would read the field twice.
                 .accessibilityHidden(true)
 
             inputBox
@@ -150,7 +150,7 @@ struct FieldRow: View {
         Group {
             if isSelect, let options = field.options {
                 Picker(accessibleName, selection: $value) {
-                    // WHY: Without an empty tag SwiftUI silently selects the first option, as if the shopper had chosen it.
+                    // Without an empty tag SwiftUI silently selects the first option, as if the shopper had chosen it.
                     Text(verbatim: emptyRowText).tag("")
                     ForEach(options, id: \.value) { option in
                         Text(option.label(in: language) ?? option.value).tag(option.value)
@@ -161,7 +161,7 @@ struct FieldRow: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 TextField(placeholderText, text: $value)
-                    // WHY: Without this the label is the placeholder, so the shopper hears an example value, not the field name.
+                    // Without this the label is the placeholder, so the shopper hears an example value, not the field name.
                     .accessibilityLabel(accessibleName)
                     .focused($focused)
                     .disabled(state.isReadOnly)
@@ -170,15 +170,15 @@ struct FieldRow: View {
                     .autocorrectionDisabled(field.type == "email")
             }
         }
-        // WHY: The padding around a TextField is not part of the control, so a tap in it focused nothing.
+        // The padding around a TextField is not part of the control, so a tap in it focused nothing.
         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-        // WHY: A locked field looks muted, since otherwise it looks editable and the shopper taps it for nothing.
+        // A locked field looks muted, since otherwise it looks editable and the shopper taps it for nothing.
         .payCrossMutedForeground(style, state.isReadOnly)
         .padding(.horizontal, 12)
         .payCrossComponentBackground(style, muted: state.isReadOnly)
-        // WHY: A select handles its own box, and a gesture over a disabled field would eat the tap that dismisses the keypad.
+        // A select handles its own box, and a gesture over a disabled field would eat the tap that dismisses the keypad.
         .tapToFocus(isSelect || state.isReadOnly ? nil : { focused = true })
-        // WHY: The identifier sits on the box, not the column, or the label and error message would inherit it.
+        // The identifier sits on the box, not the column, or the label and error message would inherit it.
         .accessibilityIdentifier(
             PayCrossTestIdentifiers.field(group: groupKey, name: field.name)
         )

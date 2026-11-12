@@ -23,7 +23,7 @@ package struct StatusResponse: Codable, Sendable, Hashable {
     package let currency: String?
     package let action: ThreeDSAction?
     package let recovery: String?
-    // WHY: used_token is not decoded: the sheet already picked that stored card.
+    // Used_token is not decoded: the sheet already picked that stored card.
     package let savedToken: String?
 
     enum CodingKeys: String, CodingKey {
@@ -79,7 +79,7 @@ package struct SubmitCardResponse: Codable, Sendable, Hashable {
     }
 }
 
-// WHY: Unknown statuses keep polling, as on Android.
+// Unknown statuses keep polling, as on Android.
 package enum TransactionStatus: String, Sendable {
     case success
     case authorized

@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<!-- No required-reason API is used, so NSPrivacyAccessedAPITypes is empty; adding UserDefaults or systemUptime needs a reason code. -->
-	<!-- WHY: Declared here as well as in PayCrossCore, because this target's UI collects the card, name, email and phone fields. -->
+	<!-- Declared here as well as in PayCrossCore, because this target's UI collects the card, name, email and phone fields. -->
 	<key>NSPrivacyTracking</key>
 	<false/>
 	<key>NSPrivacyTrackingDomains</key>

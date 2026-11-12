@@ -1,6 +1,6 @@
 import Foundation
 
-// WHY: `Locale.preferredLanguages` is filtered by the host app's localizations, so an app that ships only `Base.lproj` would hide the shopper's French; `AppleLanguages` is the unfiltered list.
+// `Locale.preferredLanguages` is filtered by the host app's localizations, so an app that ships only `Base.lproj` would hide the shopper's French; `AppleLanguages` is the unfiltered list.
 package enum DeviceLanguages {
     package static let appleLanguagesKey = "AppleLanguages"
 

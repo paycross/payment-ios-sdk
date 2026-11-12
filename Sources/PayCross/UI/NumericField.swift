@@ -2,12 +2,12 @@
 import SwiftUI
 import UIKit
 
-// WHY: A number pad has no Return key, and inputAccessoryView is the only place for a Done bar, which SwiftUI does not expose.
+// A number pad has no Return key, and inputAccessoryView is the only place for a Done bar, which SwiftUI does not expose.
 struct NumericField: UIViewRepresentable {
     @Environment(\.payCrossAppearance) private var style
     let placeholder: String
     @Binding var text: String
-    // WHY: Without a label UITextField announces its placeholder, so the card number would read its example digits.
+    // Without a label UITextField announces its placeholder, so the card number would read its example digits.
     let accessibleName: String
     var isSecure = false
     var contentType: UITextContentType?
@@ -18,7 +18,7 @@ struct NumericField: UIViewRepresentable {
         field.keyboardType = .numberPad
         field.isSecureTextEntry = isSecure
         field.textContentType = contentType
-        // WHY: UIKit's own re-scaling ignores the sheet's size clamp, so applyStyle scales the font through UIFontMetrics instead.
+        // UIKit's own re-scaling ignores the sheet's size clamp, so applyStyle scales the font through UIFontMetrics instead.
         field.adjustsFontForContentSizeCategory = false
         applyStyle(to: field)
         field.accessibilityIdentifier = identifier
@@ -30,7 +30,7 @@ struct NumericField: UIViewRepresentable {
             action: #selector(Coordinator.editingChanged(_:)),
             for: .editingChanged
         )
-        // WHY: A bare UITextField in an HStack collapses to its text, so it needs the priorities below.
+        // A bare UITextField in an HStack collapses to its text, so it needs the priorities below.
         field.setContentHuggingPriority(.defaultLow, for: .horizontal)
         field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         context.coordinator.field = field
@@ -40,7 +40,7 @@ struct NumericField: UIViewRepresentable {
 
     func updateUIView(_ field: UITextField, context: Context) {
         context.coordinator.text = $text
-        // WHY: The heading is localized per sheet install, so the label is set on every render.
+        // The heading is localized per sheet install, so the label is set on every render.
         field.accessibilityLabel = accessibleName
         applyStyle(to: field)
         if field.text != text {
@@ -48,7 +48,7 @@ struct NumericField: UIViewRepresentable {
         }
     }
 
-    // WHY: SwiftUI's .font and .foregroundStyle do not reach the UIView a representable wraps.
+    // SwiftUI's .font and .foregroundStyle do not reach the UIView a representable wraps.
     private func applyStyle(to field: UITextField) {
         field.font = UIFontMetrics(forTextStyle: .body).scaledFont(
             for: .monospacedDigitSystemFont(
@@ -72,7 +72,7 @@ struct NumericField: UIViewRepresentable {
     @MainActor
     final class Coordinator: NSObject, UITextFieldDelegate {
         var text: Binding<String>
-        // WHY: Weak, since the field owns the accessory bar, which owns this coordinator.
+        // Weak, since the field owns the accessory bar, which owns this coordinator.
         weak var field: UITextField?
 
         lazy var doneBar: UIToolbar = {
@@ -101,8 +101,8 @@ struct NumericField: UIViewRepresentable {
             field?.resignFirstResponder()
         }
 
-        // WHY: A secure UITextField replaces its whole text on the first edit after it regains focus.
-        // WHY: Rewriting the text here spends that edit, since shouldChangeCharactersIn is not reached by every input path.
+        // A secure UITextField replaces its whole text on the first edit after it regains focus.
+        // Rewriting the text here spends that edit, since shouldChangeCharactersIn is not reached by every input path.
         func textFieldDidBeginEditing(_ field: UITextField) {
             guard field.isSecureTextEntry, let existing = field.text, !existing.isEmpty else {
                 return
@@ -113,10 +113,10 @@ struct NumericField: UIViewRepresentable {
     }
 }
 
-// WHY: Scoped to the SDK's own fields, since endEditing or sendAction to a nil target would reach the host app's views.
+// Scoped to the SDK's own fields, since endEditing or sendAction to a nil target would reach the host app's views.
 @MainActor
 enum KeypadDismissal {
-    // WHY: Weak, so the registry never keeps a dismissed sheet's fields alive.
+    // Weak, so the registry never keeps a dismissed sheet's fields alive.
     private struct Box { weak var field: UITextField? }
     private static var boxes: [Box] = []
 

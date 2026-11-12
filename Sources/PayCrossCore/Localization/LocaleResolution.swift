@@ -13,7 +13,7 @@ package struct ResolvedLocale: Sendable, Equatable {
 package enum LocaleResolution {
     package static let supportedLanguages: Set<String> = ["en", "fr"]
 
-    // WHY: must match defaultLocalization in Package.swift.
+    // Must match defaultLocalization in Package.swift.
     package static let defaultLanguage = "en"
 
     package static func resolve(
@@ -23,16 +23,16 @@ package enum LocaleResolution {
         supported: Set<String> = supportedLanguages
     ) -> ResolvedLocale {
         let asked = [override, session].compactMap { $0 }.compactMap(cleaned)
-        // WHY: candidates match one at a time, so a device ranking fr-CA above en gets French.
+        // Candidates match one at a time, so a device ranking fr-CA above en gets French.
         let candidates = asked + device.compactMap(cleaned)
-        // WHY: the device list has no region; nil formattingTag means use Locale.current.
+        // The device list has no region; nil formattingTag means use Locale.current.
         return ResolvedLocale(
             language: match(candidates, supported: supported) ?? defaultLanguage,
             formattingTag: asked.first(where: isWellFormed)
         )
     }
 
-    // WHY: Locale(identifier:) formats nonsense with root data, so the shape is checked here.
+    // Locale(identifier:) formats nonsense with root data, so the shape is checked here.
     private static func isWellFormed(_ tag: String) -> Bool {
         let subtags = tag.split(separator: "-", omittingEmptySubsequences: false)
         guard let language = subtags.first,
@@ -53,9 +53,9 @@ package enum LocaleResolution {
         character.isASCII && (character.isLetter || character.isNumber)
     }
 
-    // WHY: fr- still matches French; only the amount format needs a well-formed tag.
+    // Fr- still matches French; only the amount format needs a well-formed tag.
     private static func match(_ tags: [String], supported: Set<String>) -> String? {
-        // WHY: a caller may pass supported languages in any case.
+        // A caller may pass supported languages in any case.
         let supported = Set(supported.map { $0.lowercased() })
         for tag in tags {
             let lowered = tag.lowercased()
@@ -66,7 +66,7 @@ package enum LocaleResolution {
         return nil
     }
 
-    // WHY: fr_CA arrives from server payloads and Locale.identifier, so _ becomes -.
+    // Fr_CA arrives from server payloads and Locale.identifier, so _ becomes -.
     private static func cleaned(_ tag: String) -> String? {
         let trimmed = tag
             .trimmingCharacters(in: .whitespacesAndNewlines)

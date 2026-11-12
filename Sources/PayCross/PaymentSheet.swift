@@ -138,7 +138,7 @@ final class PaymentSheetModel: ObservableObject {
         FieldGroupLogic.activeGroups(fieldGroups, optedIn: optedInGroups)
     }
 
-    // WHY: sessionData stays nil when load() fails, and the button needs the session's currency and amount.
+    // SessionData stays nil when load() fails, and the button needs the session's currency and amount.
     var showsApplePayButton: Bool {
         guard sessionData != nil else { return false }
 
@@ -224,7 +224,7 @@ final class PaymentSheetModel: ObservableObject {
     }
 
     func load() async {
-        // WHY: the form must not wait on WebKit; the user agent is read at submit.
+        // The form must not wait on WebKit; the user agent is read at submit.
         DeviceInfo.startReadingUserAgent()
 
         let response = try? await makeClient()
@@ -292,11 +292,11 @@ final class PaymentSheetModel: ObservableObject {
         )
         warnAboutContrast()
         fieldValues = FieldGroupLogic.initialValues(data.fieldGroups ?? [])
-        // WHY: a session re-read must not carry over a group the shopper opted into.
+        // A session re-read must not carry over a group the shopper opted into.
         optedInGroups = []
         form.savedCards = data.savedCards?.map(\.presentable) ?? []
 
-        // WHY: a preselected saved card still needs its CVV before it can be charged.
+        // A preselected saved card still needs its CVV before it can be charged.
         if data.preselectsSavedCard, let first = form.savedCards.first {
             CardFormReducer.reduce(state: &form, event: .sourceSelected(.saved(first)))
         }
@@ -327,7 +327,7 @@ final class PaymentSheetModel: ObservableObject {
     }
 
     func removeSavedCard(_ card: SavedCard) {
-        // WHY: a card is not removed while a payment that may charge it is running.
+        // A card is not removed while a payment that may charge it is running.
         guard !isLoading else { return }
 
         removalTask = Task { [weak self] in
@@ -338,10 +338,10 @@ final class PaymentSheetModel: ObservableObject {
                 )
                 self.drop(card)
             } catch PayCrossError.notFound {
-                // WHY: notFound means the card is already gone, so the row is dropped without an error.
+                // NotFound means the card is already gone, so the row is dropped without an error.
                 self.drop(card)
             } catch PayCrossError.sessionExpired {
-                // WHY: a retry cannot succeed on an expired session.
+                // A retry cannot succeed on an expired session.
                 self.show(L(
                     "paycross_session_expired",
                     "This payment session has expired. Start again."
@@ -360,7 +360,7 @@ final class PaymentSheetModel: ObservableObject {
     }
 
     private func show(_ message: String) {
-        // WHY: not a reducer event, which would clear the CVV the shopper still needs.
+        // Not a reducer event, which would clear the CVV the shopper still needs.
         form.inlineError = message
     }
 
@@ -379,7 +379,7 @@ final class PaymentSheetModel: ObservableObject {
     func pay() {
         guard let card = form.cardData(), !isLoading else { return }
 
-        // WHY: validated here, not in the form reducer, because visibility depends on sibling values.
+        // Validated here, not in the form reducer, because visibility depends on sibling values.
         fieldErrors = FieldGroupLogic.validate(
             groups: activeFieldGroups, values: fieldValues,
             messages: flowMessages, language: languageTag
@@ -388,7 +388,7 @@ final class PaymentSheetModel: ObservableObject {
 
         isLoading = true
         sessionDeadlineTask?.cancel()
-        // WHY: the CVV is cleared from form state on hand-off (Req 3.3.1).
+        // The CVV is cleared from form state on hand-off (Req 3.3.1).
         CardFormReducer.reduce(state: &form, event: .paySubmitted)
 
         paymentTask = Task { [weak self] in
@@ -405,15 +405,15 @@ final class PaymentSheetModel: ObservableObject {
     }
 
     func payWithApplePay() {
-        // WHY: a wallet payment has no card data, so pay()'s guard cannot be used.
+        // A wallet payment has no card data, so pay()'s guard cannot be used.
         guard !isLoading else { return }
 
-        // WHY: checked before validation, so no field errors appear when no sheet can open.
+        // Checked before validation, so no field errors appear when no sheet can open.
         guard let merchantIdentifier = applePayMerchantIdentifier,
               let authorizer = walletAuthorizer
         else { return }
 
-        // WHY: validated before the wallet sheet, so a rejection is shown before Face ID is asked.
+        // Validated before the wallet sheet, so a rejection is shown before Face ID is asked.
         fieldErrors = FieldGroupLogic.validate(
             groups: activeFieldGroups, values: fieldValues,
             messages: flowMessages, language: languageTag
@@ -452,7 +452,7 @@ final class PaymentSheetModel: ObservableObject {
     }
 
     private func submitWallet(_ token: JSONValue, merchantIdentifier: String) async {
-        // WHY: fails closed rather than force-unwrapping, because a body without `merchant_identifier` reads as a web token.
+        // Fails closed rather than force-unwrapping, because a body without `merchant_identifier` reads as a web token.
         guard let walletToken = WalletToken.applePay(
             data: token, merchantIdentifier: merchantIdentifier
         ) else {
@@ -495,7 +495,7 @@ final class PaymentSheetModel: ObservableObject {
 
     private func startSessionDeadline() {
         sessionDeadlineTask?.cancel()
-        // WHY: without an expiry claim the session is unbounded, not expired.
+        // Without an expiry claim the session is unbounded, not expired.
         guard let remaining = SessionLifetime.remaining(claims: claims) else { return }
 
         sessionDeadlineTask = Task { [weak self] in
@@ -508,7 +508,7 @@ final class PaymentSheetModel: ObservableObject {
     private func makeRunner() -> PaymentFlowRunner {
         PaymentFlowRunner(
             client: makeClient(),
-            // WHY: a missing presenter reports .failed, so an unanswered challenge is not shown as answered.
+            // A missing presenter reports .failed, so an unanswered challenge is not shown as answered.
             presenter: threeDSPresenter ?? ThreeDSPresenterStub(),
             claims: claims,
             messages: flowMessages,
@@ -524,7 +524,7 @@ final class PaymentSheetModel: ObservableObject {
             session: sessionToken,
             card: card,
             browserInfo: await DeviceInfo.browserInfo(),
-            // WHY: a hidden field's stale value must not be submitted.
+            // A hidden field's stale value must not be submitted.
             fieldGroups: FieldGroupLogic.submissionValues(
                 groups: activeFieldGroups, values: fieldValues
             ).nilIfEmpty
@@ -612,7 +612,7 @@ enum DeviceInfo {
         startReadingUserAgent()
         guard let reading else { return defaultUserAgent }
 
-        // WHY: not a task group, which would wait for a read that may never finish.
+        // Not a task group, which would wait for a read that may never finish.
         let resolved = await withCheckedContinuation { continuation in
             let answer = FirstAnswer(continuation)
             Task { @MainActor in answer.resume(await reading.value) }
@@ -635,11 +635,11 @@ enum DeviceInfo {
         let scale = UITraitCollection.current.displayScale
         return BrowserInfo(
             userAgent: userAgent,
-            // WHY: 3DS wants pixels, not points.
+            // 3DS wants pixels, not points.
             screenWidth: Int(bounds.width * scale),
             screenHeight: Int(bounds.height * scale),
             timezoneOffset: BrowserInfo.timezoneOffsetMinutes(),
-            // WHY: the backend rejects extension subtags, so the BCP-47 tag is clamped.
+            // The backend rejects extension subtags, so the BCP-47 tag is clamped.
             language: BrowserInfo.clampedLanguageTag(Locale.current.identifier(.bcp47))
         )
     }
@@ -649,7 +649,7 @@ enum DeviceInfo {
         + "(KHTML, like Gecko) PayCrossSDK-iOS/\(PayCrossAPI.version)"
 
     private static func screenBounds() -> CGRect {
-        // WHY: UIScreen.main is deprecated from iOS 16, so the active scene is read.
+        // UIScreen.main is deprecated from iOS 16, so the active scene is read.
         let scene = UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
             .first { $0.activationState == .foregroundActive }
@@ -690,7 +690,7 @@ struct PaymentSheetView: View {
             }
             .payCrossContainerIdentifier(.sheet)
             .task { await model.load() }
-            // WHY: SwiftUI's formatting must follow the locale the amount is formatted in.
+            // SwiftUI's formatting must follow the locale the amount is formatted in.
             .environment(\.locale, model.formattingLocale)
             .payCrossTint(model.appearance.color(\.brand))
             .payCrossSheetChrome(model.appearance)
@@ -698,26 +698,26 @@ struct PaymentSheetView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    // WHY: never disabled, so a shopper whose challenge never returns can still cancel.
+                    // Never disabled, so a shopper whose challenge never returns can still cancel.
                     Button(L("paycross_cancel", "Cancel")) { model.isConfirmingCancel = true }
                         .payCrossIdentifier(PayCrossTestIdentifiers.cancel)
                         .accessibilityFocused($cancelFocused)
                 }
             }
-            // WHY: not an `.alert`, because SwiftUI does not carry button identifiers onto `UIAlertAction`.
+            // Not an `.alert`, because SwiftUI does not carry button identifiers onto `UIAlertAction`.
             .overlay { confirmation }
             .onChange(of: model.isConfirmingCancel) { isConfirming in
                 if !isConfirming { cancelFocused = true }
             }
         }
-        // WHY: the 3-D Secure challenge is not capped by this type scale; its page sizes its own text.
+        // The 3-D Secure challenge is not capped by this type scale; its page sizes its own text.
         .payCrossTypeScale(model.appearance)
     }
 
     @ViewBuilder
     private var confirmation: some View {
         if model.isConfirmingCancel {
-            // WHY: two steps, so a stray tap cannot abandon a payment in flight.
+            // Two steps, so a stray tap cannot abandon a payment in flight.
             ConfirmationDialog(
                 identifier: PayCrossTestIdentifiers.cancelDialog,
                 title: L("paycross_cancel_payment_title", "Cancel Payment?"),
@@ -737,7 +737,7 @@ struct PaymentSheetView: View {
                 )
             )
         } else if let card = model.cardPendingRemoval {
-            // WHY: deleting a card is not undoable, and the trash sits next to the row that selects it.
+            // Deleting a card is not undoable, and the trash sits next to the row that selects it.
             ConfirmationDialog(
                 identifier: PayCrossTestIdentifiers.removeDialog,
                 title: L("paycross_remove_card_title", "Remove this card?"),

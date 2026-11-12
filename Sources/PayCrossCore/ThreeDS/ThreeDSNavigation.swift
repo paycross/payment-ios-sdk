@@ -3,7 +3,7 @@ import Foundation
 package enum ThreeDSNavigation {
     package static let returnHostSuffixes = ["pay-cross.com", "test-pay-cross.com"]
 
-    // WHY: EMV 3DS requires exact form field names, but some providers send variants such as `cReq`.
+    // EMV 3DS requires exact form field names, but some providers send variants such as `cReq`.
     static let fieldNormalisation = [
         "cReq": "creq",
         "CReq": "creq",

@@ -20,7 +20,7 @@ package enum SessionTokenError: Error, Sendable, Equatable {
     case missingField(String)
 }
 
-// WHY: The signature is verified server-side, so this reads the payload only.
+// The signature is verified server-side, so this reads the payload only.
 package enum SessionTokenDecoder {
 
     package static func decode(_ token: String) throws -> SessionClaims {
@@ -61,14 +61,14 @@ package enum SessionTokenDecoder {
             sessionID: sessionID,
             merchantID: object.nonNullString("merchant") ?? "",
             customerID: object.nonNullString("customer") ?? "",
-            // WHY: Android maps an empty branding string to null.
+            // Android maps an empty branding string to null.
             brandingID: object.nonNullString("branding").flatMap { $0.isEmpty ? nil : $0 },
             amount: Amount(minorUnits: amount, currencyCode: currency),
             expiresAt: object.nonNullInt64("exp")
         )
     }
 
-    // WHY: Foundation's base64 decoder needs the standard alphabet and padding.
+    // Foundation's base64 decoder needs the standard alphabet and padding.
     static func base64URLDecode(_ input: String) -> Data? {
         var s = input.replacingOccurrences(of: "-", with: "+")
             .replacingOccurrences(of: "_", with: "/")

@@ -6,7 +6,7 @@ package protocol WalletAuthorizing: Sendable {
 
 package enum WalletAuthorizationOutcome: Sendable, Equatable {
     case authorized(JSONValue)
-    // WHY: A cancelled sheet is not a failure; the shopper is still on the card form.
+    // A cancelled sheet is not a failure; the shopper is still on the card form.
     case cancelled
     case failed(String)
 }

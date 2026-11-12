@@ -1,8 +1,8 @@
 #if os(iOS)
 import SwiftUI
 
-// WHY: A SwiftUI .alert does not carry accessibilityIdentifier onto its buttons, so the dialog is drawn here.
-// WHY: The answers stack at every size, since longer translations do not fit side by side on a 390pt sheet.
+// A SwiftUI .alert does not carry accessibilityIdentifier onto its buttons, so the dialog is drawn here.
+// The answers stack at every size, since longer translations do not fit side by side on a 390pt sheet.
 struct ConfirmationDialog: View {
     @Environment(\.payCrossAppearance) private var style
     @AccessibilityFocusState private var titleFocused: Bool
@@ -22,7 +22,7 @@ struct ConfirmationDialog: View {
 
     var body: some View {
         ZStack {
-            // WHY: The scrim takes the touches, so a tap outside is not an answer.
+            // The scrim takes the touches, so a tap outside is not an answer.
             Color.black.opacity(0.4)
                 .ignoresSafeArea()
                 .contentShape(Rectangle())
@@ -54,13 +54,13 @@ struct ConfirmationDialog: View {
             )
             .payCrossForeground(style.color(\.text))
             .padding(24)
-            // WHY: VoiceOver stays inside the question; without this it reads and operates the form underneath.
+            // VoiceOver stays inside the question; without this it reads and operates the form underneath.
             .accessibilityElement(children: .contain)
             .accessibilityAddTraits(.isModal)
             .payCrossIdentifier(identifier)
         }
         .onAppear {
-            // WHY: The dialog resigns the keypad, since a raised keypad would leave the question half off screen.
+            // The dialog resigns the keypad, since a raised keypad would leave the question half off screen.
             KeypadDismissal.resignFirstResponder()
             announceAppearance()
             titleFocused = true

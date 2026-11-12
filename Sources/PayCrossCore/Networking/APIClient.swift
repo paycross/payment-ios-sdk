@@ -13,7 +13,7 @@ package enum PayCrossError: Error, Sendable, Equatable {
     case transport(String)
     case http(status: Int, body: String?)
     case sessionExpired
-    // WHY: on a saved card this is a failed ownership check, so it must not be retried.
+    // On a saved card this is a failed ownership check, so it must not be retried.
     case notFound
     case decoding(String)
 
@@ -22,7 +22,7 @@ package enum PayCrossError: Error, Sendable, Equatable {
         return nil
     }
 
-    // WHY: a transport failure is not retried, because the server may already have the request.
+    // A transport failure is not retried, because the server may already have the request.
     package var isRetryableRejection: Bool {
         if case .http(let status, _) = self { return status == 409 }
         return false
@@ -53,7 +53,7 @@ package struct PayCrossAPIClient: Sendable {
         return try await perform(request)
     }
 
-    // WHY: one idempotency key per logical submission, so a retry cannot create a second transaction.
+    // One idempotency key per logical submission, so a retry cannot create a second transaction.
     package func submitCard(
         _ body: SubmitCardRequest,
         idempotencyKey: String
@@ -73,7 +73,7 @@ package struct PayCrossAPIClient: Sendable {
         try await perform(makeRequest(path: ["status", transactionID], method: "GET"))
     }
 
-    // WHY: the server answers 204 whether or not the card is still active, so a repeat delete is not an error.
+    // The server answers 204 whether or not the card is still active, so a repeat delete is not an error.
     package func deleteSavedCard(uuid: String, sessionToken: String) async throws {
         var request = makeRequest(path: ["saved-cards", uuid], method: "DELETE")
         request.setValue("Bearer \(sessionToken)", forHTTPHeaderField: "Authorization")
@@ -85,13 +85,13 @@ package struct PayCrossAPIClient: Sendable {
     // MARK: - Plumbing
 
     private func makeRequest(path: [String], method: String) -> URLRequest {
-        // WHY: appendingPathComponent percent-encodes each segment, so an id cannot leave its path.
+        // AppendingPathComponent percent-encodes each segment, so an id cannot leave its path.
         let url = path.reduce(baseURL) { $0.appendingPathComponent($1) }
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        // WHY: a cached status response can freeze polling on a stale value, so no payments call is cache-served.
+        // A cached status response can freeze polling on a stale value, so no payments call is cache-served.
         request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
         return request
     }
@@ -127,7 +127,7 @@ package struct PayCrossAPIClient: Sendable {
         }
     }
 
-    // WHY: the status poll answers 404 while its row is being written, so 404 is not mapped in check.
+    // The status poll answers 404 while its row is being written, so 404 is not mapped in check.
     private func performNoContent(_ request: URLRequest) async throws {
         let (data, response) = try await send(request)
         if response.statusCode == 404 { throw PayCrossError.notFound }
@@ -138,10 +138,10 @@ package struct PayCrossAPIClient: Sendable {
 package struct URLSessionTransport: HTTPTransport {
     private let session: URLSession
 
-    // WHY: built inline, because a default argument must be as accessible as the initializer it is in.
+    // Built inline, because a default argument must be as accessible as the initializer it is in.
     package init(session: URLSession = {
         let configuration = URLSessionConfiguration.ephemeral
-        // WHY: payments responses must not be written to URLCache.
+        // Payments responses must not be written to URLCache.
         configuration.urlCache = nil
         return URLSession(configuration: configuration)
     }()) {

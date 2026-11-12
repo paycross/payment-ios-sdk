@@ -2,8 +2,8 @@
 import SwiftUI
 
 extension View {
-    // WHY: SwiftUI centres a one-line TextField in its frame, leaving a band above and below it where taps reach nothing.
-    // WHY: An empty tap gesture would swallow the tap that dismisses the keypad, so nil must stay nil.
+    // SwiftUI centres a one-line TextField in its frame, leaving a band above and below it where taps reach nothing.
+    // An empty tap gesture would swallow the tap that dismisses the keypad, so nil must stay nil.
     @ViewBuilder
     func tapToFocus(_ focus: (() -> Void)?) -> some View {
         if let focus {

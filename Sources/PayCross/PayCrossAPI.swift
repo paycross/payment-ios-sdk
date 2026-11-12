@@ -76,7 +76,7 @@ public struct Configuration: Sendable {
     }
 }
 
-// WHY: Not Codable, so the PAN and CVV cannot be persisted by accident.
+// Not Codable, so the PAN and CVV cannot be persisted by accident.
 /// Prefills the card form for manual test runs. Ignored in production.
 public struct TestCardPrefill: Sendable {
     public var cardholderName: String

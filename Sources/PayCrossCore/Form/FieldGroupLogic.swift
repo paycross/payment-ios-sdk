@@ -33,7 +33,7 @@ package enum FieldGroupLogic {
 
         let controlValue = groupValues[condition.whenField] ?? ""
         let isMet = condition.whenIn?.contains(controlValue) == true
-        // WHY: A nil `default` leaves the field visible and optional, as the checkout page does.
+        // A nil `default` leaves the field visible and optional, as the checkout page does.
         let display = isMet ? condition.display : condition.default
 
         return FieldState(
@@ -47,21 +47,21 @@ package enum FieldGroupLogic {
         !group.isOptIn || optedIn.contains(group.key)
     }
 
-    // WHY: `validate` and `submissionValues` must agree on the active groups, so both filter through here.
+    // `validate` and `submissionValues` must agree on the active groups, so both filter through here.
     package static func activeGroups(
         _ groups: [FieldGroup], optedIn: Set<String>
     ) -> [FieldGroup] {
         groups.filter { isActive($0, optedIn: optedIn) }
     }
 
-    // WHY: VoiceOver skips or spells out the drawn `*`, so the spoken name carries the word "required" instead.
+    // VoiceOver skips or spells out the drawn `*`, so the spoken name carries the word "required" instead.
     package static func accessibleName(
         for field: FieldDefinition,
         state: FieldState,
         requiredTemplate: String,
         language: String? = nil
     ) -> String {
-        // WHY: An empty label falls back to the server's field name, not to an empty spoken name.
+        // An empty label falls back to the server's field name, not to an empty spoken name.
         let labelled = field.label(in: language).flatMap { $0.isEmpty ? nil : $0 }
         let base = labelled ?? field.name
         return state.isRequired ? Template.fill(requiredTemplate, with: base) : base
@@ -112,7 +112,7 @@ package enum FieldGroupLogic {
 
                 guard !isBlank else { continue }
 
-                // WHY: Lengths count UTF-16 code units, as Kotlin and JavaScript do, so one `max_length` means one limit on all three clients.
+                // Lengths count UTF-16 code units, as Kotlin and JavaScript do, so one `max_length` means one limit on all three clients.
                 if let limit = field.validation?.maxLength, value.utf16.count > limit {
                     errors.append(FieldGroupError(
                         groupKey: group.key,
@@ -165,7 +165,7 @@ package enum FieldGroupLogic {
         return out
     }
 
-    // WHY: Patterns match as substrings, as Kotlin's `Regex.containsMatchIn` does; a malformed pattern passes.
+    // Patterns match as substrings, as Kotlin's `Regex.containsMatchIn` does; a malformed pattern passes.
     static func matches(_ value: String, pattern: String) -> Bool {
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return true }
         let range = NSRange(value.startIndex..<value.endIndex, in: value)

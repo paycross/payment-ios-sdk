@@ -29,7 +29,7 @@ package enum CardEntrySource: Sendable, Hashable {
 }
 
 package struct CardFormState: Sendable, Equatable {
-    // WHY: Held beside the selection, because removing a saved card must change the row and the selected entry mode together.
+    // Held beside the selection, because removing a saved card must change the row and the selected entry mode together.
     package var savedCards: [SavedCard] = []
     package var source: CardEntrySource = .newCard
     package private(set) var panDigits = ""
@@ -55,7 +55,7 @@ package struct CardFormState: Sendable, Equatable {
         }
     }
 
-    // WHY: A saved card's own brand sets the CVV length: an Amex keeps its 4-digit CID, which `.unknown` would cap at 3.
+    // A saved card's own brand sets the CVV length: an Amex keeps its 4-digit CID, which `.unknown` would cap at 3.
     package var cvvBrand: CardBrand {
         brand
     }
@@ -169,7 +169,7 @@ package enum CardFormReducer {
             reduce(state: &state, event: .sourceSelected(.newCard))
 
         case .paySubmitted:
-            // WHY: PCI DSS 3.3.1 forbids keeping the CVV after authorization, so it is cleared on submit.
+            // PCI DSS 3.3.1 forbids keeping the CVV after authorization, so it is cleared on submit.
             state.setCVV("")
 
         case .declined(let message):
@@ -177,7 +177,7 @@ package enum CardFormReducer {
             state.setCVV("")
 
         case .walletDeclined(let message):
-            // WHY: PCI DSS 3.3.1 covers data kept after authorization; this card was never authorized, so the CVV stays.
+            // PCI DSS 3.3.1 covers data kept after authorization; this card was never authorized, so the CVV stays.
             state.inlineError = message
         }
     }
@@ -204,7 +204,7 @@ private extension CardFormState {
 
 package enum CardEntryFormatter {
 
-    // WHY: Amex is 4-6-5 in the wild, but every brand is grouped in fours to match Android.
+    // Amex is 4-6-5 in the wild, but every brand is grouped in fours to match Android.
     package static func groupPAN(_ digits: String) -> String {
         stride(from: 0, to: digits.count, by: 4).map { offset in
             let start = digits.index(digits.startIndex, offsetBy: offset)

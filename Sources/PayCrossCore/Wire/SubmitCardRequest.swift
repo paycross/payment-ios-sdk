@@ -3,12 +3,12 @@ import Foundation
 package struct BrowserInfo: Codable, Sendable, Hashable {
     package let userAgent: String
     // The server derives the IP when none is sent; the SDK makes no third-party IP lookup.
-    // WHY: nil must encode as an absent key, not null, so the server can fall back to the request IP.
+    // Nil must encode as an absent key, not null, so the server can fall back to the request IP.
     package let ipAddress: String?
     package let screenWidth: Int
     package let screenHeight: Int
     package let colorDepth: Int
-    // WHY: Minutes west of UTC, the JavaScript sign that 3DS expects: UTC+2 is -120.
+    // Minutes west of UTC, the JavaScript sign that 3DS expects: UTC+2 is -120.
     package let timezoneOffset: Int
     package let language: String
     package let acceptHeader: String
@@ -62,7 +62,7 @@ package struct BrowserInfo: Codable, Sendable, Hashable {
         -timeZone.secondsFromGMT(for: date) / 60
     }
 
-    // WHY: Extension subtags (such as "-u-rg-lvzzzz") fail the backend's max:10 check, so they are dropped.
+    // Extension subtags (such as "-u-rg-lvzzzz") fail the backend's max:10 check, so they are dropped.
     package static func clampedLanguageTag(_ tag: String) -> String {
         let maxLength = 10
         var subtags = tag.split(separator: "-").map(String.init)
@@ -75,7 +75,7 @@ package struct BrowserInfo: Codable, Sendable, Hashable {
             guard candidate.count <= maxLength else { break }
             clamped = candidate
         }
-        // WHY: The backend rejects a blank language, so an all-extension tag falls back to a prefix.
+        // The backend rejects a blank language, so an all-extension tag falls back to a prefix.
         return clamped.isEmpty ? String(tag.prefix(maxLength)) : clamped
     }
 }
@@ -129,7 +129,7 @@ package struct CardData: Codable, Sendable, Hashable {
     }
 }
 
-// WHY: A PAN must not reach a log through string interpolation.
+// A PAN must not reach a log through string interpolation.
 extension CardData: CustomStringConvertible, CustomDebugStringConvertible {
     package var description: String {
         let tail = (pan?.count ?? 0) >= 4 ? String(pan!.suffix(4)) : ""
@@ -140,7 +140,7 @@ extension CardData: CustomStringConvertible, CustomDebugStringConvertible {
     package var debugDescription: String { description }
 }
 
-// WHY: merchantIdentifier is not optional: an omitted one fails Apple Pay key derivation and reads as a decline.
+// MerchantIdentifier is not optional: an omitted one fails Apple Pay key derivation and reads as a decline.
 package struct WalletToken: Codable, Sendable {
     package let type: String
     package let data: JSONValue
@@ -151,8 +151,8 @@ package struct WalletToken: Codable, Sendable {
         case type, data
     }
 
-    // WHY: Trims like WalletGate.offersApplePay: the server compares the identifier byte for byte.
-    // WHY: Returns nil rather than trapping: a crash in a merchant's app is worse than no button.
+    // Trims like WalletGate.offersApplePay: the server compares the identifier byte for byte.
+    // Returns nil rather than trapping: a crash in a merchant's app is worse than no button.
     package static func applePay(data: JSONValue, merchantIdentifier: String) -> WalletToken? {
         let identifier = merchantIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !identifier.isEmpty else { return nil }
@@ -195,7 +195,7 @@ package struct SubmitCardRequest: Codable, Sendable {
         self.fieldGroups = fieldGroups
     }
 
-    // WHY: The payment method comes from the token: the server refuses a body where the two disagree.
+    // The payment method comes from the token: the server refuses a body where the two disagree.
     package init(
         session: String,
         walletToken: WalletToken,

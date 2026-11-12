@@ -10,7 +10,7 @@ package enum Amounts {
         zeroDecimalCurrencies.contains(currencyCode.uppercased()) ? 0 : 2
     }
 
-    // WHY: Decimal, not Double, keeps minor-unit division exact.
+    // Decimal, not Double, keeps minor-unit division exact.
     package static func majorUnits(_ amount: Amount) -> Decimal {
         let digits = fractionDigits(for: amount.currencyCode)
         return Decimal(amount.minorUnits) / pow(Decimal(10), digits)

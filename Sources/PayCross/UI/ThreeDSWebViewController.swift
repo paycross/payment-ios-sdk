@@ -3,13 +3,13 @@ import UIKit
 import WebKit
 import PayCrossCore
 
-// WHY: WKWebView, not SFSafariViewController or ASWebAuthenticationSession, which run out
+// WKWebView, not SFSafariViewController or ASWebAuthenticationSession, which run out
 // of process: the SDK could not observe navigation or run the fingerprint step invisibly.
 final class ThreeDSWebViewController: UIViewController {
 
     private let action: ThreeDSAction
     private let onFinish: (ThreeDSOutcome) -> Void
-    // WHY: A challenge covers the sheet's toolbar, so it carries its own way out.
+    // A challenge covers the sheet's toolbar, so it carries its own way out.
     private let onCancel: (() -> Void)?
     private let surfaceColor: UIColor?
     private var hasFinished = false
@@ -39,7 +39,7 @@ final class ThreeDSWebViewController: UIViewController {
         super.viewDidLoad()
 
         let configuration = WKWebViewConfiguration()
-        // WHY: Non-persistent, so no 3DS session data is written to disk.
+        // Non-persistent, so no 3DS session data is written to disk.
         configuration.websiteDataStore = .nonPersistent()
 
         webView = WKWebView(frame: view.bounds, configuration: configuration)
@@ -47,9 +47,9 @@ final class ThreeDSWebViewController: UIViewController {
         view.addSubview(webView)
 
         if isChallenge {
-            // WHY: Opaque, or the sheet underneath shows through the bar.
+            // Opaque, or the sheet underneath shows through the bar.
             view.backgroundColor = surfaceColor ?? .systemBackground
-            // WHY: Without this, VoiceOver still reads and operates the card form underneath.
+            // Without this, VoiceOver still reads and operates the card form underneath.
             view.accessibilityViewIsModal = true
             view.accessibilityIdentifier = PayCrossTestIdentifiers.threeDS.rawValue
             installCancelBar()
@@ -62,7 +62,7 @@ final class ThreeDSWebViewController: UIViewController {
 
     private func installCancelBar() {
         let bar = UINavigationBar()
-        // WHY: A standalone bar is transparent by default, so the page would show through it.
+        // A standalone bar is transparent by default, so the page would show through it.
         let appearance = UINavigationBarAppearance()
         appearance.configureWithOpaqueBackground()
         bar.standardAppearance = appearance
@@ -93,7 +93,7 @@ final class ThreeDSWebViewController: UIViewController {
         ])
     }
 
-    // WHY: Target/action, not UIAction: UIActionHandler is @Sendable, and the cancel closure is
+    // Target/action, not UIAction: UIActionHandler is @Sendable, and the cancel closure is
     // main-actor isolated and not Sendable.
     @objc private func cancelTapped() {
         onCancel?()
@@ -120,7 +120,7 @@ final class ThreeDSWebViewController: UIViewController {
     }
 
     private func finish(_ outcome: ThreeDSOutcome) {
-        // WHY: WebKit can report navigation more than once; the flow must be told only once.
+        // WebKit can report navigation more than once; the flow must be told only once.
         guard !hasFinished else { return }
         hasFinished = true
         onFinish(outcome)
@@ -152,9 +152,9 @@ extension ThreeDSWebViewController: WKNavigationDelegate {
         finish(.failed)
     }
 
-    // WHY: Default handling keeps ATS and system trust evaluation in charge, so an invalid
+    // Default handling keeps ATS and system trust evaluation in charge, so an invalid
     // certificate fails the load.
-    // WHY: The completion handler must be @MainActor to match WebKit's imported signature;
+    // The completion handler must be @MainActor to match WebKit's imported signature;
     // otherwise this override silently never runs, and WebKit rejects every challenge.
     func webView(
         _ webView: WKWebView,
@@ -165,17 +165,17 @@ extension ThreeDSWebViewController: WKNavigationDelegate {
     }
 }
 
-// WHY: The fingerprint step renders full size and opaque under the overlay: WebKit throttles
+// The fingerprint step renders full size and opaque under the overlay: WebKit throttles
 // content it believes is hidden, and a throttled fingerprint never posts its device data.
 @MainActor
 final class WebKitThreeDSPresenter: ThreeDSPresenting {
 
     private weak var host: UIViewController?
     private let surfaceColor: UIColor?
-    // WHY: A challenge covers the sheet's toolbar, so its cancel must reach the sheet's two-step
+    // A challenge covers the sheet's toolbar, so its cancel must reach the sheet's two-step
     // confirmation.
     private let onCancelRequested: () -> Void
-    // WHY: Held with the continuation, so teardown always resumes it.
+    // Held with the continuation, so teardown always resumes it.
     private var active: (
         controller: ThreeDSWebViewController,
         continuation: CheckedContinuation<ThreeDSOutcome, Never>
@@ -191,13 +191,13 @@ final class WebKitThreeDSPresenter: ThreeDSPresenting {
         self.onCancelRequested = onCancelRequested
     }
 
-    // WHY: A continuation dropped without resuming leaves the runner awaiting forever.
+    // A continuation dropped without resuming leaves the runner awaiting forever.
     deinit {
         active?.continuation.resume(returning: .failed)
     }
 
     func present(_ step: ThreeDSStep) async -> ThreeDSOutcome {
-        // WHY: A step still on screen must be torn down first, or its continuation is orphaned.
+        // A step still on screen must be torn down first, or its continuation is orphaned.
         resolve(.failed)
 
         return await withCheckedContinuation { continuation in
@@ -205,7 +205,7 @@ final class WebKitThreeDSPresenter: ThreeDSPresenting {
                 return continuation.resume(returning: .failed)
             }
 
-            // WHY: The CVV field keeps first responder, and its keypad would cover the challenge's
+            // The CVV field keeps first responder, and its keypad would cover the challenge's
             // buttons. Scoped to the sheet, so a host field edited behind it is left alone.
             host.view.endEditing(true)
 
@@ -234,7 +234,7 @@ final class WebKitThreeDSPresenter: ThreeDSPresenting {
         resolve(.failed)
     }
 
-    // WHY: active is cleared before resuming, so a second call from a racing completion or dismiss
+    // Active is cleared before resuming, so a second call from a racing completion or dismiss
     // cannot resume twice.
     private func resolve(_ outcome: ThreeDSOutcome) {
         guard let (controller, continuation) = active else { return }

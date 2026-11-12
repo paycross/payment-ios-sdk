@@ -36,7 +36,7 @@ package struct SessionData: Codable, Sendable, Hashable {
     package let savedCardsConfig: SavedCardsConfig?
     package let wallets: WalletsAvailability?
     package let branding: Branding?
-    // WHY: no caller reads this, but the backend still sends it; keep the decode.
+    // No caller reads this, but the backend still sends it; keep the decode.
     package let accountFunding: Bool?
 
     enum CodingKeys: String, CodingKey {
@@ -84,8 +84,8 @@ package struct SessionData: Codable, Sendable, Hashable {
         self.accountFunding = accountFunding
     }
 
-    // WHY: a throw here drops the whole session, and WalletGate reads that nil as wallet permission.
-    // WHY: every CodingKeys case must be decoded here, since there is no synthesised init.
+    // A throw here drops the whole session, and WalletGate reads that nil as wallet permission.
+    // Every CodingKeys case must be decoded here, since there is no synthesised init.
     package init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
 
@@ -96,12 +96,12 @@ package struct SessionData: Codable, Sendable, Hashable {
         merchantCountry = try container.decodeIfPresent(String.self, forKey: .merchantCountry)
         saveCardConfig = try container.decodeIfPresent(SaveCardConfig.self, forKey: .saveCardConfig)
         savedCards = try container.decodeIfPresent([WireSavedCard].self, forKey: .savedCards)
-        // WHY: losing this block costs two affordances; throwing would drop the field groups too.
+        // Losing this block costs two affordances; throwing would drop the field groups too.
         savedCardsConfig = (try? container.decodeIfPresent(
             SavedCardsConfig.self, forKey: .savedCardsConfig
         )) ?? nil
         wallets = (try? container.decodeIfPresent(WalletsAvailability.self, forKey: .wallets)) ?? nil
-        // WHY: an unreadable branding block costs only the default accent.
+        // An unreadable branding block costs only the default accent.
         branding = (try? container.decodeIfPresent(Branding.self, forKey: .branding)) ?? nil
         accountFunding = container.decodeLenientBoolIfPresent(forKey: .accountFunding)
     }
@@ -161,7 +161,7 @@ package struct WalletsAvailability: Codable, Sendable, Hashable {
         self.googlePay = googlePay
     }
 
-    // WHY: a value that is not an object throws, so SessionData drops the whole block.
+    // A value that is not an object throws, so SessionData drops the whole block.
     package init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
 
@@ -231,7 +231,7 @@ package struct WireSavedCard: Codable, Sendable, Hashable {
         self.cardholderName = cardholderName
     }
 
-    // WHY: an unknown brand validates a three-digit CVV, since every scheme but Amex uses three.
+    // An unknown brand validates a three-digit CVV, since every scheme but Amex uses three.
     package var presentable: SavedCard {
         SavedCard(
             id: uuid,
@@ -258,7 +258,7 @@ package struct FieldGroup: Codable, Sendable, Hashable {
     package let key: String
     package let label: String?
     package let labels: [String: String]?
-    // WHY: nil and false both mean the group is mandatory, since older sessions omit the flag.
+    // Nil and false both mean the group is mandatory, since older sessions omit the flag.
     package let optIn: Bool?
     package let fields: [FieldDefinition]?
 
@@ -281,8 +281,8 @@ package struct FieldGroup: Codable, Sendable, Hashable {
         self.fields = fields
     }
 
-    // WHY: opt_in is read leniently, because losing it leaves the group mandatory.
-    // WHY: every CodingKeys case must be decoded here, since there is no synthesised init.
+    // Opt_in is read leniently, because losing it leaves the group mandatory.
+    // Every CodingKeys case must be decoded here, since there is no synthesised init.
     package init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
 
