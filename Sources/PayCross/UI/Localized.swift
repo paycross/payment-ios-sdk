@@ -67,18 +67,6 @@ enum SheetLanguage {
     }
 }
 
-// Under CocoaPods the strings sit in PayCrossLocalizations.bundle beside the binary, not in the class bundle.
 // Bundle.module traps rather than returning nil, so under SwiftPM a missing bundle crashes instead of falling back.
-let sdkBundle: Bundle = {
-    #if SWIFT_PACKAGE
-    return .module
-    #else
-    let base = Bundle(for: PaymentSheet.self)
-    if let url = base.url(forResource: "PayCrossLocalizations", withExtension: "bundle"),
-       let bundle = Bundle(url: url) {
-        return bundle
-    }
-    return base
-    #endif
-}()
+let sdkBundle: Bundle = .module
 #endif
