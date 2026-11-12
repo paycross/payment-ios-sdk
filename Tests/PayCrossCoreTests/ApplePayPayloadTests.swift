@@ -1,17 +1,8 @@
 import XCTest
 @testable import PayCrossCore
 
-/// The Apple Pay submit payload, end to end from a PassKit token to the JSON
-/// the edge parses.
-///
-/// Every assertion here reads encoded JSON rather than the struct that produced
-/// it. The failures this card exists to prevent -- a dropped field, an omitted
-/// key -- live between the two, and a test that asserts on the struct cannot
-/// see them.
 final class ApplePayPayloadTests: XCTestCase {
-
-    /// The shape `PKPaymentToken` produces, as the web posts it: `paymentData`
-    /// at the top level, which is where the edge looks for the envelope.
+    /// A PassKit token as the web posts it, with the envelope at the top level.
     private let tokenJSON = """
     {
       "paymentData": {
@@ -38,8 +29,6 @@ final class ApplePayPayloadTests: XCTestCase {
         try JSONDecoder().decode(JSONValue.self, from: Data(tokenJSON.utf8))
     }
 
-    /// Re-encodes a value and reads it back as plain Foundation objects, which
-    /// is as close to "what the edge receives" as a unit test gets.
     private func encodedObject<T: Encodable>(_ value: T) throws -> [String: Any] {
         let data = try JSONEncoder().encode(value)
         return try XCTUnwrap(
@@ -68,10 +57,6 @@ final class ApplePayPayloadTests: XCTestCase {
         XCTAssertEqual(method["type"] as? String, "debit")
         XCTAssertEqual(encoded["transactionIdentifier"] as? String, "31323334353637")
 
-        // The nested key sets as well as the values. A value assertion catches
-        // a dropped key it names; these catch one it does not, so a field added
-        // to the fixture cannot sit unasserted the way `data` and
-        // `ephemeralPublicKey` once did.
         XCTAssertEqual(Set(paymentData.keys), ["version", "data", "signature", "header"])
         XCTAssertEqual(
             Set(header.keys),
@@ -86,9 +71,6 @@ final class ApplePayPayloadTests: XCTestCase {
         XCTAssertEqual(Set(encoded.keys), ["paymentData", "paymentMethod", "transactionIdentifier"])
     }
 
-    /// An integer must come back an integer. Routing every number through
-    /// `Double` turns a large one into exponent notation, and a field the
-    /// vault reads as a string comparison would then never match.
     func testAnIntegerIsNotTurnedIntoAFloat() throws {
         let value = try JSONDecoder().decode(JSONValue.self, from: Data(#"{"n": 1234567890123}"#.utf8))
         let encoded = try XCTUnwrap(String(data: try JSONEncoder().encode(value), encoding: .utf8))
@@ -97,11 +79,6 @@ final class ApplePayPayloadTests: XCTestCase {
         XCTAssertFalse(encoded.contains("e+"), encoded)
     }
 
-    /// The `Int64` branch, pinned. The test above does not reach it: Foundation
-    /// encodes a whole `Double` without an exponent, so routing every number
-    /// through `Double` still satisfies it. Above 2^53 a `Double` runs out of
-    /// mantissa and the value silently changes, which is the failure a long
-    /// numeric identifier in Apple's token would actually suffer.
     func testAnIntegerTooLargeForADoubleKeepsEveryDigit() throws {
         let value = try JSONDecoder().decode(JSONValue.self, from: Data(#"{"n": 9007199254740993}"#.utf8))
         let encoded = try XCTUnwrap(String(data: try JSONEncoder().encode(value), encoding: .utf8))
@@ -116,7 +93,6 @@ final class ApplePayPayloadTests: XCTestCase {
         XCTAssertEqual(encoded["n"] as? Double, 1.5)
     }
 
-    /// An explicit null is a value the server sent, not a field to drop.
     func testAnExplicitNullSurvives() throws {
         let value = try JSONDecoder().decode(JSONValue.self, from: Data(#"{"a": null}"#.utf8))
         let encoded = try encodedObject(value)
@@ -149,8 +125,6 @@ final class ApplePayPayloadTests: XCTestCase {
 
         XCTAssertEqual(encoded["s"] as? String, "a\"b\\c\nd")
 
-        // `paymentMethod.displayName` carries the card's own label and is the
-        // field most likely to arrive non-ASCII.
         let unicode = try JSONDecoder().decode(JSONValue.self, from: Data(#"{"s": "café ¥ 😀"}"#.utf8))
 
         XCTAssertEqual(try encodedObject(unicode)["s"] as? String, "café ¥ 😀")
@@ -185,9 +159,6 @@ final class ApplePayPayloadTests: XCTestCase {
         XCTAssertEqual(encoded["payment_method"] as? String, "apple_pay")
     }
 
-    /// The card key must be absent, not null: `validatePaymentMethod` on the
-    /// edge branches on the payment method and a stray card object on a wallet
-    /// body is a contradiction nobody downstream has to resolve.
     func testNoCardObjectIsSent() throws {
         let encoded = try encodedObject(try applePayRequest())
 
@@ -198,20 +169,11 @@ final class ApplePayPayloadTests: XCTestCase {
         let encoded = try encodedObject(try applePayRequest())
         let wallet = try XCTUnwrap(encoded["wallet_token"] as? [String: Any])
 
-        // The edge refuses a body whose wallet_token.type differs from its
-        // payment_method, so these two are one decision, not two. The second
-        // assertion cannot fail as the code stands, because the wallet
-        // initialiser derives payment_method from the token's own type; it is
-        // kept as the guard that fires if anyone splits it back into two
-        // arguments, which is the only way they could ever disagree.
+        // The edge refuses a wallet body whose token type differs from payment_method.
         XCTAssertEqual(wallet["type"] as? String, "apple_pay")
         XCTAssertEqual(wallet["type"] as? String, encoded["payment_method"] as? String)
     }
 
-    /// The assertion this whole card exists for. An omitted merchant
-    /// identifier is not refused anywhere: it reads to the edge as a web
-    /// token, the vault derives the environment default key, and the shopper
-    /// gets a generic decline.
     func testTheMerchantIdentifierIsAlwaysPresentAndNonEmpty() throws {
         let encoded = try encodedObject(try applePayRequest())
         let wallet = try XCTUnwrap(encoded["wallet_token"] as? [String: Any])
@@ -230,13 +192,6 @@ final class ApplePayPayloadTests: XCTestCase {
         XCTAssertNil(WalletToken.applePay(data: try decodedToken(), merchantIdentifier: "   "))
     }
 
-    /// A merchant reads this identifier out of a plist, an environment
-    /// variable or a copied console field, and every one of those can deliver
-    /// it padded. The gate trims before offering the button, so a padded
-    /// identifier gets all the way to Face ID; the edge then compares the body
-    /// against the signed session claim byte for byte and answers a 400. The
-    /// builder has to agree with the gate or the two guards describe different
-    /// identifiers.
     func testAPaddedIdentifierReachesTheEdgeTrimmed() throws {
         let padded = try applePayRequest(merchantIdentifier: "  merchant.pay-cross.com\n")
         let wallet = try XCTUnwrap(try encodedObject(padded)["wallet_token"] as? [String: Any])
@@ -257,9 +212,6 @@ final class ApplePayPayloadTests: XCTestCase {
         )
     }
 
-    /// The edge backfills the IP from the request context and a body value
-    /// always wins, so the absent key is the correct one. This is existing
-    /// behaviour and the wallet path must not change it.
     func testBrowserInfoStillOmitsTheIPAddress() throws {
         let encoded = try encodedObject(try applePayRequest())
         let browser = try XCTUnwrap(encoded["browser_info"] as? [String: Any])
@@ -275,8 +227,6 @@ final class ApplePayPayloadTests: XCTestCase {
         XCTAssertTrue(try encodedObject(withGroups).keys.contains("field_groups"))
     }
 
-    /// The card path is untouched. Nothing in this plan may change what a card
-    /// payment puts on the wire.
     func testACardRequestIsUnchanged() throws {
         let request = SubmitCardRequest(
             session: "session.jwt.here",
@@ -332,9 +282,6 @@ final class ApplePayPayloadTests: XCTestCase {
         XCTAssertEqual(spec().countryCode, "GB")
     }
 
-    /// Apple refuses a request with no country, and the session is allowed not
-    /// to name one. US is the fallback the design fixed; it is a default, not
-    /// a guess about the shopper.
     func testTheCountryFallsBackWhenTheSessionNamesNone() {
         XCTAssertEqual(spec(merchantCountry: nil).countryCode, "US")
     }
@@ -343,9 +290,6 @@ final class ApplePayPayloadTests: XCTestCase {
         XCTAssertEqual(spec(hasData: false).countryCode, "US")
     }
 
-    /// PassKit wants ISO 3166-1 alpha-2 in its conventional case, and the
-    /// session is not guaranteed to send it that way. Every other consumer in
-    /// this repo already defends against the lowercase spelling.
     func testALowercaseCountryIsUppercased() {
         XCTAssertEqual(spec(merchantCountry: "gb").countryCode, "GB")
     }
@@ -357,10 +301,6 @@ final class ApplePayPayloadTests: XCTestCase {
         XCTAssertEqual(built.amount.minorUnits, 100)
     }
 
-    /// ISO 4217, same argument as the country. `Amounts` already uppercases at
-    /// three call sites, so within this one struct `amountMajorUnits` survived
-    /// a lowercase currency while `currencyCode` handed it to PassKit as it
-    /// arrived. A sheet that fails to present fails at the moment of payment.
     func testALowercaseCurrencyIsUppercased() {
         XCTAssertEqual(spec(currency: "gbp").currencyCode, "GBP")
     }
@@ -369,9 +309,6 @@ final class ApplePayPayloadTests: XCTestCase {
         XCTAssertEqual(spec(minorUnits: 1234, currency: "GBP").amountMajorUnits, Decimal(string: "12.34"))
     }
 
-    /// A zero-decimal currency divides by one, not by a hundred. Sending
-    /// Apple 12.34 for ¥1234 would quote the shopper the wrong price on the
-    /// sheet, which is the one number they read before authorising.
     func testTheMajorUnitAmountIsExactForAZeroDecimalCurrency() {
         XCTAssertEqual(spec(minorUnits: 1234, currency: "JPY").amountMajorUnits, Decimal(1234))
     }
@@ -392,12 +329,6 @@ final class ApplePayPayloadTests: XCTestCase {
 
     // MARK: - Through a fake authorizer
 
-    /// `ThreeDSOutcome` is `Sendable, Equatable` and this type is said to
-    /// mirror it. Task 03's adapter tests assert on outcomes, where
-    /// `XCTAssertEqual(outcome, .cancelled)` reads better than the `guard case`
-    /// dance the end-to-end test below has to write. Comparing payloads and not
-    /// only cases is the part worth pinning: both payloads are already
-    /// `Equatable`, so the synthesised conformance is the useful one.
     func testOutcomesCompareByCaseAndByPayload() throws {
         let token = try decodedToken()
 
@@ -407,15 +338,7 @@ final class ApplePayPayloadTests: XCTestCase {
         XCTAssertNotEqual(WalletAuthorizationOutcome.failed("a"), .failed("b"))
     }
 
-    /// The whole Core-side path in one test: a spec goes to an authorizer, an
-    /// authorised token comes back, and it becomes a submit body. Nothing in
-    /// this file mocks the payload builder, so this is the assertion that
-    /// would fail if the pieces stopped fitting together.
     func testAnAuthorizedTokenBecomesASubmitBody() async throws {
-        // An actor rather than a class with `@unchecked Sendable`: the
-        // protocol is Sendable and the fake holds mutable state, and an
-        // actor satisfies both without an escape hatch that would also
-        // silence a real race in the shipping adapter.
         actor FakeAuthorizer: WalletAuthorizing {
             private(set) var received: ApplePayRequestSpec?
             private let token: JSONValue
@@ -453,19 +376,6 @@ final class ApplePayPayloadTests: XCTestCase {
         XCTAssertEqual(wallet["merchant_identifier"] as? String, "merchant.pay-cross.com")
     }
 
-    /// Two lists of card networks have to agree, and nothing else makes them.
-    ///
-    /// The iOS sheet asks PassKit whether the device can pay any of
-    /// `ApplePayNetwork.allCases`, while the request it then builds carries the
-    /// list this spec hardcodes. They are identical today. Add a sixth case to
-    /// the enum and the device check starts answering yes for a card the sheet
-    /// will not accept: the button appears and opens onto "no cards", with
-    /// nothing anywhere to explain it.
-    ///
-    /// Asserted here rather than fixed by having `make` read `allCases`,
-    /// because which schemes a merchant is offered is a deliberate list and
-    /// should stay one. This makes adding to it a decision rather than an
-    /// accident.
     func testTheSpecOffersEveryNetworkTheDeviceCheckAsksAbout() {
         XCTAssertEqual(
             Set(spec().supportedNetworks), Set(ApplePayNetwork.allCases),

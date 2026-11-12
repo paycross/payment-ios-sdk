@@ -5,23 +5,6 @@ import UIKit
 @testable import PayCross
 @testable import PayCrossCore
 
-/// What the sheet's fields are called out loud.
-///
-/// Every field on this form draws its heading as a separate `Text` above the
-/// control, and nothing associated the two: the control's accessible name fell
-/// back to its placeholder, so the card number announced its own example digits,
-/// the security code announced three bullets, and a merchant field with no
-/// example announced nothing at all.
-///
-/// The three card fields are `UITextField`s the SDK builds itself, so their
-/// spoken name is a property this bundle can read back exactly. The cardholder
-/// field and the server-driven ones are SwiftUI `TextField`s, and SwiftUI keeps
-/// its accessibility tree out of reach here — measured: a hosted `TextField`
-/// reports a nil `accessibilityLabel` on the `UITextField` under it however the
-/// modifier is applied, and forcing the container protocol open returns no
-/// elements without an assistive technology running. What those fields will say
-/// is asserted as the string the view computes, and the modifier landing on the
-/// control is checked on a simulator against a live session.
 @MainActor
 final class FieldAccessibilityTests: XCTestCase {
 
@@ -40,8 +23,6 @@ final class FieldAccessibilityTests: XCTestCase {
 
     // MARK: - The card fields, read off the control
 
-    /// An empty dictionary would pass every assertion below by naming nothing,
-    /// so the read is proved before it is used.
     func testTheReadItselfWorks() throws {
         XCTAssertEqual(
             spokenNames(in: hostForm()).count, 3,
@@ -58,8 +39,6 @@ final class FieldAccessibilityTests: XCTestCase {
         )
     }
 
-    /// The security code is the worst of the three: its placeholder is bullets,
-    /// so the fallback name was punctuation.
     func testTheExpiryAndTheSecurityCodeAreSpokenAsTheirHeadings() throws {
         let spoken = spokenNames(in: hostForm())
         XCTAssertEqual(spoken[PayCrossTestIdentifiers.expiry.rawValue], "MM/YY")
@@ -89,15 +68,11 @@ final class FieldAccessibilityTests: XCTestCase {
         )
     }
 
-    /// The bug in the round: this field's placeholder is the example address, and
-    /// that string was the whole of its spoken name.
     func testTheSpokenNameIsNeverThePlaceholder() {
         let row = self.row(Self.line1, state: Self.optional, language: "en")
         XCTAssertNotEqual(row.accessibleName, Self.line1.placeholder)
     }
 
-    /// A merchant field the server sent no placeholder for announced nothing
-    /// identifying at all, which is how first and last name behaved.
     func testAFieldWithNoPlaceholderIsStillNamed() {
         let name = FieldDefinition(
             name: "first_name",
@@ -110,8 +85,6 @@ final class FieldAccessibilityTests: XCTestCase {
         )
     }
 
-    /// The word comes out of the sheet's own strings file, so it moves with the
-    /// language the merchant's label is read in.
     func testTheWholeSpokenNameIsFrenchOnAFrenchSheet() {
         SheetLanguage.install(LocaleResolution.resolve(override: "fr"))
         XCTAssertEqual(
@@ -146,7 +119,6 @@ final class FieldAccessibilityTests: XCTestCase {
         )
     }
 
-    /// Spoken name by test identifier, for the fields that carry one.
     private func spokenNames(in window: UIWindow) -> [String: String] {
         var names: [String: String] = [:]
         for field in textFields(in: window) {

@@ -4,13 +4,6 @@ import SwiftUI
 @testable import PayCross
 @testable import PayCrossCore
 
-/// The sheet's half of saved-card removal and preselection.
-///
-/// Core proves what the reducer does with a removal; these prove the model asks
-/// the server first, keeps the row when the server refuses, and reads the two
-/// session flags. The path in between — a trash button, a confirmation, a DELETE
-/// — is the one that can charge or strand a shopper, and none of it is reachable
-/// from the Linux runner.
 @MainActor
 final class SavedCardRemovalTests: XCTestCase {
 
@@ -51,9 +44,6 @@ final class SavedCardRemovalTests: XCTestCase {
         XCTAssertNil(model.form.inlineError)
     }
 
-    /// The row is the shopper's only record of what the server holds. A removal
-    /// the server refused must leave it exactly where it was, or the sheet has
-    /// promised something it did not do.
     func testAFailedRemovalKeepsTheRowAndShowsTheReason() async throws {
         let transport = StubTransport(replies: [
             .init(body: Data(sessionJSON(allowRemoval: true).utf8)),
@@ -72,8 +62,6 @@ final class SavedCardRemovalTests: XCTestCase {
         XCTAssertEqual(model.form.savedCards.map(\.id), [visa, mastercard])
     }
 
-    /// Deleting a card the server is in the middle of charging is not a state
-    /// worth having, and the picker stays on screen through authorization.
     func testARemovalIsRefusedWhileAPaymentIsInFlight() async throws {
         let transport = StubTransport(replies: [
             .init(body: Data(sessionJSON(allowRemoval: true).utf8)),
@@ -89,10 +77,7 @@ final class SavedCardRemovalTests: XCTestCase {
         model.pay()
         XCTAssertTrue(model.isLoading, "the payment has to be in flight for this to prove anything")
 
-        // The refusal is synchronous, so what the payment does next cannot
-        // change the outcome.
         model.removeSavedCard(try XCTUnwrap(model.form.savedCards.first))
-        // Nil is the assertion: the guard returns before a task is ever made.
         XCTAssertNil(model.removalTask, "no removal may even be started mid-payment")
 
         let sent = await transport.sent
@@ -102,7 +87,6 @@ final class SavedCardRemovalTests: XCTestCase {
         )
         XCTAssertEqual(model.form.savedCards.count, 2)
 
-        // Stops the poll loop the submit started, so it does not outlive the test.
         model.cancel()
     }
 
@@ -117,9 +101,6 @@ final class SavedCardRemovalTests: XCTestCase {
         XCTAssertEqual(model.form.savedCards.count, 2, "the cards are still offered")
     }
 
-    /// A card the server says is not this customer's is in the state the shopper
-    /// asked for. Telling them to try again asks them to repeat a request that
-    /// has been answered, against a row that could never go.
     func testARemovalThatComesBack404DropsTheRowAnyway() async throws {
         let transport = StubTransport(replies: [
             .init(body: Data(sessionJSON(allowRemoval: true).utf8)),
@@ -135,8 +116,6 @@ final class SavedCardRemovalTests: XCTestCase {
         XCTAssertNil(model.form.inlineError, "nothing went wrong from here")
     }
 
-    /// Nothing is retryable on a dead session, and the same token is about to
-    /// fail the payment itself. "Try again" would be the wrong instruction.
     func testARemovalThatComesBack401ReportsTheSessionNotTheCard() async throws {
         let transport = StubTransport(replies: [
             .init(body: Data(sessionJSON(allowRemoval: true).utf8)),
@@ -154,8 +133,6 @@ final class SavedCardRemovalTests: XCTestCase {
         XCTAssertEqual(model.form.savedCards.count, 2, "the card is not the problem")
     }
 
-    /// A removal that succeeds after one that failed must not leave the first
-    /// one's message standing over a form that is now fine.
     func testASuccessfulRemovalClearsAnEarlierFailuresBanner() async throws {
         let transport = StubTransport(replies: [
             .init(body: Data(sessionJSON(allowRemoval: true).utf8)),
@@ -178,8 +155,6 @@ final class SavedCardRemovalTests: XCTestCase {
 
     // MARK: - Preselection
 
-    /// Opt-in, and only ever the first card: the server lists them most recently
-    /// used first, so that is the one the shopper reaches for.
     func testPreselectPicksTheMostRecentlyUsedCard() async {
         let transport = StubTransport(
             replies: [.init(body: Data(sessionJSON(preselect: true).utf8))]
@@ -191,8 +166,6 @@ final class SavedCardRemovalTests: XCTestCase {
         XCTAssertEqual(model.form.savedCards[0].id, visa)
     }
 
-    /// The point of the opt-in. Without it the sheet opens on "Use a new card",
-    /// exactly as Android does.
     func testWithoutPreselectTheSheetOpensOnANewCard() async {
         let transport = StubTransport(
             replies: [.init(body: Data(sessionJSON(preselect: false).utf8))]
@@ -203,9 +176,6 @@ final class SavedCardRemovalTests: XCTestCase {
         XCTAssertTrue(model.form.source.isNewCard)
     }
 
-    /// The whole safety argument for preselection. A preselected card is not a
-    /// tap away from a charge, because it has no CVV yet and cannot be submitted
-    /// without one.
     func testAPreselectedCardCannotBePaidWithoutItsCVV() async {
         let transport = StubTransport(
             replies: [.init(body: Data(sessionJSON(preselect: true).utf8))]
@@ -255,9 +225,6 @@ final class SavedCardRemovalTests: XCTestCase {
                 amount: Amount(minorUnits: 2599, currencyCode: "EUR"),
                 expiresAt: nil
             ),
-            // Read off the model rather than PayCrossAPI: the static
-            // configuration is a process-wide box nothing resets, and this
-            // target runs several suites that write to it.
             configuration: Configuration(
                 environment: .sandbox,
                 testCardPrefill: nil,
@@ -265,8 +232,6 @@ final class SavedCardRemovalTests: XCTestCase {
             ),
             walletAuthorizer: nil,
             deviceCanPay: { false },
-            // Never the real one. A model left holding URLSessionTransport would
-            // open a socket to the live checkout API from a unit test.
             transport: transport
         )
     }

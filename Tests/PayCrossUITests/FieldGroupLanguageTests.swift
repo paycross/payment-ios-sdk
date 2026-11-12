@@ -5,28 +5,11 @@ import SwiftUI
 @testable import PayCross
 @testable import PayCrossCore
 
-/// The words on a server-driven field are the server's, not ours.
-///
-/// Every other string on the sheet is looked up in our bundle by `L`, so a
-/// French sheet gets French labels for free. A field group's heading, its
-/// fields' labels and placeholders and its options' labels are rendered by the
-/// backend, which now sends each of them in every language it renders. Nothing
-/// in Core can prove the sheet reaches for the right one, because the tag comes
-/// from `SheetLanguage` and the reading is done by the view.
-///
-/// Each fixture below carries **one** kind of per-language string and nothing
-/// else, so a render that moves can only have moved for the reason the test is
-/// named after. The paired fixture with no maps at all is the control: with the
-/// language as the only differing input, that pair must be pixel-identical.
 @MainActor
 final class FieldGroupLanguageTests: XCTestCase {
 
     private let host = ViewHost()
 
-    /// The whole bundle shares one process and one `SheetLanguage`, so the
-    /// English chrome these renders draw around the fields is only English if
-    /// whatever ran before put the language back. This suite does not depend on
-    /// that.
     override func setUp() async throws {
         try await super.setUp()
         SheetLanguage.reset()
@@ -39,9 +22,6 @@ final class FieldGroupLanguageTests: XCTestCase {
 
     // MARK: - Fixtures
 
-    /// Placeholders only. A placeholder reaches the `UITextField` under a
-    /// SwiftUI `TextField`, which is the one drawn string this bundle can read
-    /// back exactly.
     private let placeholderGroup = FieldGroup(
         key: "billing",
         fields: [
@@ -56,7 +36,6 @@ final class FieldGroupLanguageTests: XCTestCase {
         ]
     )
 
-    /// The same field as a session minted before the maps carries it.
     private let placeholderGroupSingular = FieldGroup(
         key: "billing",
         fields: [
@@ -70,9 +49,6 @@ final class FieldGroupLanguageTests: XCTestCase {
         ]
     )
 
-    /// The heading and the field label, and no placeholder at all: a placeholder
-    /// is drawn by a different line than the labels are, and one that differed
-    /// by language would satisfy the comparison on its own.
     private let labelGroup = FieldGroup(
         key: "billing",
         label: "Billing address",
@@ -96,9 +72,6 @@ final class FieldGroupLanguageTests: XCTestCase {
         ]
     )
 
-    /// One select option. The field's own label is the same string in both
-    /// languages and carries no map, so the option's label is the only thing on
-    /// the form that can move.
     private let optionGroup = FieldGroup(
         key: "billing",
         fields: [
@@ -129,8 +102,6 @@ final class FieldGroupLanguageTests: XCTestCase {
         ]
     )
 
-    /// The option has to be the chosen one before a menu picker draws its label;
-    /// an unset select draws the empty tag instead.
     private let chosenOption = ["billing": ["state": "NY"]]
 
     private func form(
@@ -162,9 +133,6 @@ final class FieldGroupLanguageTests: XCTestCase {
         }
     }
 
-    /// The card fields' own placeholders come back with the group's, so an empty
-    /// list means the read stopped working rather than that a field lost its
-    /// placeholder.
     func testTheReadItselfWorks() {
         XCTAssertTrue(
             placeholders(in: form(placeholderGroup, language: "en")).contains("NAME ON CARD"),
@@ -184,8 +152,6 @@ final class FieldGroupLanguageTests: XCTestCase {
         XCTAssertFalse(drawn.contains("75001"))
     }
 
-    /// The live sessions that predate the maps must draw exactly what they drew
-    /// before, whatever language the sheet resolved.
     func testASessionWithoutTheMapsDrawsTheSingularValue() {
         XCTAssertTrue(
             placeholders(in: form(placeholderGroupSingular, language: "fr")).contains("SW1A 1AA")
@@ -194,10 +160,6 @@ final class FieldGroupLanguageTests: XCTestCase {
 
     // MARK: - Labels, by rendering
 
-    /// A heading, a field label and an option label are SwiftUI `Text`: drawn
-    /// into layers rather than into `UILabel`s, and this bundle has no app host
-    /// to build an accessibility tree from. So they are asserted by comparing
-    /// two renders of a fixture that carries nothing else per-language.
     func testTheHeadingAndTheFieldLabelAreDrawnInTheSheetsLanguage() throws {
         XCTAssertGreaterThan(
             try differingPixels(render(labelGroup, "en"), render(labelGroup, "fr")),
@@ -238,9 +200,6 @@ final class FieldGroupLanguageTests: XCTestCase {
 
     // MARK: - The empty row of a select
 
-    /// A country select the session sends a placeholder for. Every other string
-    /// on this fixture is one string in both languages, so the empty row is the
-    /// only thing on the form that can move with the language.
     private let selectWithPlaceholder = FieldGroup(
         key: "billing",
         fields: [
@@ -257,7 +216,6 @@ final class FieldGroupLanguageTests: XCTestCase {
         ]
     )
 
-    /// The same select as a merchant who configured no placeholder sends it.
     private let selectWithoutPlaceholder = FieldGroup(
         key: "billing",
         fields: [
@@ -270,8 +228,6 @@ final class FieldGroupLanguageTests: XCTestCase {
         ]
     )
 
-    /// The fallback written out as a placeholder, so the em dash can be pinned
-    /// without reading a glyph off a layer.
     private let selectWithDashPlaceholder = FieldGroup(
         key: "billing",
         fields: [
@@ -285,8 +241,6 @@ final class FieldGroupLanguageTests: XCTestCase {
         ]
     )
 
-    /// A session that sends the placeholder as an empty string. Not the same
-    /// shape as sending none: the read returns `""` rather than nil.
     private let selectWithEmptyPlaceholder = FieldGroup(
         key: "billing",
         fields: [
@@ -303,9 +257,6 @@ final class FieldGroupLanguageTests: XCTestCase {
 
     private let chosenCountry = ["billing": ["country": "US"]]
 
-    /// The country placeholder is usually the one entry in the session's
-    /// per-language maps that is genuinely translated; the address examples
-    /// beside it tend to be the same string in both.
     func testAnUnsetSelectDrawsThePlaceholderInTheSheetsLanguage() throws {
         XCTAssertGreaterThan(
             try differingPixels(
@@ -316,8 +267,6 @@ final class FieldGroupLanguageTests: XCTestCase {
         )
     }
 
-    /// What the bug looked like: the empty row was a literal em dash, so a
-    /// select with a placeholder and one without drew the same thing.
     func testAnUnsetSelectDrawsThePlaceholderRatherThanTheDash() throws {
         XCTAssertGreaterThan(
             try differingPixels(
@@ -328,9 +277,6 @@ final class FieldGroupLanguageTests: XCTestCase {
         )
     }
 
-    /// And the fallback survives: a field the session sends no placeholder for
-    /// still draws the dash, which is what an unset optional select needs to
-    /// sit on.
     func testASelectWithNoPlaceholderStillDrawsTheDash() throws {
         XCTAssertEqual(
             try differingPixels(
@@ -341,8 +287,6 @@ final class FieldGroupLanguageTests: XCTestCase {
         )
     }
 
-    /// An empty string is not a placeholder. Reading it as one draws a blank
-    /// where the dash belongs, which is a select with nothing in it at all.
     func testASelectWhosePlaceholderIsEmptyDrawsTheDash() throws {
         XCTAssertEqual(
             try differingPixels(
@@ -353,8 +297,6 @@ final class FieldGroupLanguageTests: XCTestCase {
         )
     }
 
-    /// The placeholder belongs to the empty row alone. A select the shopper has
-    /// answered draws their answer, whether or not the field carries one.
     func testAChosenOptionIsDrawnWhicheverPlaceholderTheFieldCarries() throws {
         XCTAssertEqual(
             try differingPixels(
@@ -372,8 +314,6 @@ final class FieldGroupLanguageTests: XCTestCase {
         _ values: [String: [String: String]] = [:]
     ) -> UIImage {
         let window = form(group, language: language, values: values)
-        // Longer than the shared settle: a layer read before the text has drawn
-        // compares two blank forms and passes the control while failing nothing.
         host.settle(0.4)
         return UIGraphicsImageRenderer(bounds: window.bounds).image { context in
             window.layer.render(in: context.cgContext)

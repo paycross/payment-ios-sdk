@@ -4,21 +4,6 @@ import SwiftUI
 @testable import PayCross
 @testable import PayCrossCore
 
-/// The two steps between pressing the trash and the card being gone.
-///
-/// `SavedCardRemovalTests` starts after the shopper has said yes, and proves
-/// what the server call does. This starts one step earlier, at the press, and
-/// covers the pair that can delete a card nobody meant to delete: a trash wired
-/// to the wrong row, and a confirmation whose Cancel removes the card anyway.
-///
-/// The press itself is dispatched through the model rather than through a
-/// synthesised touch. SwiftUI renders these controls as neither `UIView`s nor
-/// materialised accessibility elements — a hosted sheet reports an accessibility
-/// element count of zero throughout, because nothing in a unit-test process is
-/// an assistive client — so there is no button on screen for a test in this
-/// target to press. What is left is that the sheet's own methods are exactly
-/// what the trash and the two alert buttons call, and one screenshot showing the
-/// control is rendered.
 @MainActor
 final class SavedCardConfirmationTests: XCTestCase {
 
@@ -33,8 +18,6 @@ final class SavedCardConfirmationTests: XCTestCase {
 
     // MARK: - Pressing the trash
 
-    /// The press must not delete anything on its own. A trash wired straight to
-    /// the server is one mis-tap from a card the shopper never agreed to lose.
     func testPressingTheTrashOnlyRaisesTheConfirmation() async throws {
         let (model, transport) = try await makeSheet()
 
@@ -66,8 +49,6 @@ final class SavedCardConfirmationTests: XCTestCase {
         XCTAssertNil(model.cardPendingRemoval, "the prompt goes with the answer")
     }
 
-    /// The half that makes the confirmation worth having. Without it, an alert
-    /// whose Cancel deleted the card anyway would pass every test above.
     func testCancellingRemovesNothing() async throws {
         let (model, transport) = try await makeSheet()
 
@@ -81,9 +62,6 @@ final class SavedCardConfirmationTests: XCTestCase {
         XCTAssertEqual(model.form.savedCards.map(\.id), [visa, mastercard])
     }
 
-    /// The alert's own dismissal writes `false` through the presentation
-    /// binding, which is a second way for the prompt to close. It must not leave
-    /// a card armed for whatever the next confirmation answers.
     func testConfirmingWithNothingPendingDoesNothing() async throws {
         let (model, transport) = try await makeSheet()
 
@@ -97,13 +75,6 @@ final class SavedCardConfirmationTests: XCTestCase {
 
     // MARK: - Whether the trash is offered at all
 
-    /// The picker is what decides this, and it decides twice: the session has to
-    /// allow removal, and no payment may be in flight.
-    ///
-    /// Asserted on what is drawn, because that is the only observable there is.
-    /// A row with a trash on it cannot render identically to one without, so a
-    /// picker that matches the no-removal baseline pixel for pixel did not draw
-    /// the control.
     func testTheTrashIsDrawnOnlyWhenTheSessionAllowsItAndNothingIsPaying() throws {
         let baseline = try render(allowsRemoval: false, isPaying: false)
 
@@ -150,7 +121,6 @@ final class SavedCardConfirmationTests: XCTestCase {
         return (model, transport)
     }
 
-    /// One picker, drawn, as PNG bytes.
     private func render(allowsRemoval: Bool, isPaying: Bool) throws -> Data {
         let window = host(
             SavedCardPicker(

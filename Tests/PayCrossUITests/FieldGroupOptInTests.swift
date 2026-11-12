@@ -5,14 +5,6 @@ import SwiftUI
 @testable import PayCross
 @testable import PayCrossCore
 
-/// A group the merchant offers rather than requires.
-///
-/// Two halves, in one file because they are the same claim asked twice. The
-/// render says a declined group draws its offer and nothing else; the model
-/// says it is not validated and not submitted. Neither half is worth much
-/// alone: a group hidden but still validated blocks a payment for a reason
-/// nothing on screen explains, and one skipped but still drawn asks the shopper
-/// for an address that is thrown away.
 @MainActor
 final class FieldGroupOptInTests: XCTestCase {
 
@@ -30,8 +22,6 @@ final class FieldGroupOptInTests: XCTestCase {
 
     // MARK: - Fixtures
 
-    /// The shipping group as the backend marks it: the flag beside the labels,
-    /// and fields the merchant made required.
     private let shipping = FieldGroup(
         key: "shipping_address",
         label: "Shipping Address",
@@ -48,8 +38,6 @@ final class FieldGroupOptInTests: XCTestCase {
         ]
     )
 
-    /// The same group without the flag, which is every group the SDK has ever
-    /// drawn.
     private let mandatory = FieldGroup(
         key: "shipping_address",
         label: "Shipping Address",
@@ -65,9 +53,6 @@ final class FieldGroupOptInTests: XCTestCase {
         ]
     )
 
-    /// An opt-in group whose only per-language string is its own heading, so a
-    /// render that moves with the language can only have moved because the
-    /// toggle's caption did.
     private let captionOnly = FieldGroup(
         key: "shipping_address",
         label: "Shipping Address",
@@ -93,9 +78,6 @@ final class FieldGroupOptInTests: XCTestCase {
         return host(NavigationStack { view })
     }
 
-    /// Every `UISwitch` under a view. A SwiftUI `Toggle` really is one, measured
-    /// on the simulator, which is the only thing about this sheet's controls a
-    /// test bundle can count: SwiftUI's accessibility tree is not built here.
     private func switches(in view: UIView) -> [UISwitch] {
         (view.subviews.compactMap { $0 as? UISwitch }) + view.subviews.flatMap(switches(in:))
     }
@@ -106,7 +88,6 @@ final class FieldGroupOptInTests: XCTestCase {
 
     // MARK: - What is drawn
 
-    /// The control has to exist before anything else here means anything.
     func testAnOptInGroupAddsASwitchAndAMandatoryOneDoesNot() {
         XCTAssertEqual(switches(in: form(shipping, optedIn: [])).count, 1)
         XCTAssertEqual(
@@ -115,7 +96,6 @@ final class FieldGroupOptInTests: XCTestCase {
         )
     }
 
-    /// The bug as filed: required shipping fields with no way to decline them.
     func testADeclinedGroupDrawsItsOfferAndNoFields() {
         let window = form(shipping, optedIn: [])
         XCTAssertEqual(switches(in: window).count, 1, "the offer itself must stay on screen")
@@ -132,8 +112,6 @@ final class FieldGroupOptInTests: XCTestCase {
         )
     }
 
-    /// The card fields come back in the same read, so an empty list would mean
-    /// the read stopped working rather than that the group went away.
     func testTheReadItselfWorks() {
         XCTAssertTrue(
             placeholders(in: form(shipping, optedIn: [])).contains("NAME ON CARD"),
@@ -141,16 +119,12 @@ final class FieldGroupOptInTests: XCTestCase {
         )
     }
 
-    /// Without the flag nothing moves: the same group draws the same fields it
-    /// always did, whatever the set holds.
     func testAGroupWithoutTheFlagIsDrawnExactlyAsBefore() {
         XCTAssertTrue(
             placeholders(in: form(mandatory, optedIn: [])).contains("SHIPPING LINE ONE")
         )
     }
 
-    /// The toggle is captioned by the group's own heading, which the backend
-    /// translates. An SDK string would be our words for the merchant's group.
     func testTheToggleIsCaptionedInTheSheetsLanguage() throws {
         XCTAssertGreaterThan(
             try differingPixels(
@@ -209,9 +183,6 @@ final class FieldGroupOptInTests: XCTestCase {
         model.cancel()
     }
 
-    /// A value the merchant prefilled is kept in state while the group is off,
-    /// so ticking it back on restores the address instead of clearing it. It
-    /// still may not be sent.
     func testAPrefilledDeclinedGroupIsHeldButNotSent() async throws {
         let (model, transport) = try await sheet()
         model.fieldValues["shipping_address"] = ["line1": "1 Rue de Rivoli"]
@@ -228,20 +199,9 @@ final class FieldGroupOptInTests: XCTestCase {
         model.cancel()
     }
 
-    /// A shopper shown "Address line 1 is required" under the shipping group,
-    /// who answers it by declining the group, has answered it. The row goes
-    /// with the tick, so an error left in the list is one nothing on screen can
-    /// show and nothing can clear.
-    ///
-    /// Nothing draws it today, which is the point: this is the assertion that
-    /// stops an error summary or a scroll-to-first-error, added later, from
-    /// putting a complaint about a declined group back in front of the shopper
-    /// with no test going red.
     func testUntickingAGroupAfterAFailedSubmitTakesItsErrorsWithIt() async throws {
         let (model, _) = try await sheet()
         model.optedInGroups = ["shipping_address"]
-        // The mandatory group fails too, so this can tell pruning the declined
-        // group's errors apart from simply emptying the list.
         model.fieldValues["billing_address"] = [:]
 
         payWithACard(model)
@@ -252,9 +212,6 @@ final class FieldGroupOptInTests: XCTestCase {
 
         model.optedInGroups = []
 
-        // By group and field, not by message: both groups name a field `line1`
-        // and label it "Address line 1", so the sentence alone cannot say which
-        // of the two is still complaining.
         XCTAssertEqual(
             model.fieldErrors.map { "\($0.groupKey).\($0.fieldName)" },
             ["billing_address.line1"],
@@ -262,8 +219,6 @@ final class FieldGroupOptInTests: XCTestCase {
         )
     }
 
-    /// And the other direction leaves the mandatory groups alone: ticking a
-    /// group is not a reason to forget what the shopper was already told.
     func testTickingAGroupKeepsTheErrorsAlreadyOnScreen() async throws {
         let (model, _) = try await sheet()
         model.fieldValues["billing_address"] = [:]
@@ -280,9 +235,6 @@ final class FieldGroupOptInTests: XCTestCase {
 
     private func render(_ group: FieldGroup, _ language: String) -> UIImage {
         let window = form(group, optedIn: [], language: language)
-        // Longer than the shared settle, for the reason the language suite
-        // gives: a layer read before the text has drawn compares two blank
-        // forms and passes while proving nothing.
         host.settle(0.4)
         return UIGraphicsImageRenderer(bounds: window.bounds).image { context in
             window.layer.render(in: context.cgContext)
@@ -297,12 +249,6 @@ final class FieldGroupOptInTests: XCTestCase {
         model.pay()
     }
 
-    /// The submitted body, or a failed test.
-    ///
-    /// Polled to a deadline rather than simply awaited: a regression that stops
-    /// the payment being submitted at all -- which is exactly what a declined
-    /// group blocking validation would do -- must fail this test rather than
-    /// hang it.
     private func submittedBody(
         _ transport: StubTransport, _ model: PaymentSheetModel
     ) async throws -> [String: Any] {
@@ -310,8 +256,6 @@ final class FieldGroupOptInTests: XCTestCase {
         while await transport.sent.count < 2, Date() < deadline {
             try await Task.sleep(nanoseconds: 20_000_000)
         }
-        // The second request, by index. The submission is followed by polls,
-        // and `last` would read whichever of those happened to have landed.
         let sent = await transport.sent
         guard sent.count > 1 else {
             XCTFail(
@@ -354,8 +298,6 @@ final class FieldGroupOptInTests: XCTestCase {
         return (model, transport)
     }
 
-    /// A billing group the shopper cannot decline, prefilled so it never blocks
-    /// the payment, and the shipping group the merchant marked opt-in.
     private let sessionJSON = """
     {
       "session_id": "sess_1",

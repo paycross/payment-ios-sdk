@@ -3,8 +3,6 @@ import XCTest
 
 final class SessionTokenTests: XCTestCase {
 
-    /// Builds a JWT with the given payload. The signature is nonsense on purpose —
-    /// the SDK does not verify it, the server does.
     private func makeToken(_ payload: [String: Any]) throws -> String {
         let header = Data(#"{"alg":"RS256","typ":"JWT"}"#.utf8)
         let body = try JSONSerialization.data(withJSONObject: payload)
@@ -38,7 +36,6 @@ final class SessionTokenTests: XCTestCase {
         XCTAssertEqual(claims.expiresAt, 1_800_000_000)
     }
 
-    /// Android defaults merchant/customer to "" and maps empty branding to null.
     func testOptionalClaimsMatchAndroidDefaults() throws {
         let token = try makeToken([
             "sub": "sess_abc", "amount": 100, "currency": "USD", "branding": ""
@@ -79,8 +76,6 @@ final class SessionTokenTests: XCTestCase {
         XCTAssertThrowsError(try SessionTokenDecoder.decode("a.!!!not-base64!!!.c"))
     }
 
-    /// Real JWTs are base64url without padding; a decoder that forgets to repad
-    /// fails on payload lengths that are not a multiple of 4.
     func testUnpaddedBase64URLPayloadsDecode() throws {
         for filler in ["a", "ab", "abc", "abcd"] {
             let token = try makeToken([

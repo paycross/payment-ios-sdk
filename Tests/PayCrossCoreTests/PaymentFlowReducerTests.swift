@@ -56,8 +56,6 @@ final class PaymentFlowReducerTests: XCTestCase {
         XCTAssertEqual(status, "authorized")
     }
 
-    /// Android coalesces amount and currency independently; a status carrying only
-    /// one of them must still pick the other up from the session claims.
     func testAmountAndCurrencyFallBackIndependently() {
         var state = PaymentFlowState(claims: claims(amount: 1000, currency: "EUR"))
         _ = PaymentFlowReducer.reduce(
@@ -88,9 +86,6 @@ final class PaymentFlowReducerTests: XCTestCase {
         ))
     }
 
-    /// The token for a card this payment stored rides the terminal status and
-    /// has to reach the merchant: it is the only handle they get on the card,
-    /// and it does not exist anywhere before this response.
     func testATerminalStatusCarriesTheSavedCardTokenThrough() {
         var state = PaymentFlowState(claims: claims())
         _ = PaymentFlowReducer.reduce(
@@ -111,8 +106,6 @@ final class PaymentFlowReducerTests: XCTestCase {
         ))
     }
 
-    /// A payment that stored nothing reports nothing. Most do not: the shopper
-    /// left the toggle off, or paid with a card already on file.
     func testASuccessWithNoSavedTokenReportsNil() {
         var state = PaymentFlowState(claims: claims())
         _ = PaymentFlowReducer.reduce(
@@ -128,8 +121,6 @@ final class PaymentFlowReducerTests: XCTestCase {
 
     // MARK: - Failure
 
-    /// The defect the review caught. Android's handleStatus returns `true` for a
-    /// retryable decline, which ends the poll job, even though it emits no result.
     func testRetryableDeclineStopsPollingWithoutFinishing() {
         var state = PaymentFlowState(claims: claims())
         state.transactionID = "txn_1"
@@ -149,9 +140,6 @@ final class PaymentFlowReducerTests: XCTestCase {
         XCTAssertEqual(state.inlineError, "Payment failed. Please try again.")
     }
 
-    /// The reducer writes the banner, and the reducer is in Core where `L(...)`
-    /// cannot reach. The sheet resolves the sentence and hands it in; this is the
-    /// assertion that the reducer actually uses it instead of its own literal.
     func testTheReArmBannerUsesTheMessagesItWasGiven() {
         var state = PaymentFlowState()
         _ = PaymentFlowReducer.reduce(
@@ -164,10 +152,6 @@ final class PaymentFlowReducerTests: XCTestCase {
         XCTAssertEqual(state.inlineError, "Le paiement a échoué. Veuillez réessayer.")
     }
 
-    /// A re-armed form is only worth showing while the session can still take a
-    /// payment. Nothing else bounds it — the 480 s poll deadline goes with the
-    /// poll — so the sheet would otherwise sit on a live Pay button long after the
-    /// session expired, and the shopper's next tap could only fail.
     func testRetryableDeclineOnAnExpiredSessionIsTerminal() {
         var state = PaymentFlowState(
             claims: claims(expiresAt: Int64(noon.timeIntervalSince1970) - 1)
@@ -204,7 +188,6 @@ final class PaymentFlowReducerTests: XCTestCase {
         XCTAssertEqual(state.inlineError, "Payment failed. Please try again.")
     }
 
-    /// A session with no `exp` claim at all is not treated as expired.
     func testRetryableDeclineReArmsWhenTheSessionHasNoExpiry() {
         var state = PaymentFlowState(claims: claims(expiresAt: nil))
 
@@ -231,11 +214,6 @@ final class PaymentFlowReducerTests: XCTestCase {
         XCTAssertEqual(state.result, .failed(transactionID: "txn_1", recovery: .doNotRetry))
     }
 
-    /// `verify_before_retry` from the server says exactly what the poll deadline
-    /// says: nobody observed the outcome. Delivering it as a decline was the whole
-    /// defect — a merchant reading `.failed` re-collects, and the payment that may
-    /// already have succeeded gets charged twice. It is a pending outcome whoever
-    /// noticed first, so the only thing that differs is the reason.
     func testServerVerifyBeforeRetryIsPendingRatherThanADecline() {
         var state = PaymentFlowState(claims: claims())
         let effects = PaymentFlowReducer.reduce(
@@ -258,7 +236,6 @@ final class PaymentFlowReducerTests: XCTestCase {
         XCTAssertNil(state.inlineError, "an unobserved outcome must not re-arm the form")
     }
 
-    /// An unknown recovery value must end the payment, not re-arm the form.
     func testUnknownRecoveryFailsClosedAndFinishes() {
         var state = PaymentFlowState(claims: claims())
         _ = PaymentFlowReducer.reduce(
@@ -309,9 +286,6 @@ final class PaymentFlowReducerTests: XCTestCase {
         XCTAssertTrue(second.isEmpty, "polling re-delivers the same action; it must not re-present")
     }
 
-    /// The porting bug the review caught: Kotlin's LinkedHashMap.toString() is
-    /// insertion-ordered, Swift's Dictionary is not. Without sorting, the same
-    /// action yields different keys and the challenge re-shows mid-payment.
     func testDedupeKeyIsStableRegardlessOfDictionaryOrder() {
         let a = ThreeDSAction(url: "u", method: "POST", data: ["z": "1", "a": "2", "m": "3"])
         let b = ThreeDSAction(url: "u", method: "POST", data: ["a": "2", "m": "3", "z": "1"])
@@ -356,10 +330,6 @@ final class PaymentFlowReducerTests: XCTestCase {
 
         XCTAssertNil(state.pendingThreeDS)
         XCTAssertEqual(state.handledThreeDSKeys.count, 1, "polling must not re-show the completed step")
-        // Emitting the dismissal is what actually removes the web view. Returning
-        // [] here left an answered challenge full-screen over the form until the
-        // next poll returned terminal, and left a completed fingerprint's web
-        // view in the hierarchy for the life of the sheet.
         XCTAssertEqual(effects, [.dismiss3DS])
     }
 
@@ -375,10 +345,6 @@ final class PaymentFlowReducerTests: XCTestCase {
         XCTAssertNil(state.result)
     }
 
-    /// The poll ran out without ever seeing an outcome. The payment may have
-    /// succeeded and shifted liability, so reporting a failure is a lie that
-    /// invites the merchant to charge a shopper twice. The transaction id stays,
-    /// because it is what resolves the outcome out of band.
     func testDeadlineReportsPendingRatherThanAFailure() {
         var state = PaymentFlowState(claims: claims())
         state.transactionID = "txn_1"

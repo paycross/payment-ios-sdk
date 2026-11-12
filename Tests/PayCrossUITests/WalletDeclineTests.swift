@@ -3,12 +3,6 @@ import XCTest
 @testable import PayCross
 @testable import PayCrossCore
 
-/// A wallet decline must not take the shopper's typed CVV with it.
-///
-/// Core owns the rule and asserts it on Linux in `CardFormTests`. What is asserted
-/// here is that the sheet's wallet branch actually reaches for the wallet flavour
-/// of the event — the defect was a card-path event used on three wallet paths, so
-/// the wiring is the whole bug.
 @MainActor
 final class WalletDeclineTests: XCTestCase {
 
@@ -33,13 +27,10 @@ final class WalletDeclineTests: XCTestCase {
             deviceCanPay: { true },
             sessionData: nil,
             isPreparing: false,
-            // Never the real one: a model holding URLSessionTransport would open a
-            // socket to the live checkout API from a unit test.
             transport: transport
         )
     }
 
-    /// Fills the form the way a shopper would before changing their mind.
     private func typeACard(into model: PaymentSheetModel) {
         CardFormReducer.reduce(state: &model.form, event: .nameChanged("A Person"))
         CardFormReducer.reduce(state: &model.form, event: .panChanged("4111111111111111"))
@@ -77,10 +68,6 @@ final class WalletDeclineTests: XCTestCase {
         XCTAssertFalse(model.isLoading)
     }
 
-    /// The other wallet route, and the one the re-arm rework touches: the wallet
-    /// payment reached the server and was declined retryably. The submission
-    /// carried a payment token, so the card on the form was still never
-    /// authorized and its CVV must survive.
     func testAServerDeclinedWalletPaymentKeepsTheTypedCVV() async throws {
         let token = try JSONDecoder().decode(JSONValue.self, from: Data(Self.appleTokenJSON.utf8))
         let transport = StubTransport(replies: [
@@ -124,9 +111,6 @@ final class WalletDeclineTests: XCTestCase {
     }
     """#
 
-    /// The shopper dismissing Apple Pay is not a decline and shows nothing, so the
-    /// CVV is untouched for a different reason. Pinned so a future refactor cannot
-    /// route it through a decline event.
     func testDismissingTheWalletSheetShowsNothingAndKeepsTheCVV() async {
         let model = makeModel(authorizer: StubAuthorizer(outcome: .cancelled))
         typeACard(into: model)

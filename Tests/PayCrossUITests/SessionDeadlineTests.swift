@@ -3,13 +3,6 @@ import XCTest
 @testable import PayCross
 @testable import PayCrossCore
 
-/// Pins the bound on a re-armed form.
-///
-/// The decision — what an expired session resolves to, and how long is left —
-/// is Core's and is asserted on Linux in `SessionLifetimeTests`. What can only be
-/// shown in a running process is that the sheet actually acts on it: a form
-/// re-armed after a retryable decline has no other deadline, because the 480 s
-/// poll deadline went with the poll it belonged to.
 @MainActor
 final class SessionDeadlineTests: XCTestCase {
 
@@ -31,19 +24,10 @@ final class SessionDeadlineTests: XCTestCase {
             deviceCanPay: { false },
             sessionData: nil,
             isPreparing: false,
-            // Never the real one: a model holding URLSessionTransport would open a
-            // socket to the live checkout API from a unit test.
             transport: StubTransport(status: 500)
         )
     }
 
-    /// Installs the continuation, re-arms, then polls for a result until the
-    /// timeout.
-    ///
-    /// Polling rather than racing the awaiting task in a task group: `awaitResult`
-    /// never resumes when no result is coming, and a group waits for every child
-    /// before it returns, so the "nothing should happen" case would hang the suite
-    /// rather than fail. Same shape as `waitUntil` in `ApplePayPresentationTests`.
     private func resultOfReArming(
         _ model: PaymentSheetModel,
         within timeout: Duration
@@ -78,8 +62,6 @@ final class SessionDeadlineTests: XCTestCase {
         )
     }
 
-    /// A session that never says when it ends is not one that has ended. Guessing
-    /// a lifetime here would abandon payments the server would still have taken.
     func testAReArmedFormWithoutAnExpiryIsNotEnded() async {
         let model = makeModel(expiresIn: nil)
 
@@ -88,7 +70,6 @@ final class SessionDeadlineTests: XCTestCase {
         XCTAssertNil(result)
     }
 
-    /// The message still reaches the form; the deadline is the only thing added.
     func testReArmingStillShowsTheDeclineAndReEnablesTheForm() {
         let model = makeModel(expiresIn: 600)
 

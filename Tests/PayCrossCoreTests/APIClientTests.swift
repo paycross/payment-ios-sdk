@@ -5,10 +5,6 @@ import XCTest
 import FoundationNetworking
 #endif
 
-/// Records what was sent and replays canned responses. No server, no URLProtocol.
-///
-/// An actor rather than a lock-guarded class: `send` is async, and Swift 6 refuses
-/// `NSLock` across a suspension point.
 private actor StubTransport: HTTPTransport {
     struct Reply {
         var status: Int = 200
@@ -58,12 +54,6 @@ final class APIClientTests: XCTestCase {
         XCTAssertEqual(request.value(forHTTPHeaderField: "User-Agent"), "PayCrossSDK-iOS/test")
     }
 
-    /// A cached status poll can freeze the caller on a stale value: a live test
-    /// drive saw the second poll after submit come back `cache_hit=true` from
-    /// URLSession's URLCache. Every request from this client is a payments API
-    /// call, none of which is cacheable, so none may be cache-served. All three
-    /// go through `makeRequest` today, but this asserts each call site
-    /// directly rather than trusting that they keep sharing it.
     func testRequestsBypassURLCache() async throws {
         let transport = StubTransport(replies: [
             .init(body: Data(#"{"transaction_id":"t1","status":"success"}"#.utf8)),
@@ -126,7 +116,6 @@ final class APIClientTests: XCTestCase {
         XCTAssertEqual(request.value(forHTTPHeaderField: "Idempotency-Key"), "key-1")
         XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "application/json")
 
-        // The wire body must use the snake_case names the backend documents.
         let json = try XCTUnwrap(
             JSONSerialization.jsonObject(with: try XCTUnwrap(request.httpBody)) as? [String: Any]
         )
@@ -161,8 +150,6 @@ final class APIClientTests: XCTestCase {
         }
     }
 
-    /// Only a server-side rejection is safe to retry. A dropped connection is not:
-    /// the request may already have been received.
     func testOnlyConflictsAreRetryableRejections() {
         XCTAssertTrue(PayCrossError.http(status: 409, body: nil).isRetryableRejection)
         XCTAssertFalse(PayCrossError.http(status: 400, body: nil).isRetryableRejection)
@@ -182,7 +169,6 @@ final class APIClientTests: XCTestCase {
         }
     }
 
-    /// A hostile identifier must not be able to climb out of the API path.
     func testPathSegmentsArePercentEncoded() async throws {
         let transport = StubTransport(json: #"{"transaction_id":"t","status":"success"}"#)
         _ = try? await makeClient(transport).status(transactionID: "../session/secret")
@@ -208,8 +194,6 @@ final class APIClientTests: XCTestCase {
         XCTAssertEqual(request.cachePolicy, .reloadIgnoringLocalAndRemoteCacheData)
     }
 
-    /// The endpoint is idempotent and answers 204 whether or not the card was
-    /// still active, so a second removal is a success and not an error.
     func testDeleteSavedCardTreats204AsSuccess() async throws {
         let transport = StubTransport(replies: [
             .init(status: 204, body: Data()),
@@ -224,9 +208,6 @@ final class APIClientTests: XCTestCase {
         XCTAssertEqual(sent.count, 2)
     }
 
-    /// 404 is the ownership check failing — the card is not this session's
-    /// customer's — and is distinct from a transient failure because there is
-    /// nothing to retry.
     func testDeleteSavedCardTreats404AsNotFound() async {
         let transport = StubTransport(status: 404, json: #"{"error":"not found"}"#)
         do {
@@ -260,9 +241,6 @@ final class APIClientTests: XCTestCase {
         }
     }
 
-    /// A 404 on the status poll must stay an `.http` failure: the row is still
-    /// being written while the poll runs, and reading that as "gone" would end
-    /// a live payment. Only the no-content path reads 404 as a missing resource.
     func testA404OnAPollIsStillAnHTTPFailure() async {
         let transport = StubTransport(status: 404, json: #"{"error":"not found"}"#)
         do {
@@ -278,12 +256,9 @@ final class APIClientTests: XCTestCase {
 
     // MARK: - browser_info
 
-    /// 3DS expects the JavaScript getTimezoneOffset() convention: minutes WEST of
-    /// UTC. A device at UTC+2 reports -120. The sign is easy to invert and a stale
-    /// design doc in this repo's history had it backwards.
     func testTimezoneOffsetIsMinutesWestOfUTC() {
         let berlinSummer = TimeZone(identifier: "Europe/Berlin")!
-        let july = Date(timeIntervalSince1970: 1_720_000_000) // 2024-07-03, CEST (UTC+2)
+        let july = Date(timeIntervalSince1970: 1_720_000_000)
         XCTAssertEqual(
             BrowserInfo.timezoneOffsetMinutes(timeZone: berlinSummer, at: july),
             -120
@@ -292,7 +267,7 @@ final class APIClientTests: XCTestCase {
         let newYork = TimeZone(identifier: "America/New_York")!
         XCTAssertEqual(
             BrowserInfo.timezoneOffsetMinutes(timeZone: newYork, at: july),
-            240 // UTC-4 in summer
+            240
         )
 
         XCTAssertEqual(
@@ -304,13 +279,6 @@ final class APIClientTests: XCTestCase {
     func testBrowserInfoEncodesSnakeCase() throws {
         let data = try JSONEncoder().encode(sampleBrowserInfo)
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        // Non-EMPTY, not merely non-nil: the backend trims and rejects blanks,
-        // and "" is present-but-invalid. Asserting presence is what allowed an
-        // SDK whose ip_address was always "" to pass this test.
-        //
-        // ip_address is not in this list: the server derives it when the client
-        // omits it, so it is no longer a client-required field. See the
-        // ip_address-specific tests below.
         for key in ["user_agent", "language", "accept_header"] {
             let value = json[key] as? String
             XCTAssertNotNil(value, "\(key) missing")
@@ -326,10 +294,6 @@ final class APIClientTests: XCTestCase {
         XCTAssertEqual(json["color_depth"] as? Int, 24)
     }
 
-    /// The server derives `ip_address` from the request (Cloudflare header ->
-    /// source IP) when the client omits it. Sending the key as `null` would
-    /// still trip the backend's blank check, so a nil `ipAddress` must produce
-    /// no key at all -- not `"ip_address": null`.
     func testBrowserInfoOmitsIPAddressKeyWhenNil() throws {
         let info = BrowserInfo(
             userAgent: "test-agent", screenWidth: 390, screenHeight: 844,
@@ -342,7 +306,6 @@ final class APIClientTests: XCTestCase {
         XCTAssertFalse(json.keys.contains("ip_address"), "ip_address must be absent, not null")
     }
 
-    /// A client-supplied value still wins over the server's derivation.
     func testBrowserInfoEncodesIPAddressWhenPresent() throws {
         let info = BrowserInfo(
             userAgent: "test-agent", ipAddress: "192.0.2.1", screenWidth: 390,
@@ -356,8 +319,6 @@ final class APIClientTests: XCTestCase {
 
     // MARK: - Redaction
 
-    /// The submit body carries a PAN and a CVV and is reachable from a merchant's
-    /// test target, so interpolating it must not leak either.
     func testCardDataDescriptionRedactsPANAndCVV() {
         let card = CardData.newCard(
             cardholderName: "A PERSON",

@@ -1,8 +1,6 @@
 import XCTest
 @testable import DemoHarnessCore
 
-/// The most valuable test in the harness: a production merchant cannot start a
-/// run unconfirmed, including from the deep link that no view sees.
 final class RunDecisionTests: XCTestCase {
 
     private let sandbox = Merchant(id: "m1", name: "Sandbox merchant", environment: .staging)
@@ -45,8 +43,6 @@ final class RunDecisionTests: XCTestCase {
         XCTAssertEqual(pending.scenario.id, "s2")
     }
 
-    /// The dangerous path: `xcrun simctl openurl` with no human present. A gate
-    /// implemented in a view would not cover this.
     func testProductionIsGatedOnEverySurfaceIncludingTheDeepLink() {
         for surface in CheckoutSurface.allCases {
             let decision = HarnessRunner.decide(
@@ -59,7 +55,6 @@ final class RunDecisionTests: XCTestCase {
         }
     }
 
-    /// Same gate whether the run came from the UI or a URL.
     func testDirectDecideGatesProductionToo() {
         let scenario = Scenario(merchantID: "m2", name: "Approve", requestBody: "{}")
         guard case .confirmProduction = HarnessRunner.decide(
@@ -76,8 +71,6 @@ final class RunDecisionTests: XCTestCase {
 
     // MARK: - Resolution
 
-    /// Scenarios are namespaced per merchant; both merchants here have an
-    /// "Approve", and the wrong one would run against production.
     func testScenariosResolveWithinTheNamedMerchant() {
         guard case .start(_, let scenario, _) = HarnessRunner.decide(
             merchantName: "Sandbox merchant", scenarioName: "Approve",

@@ -18,8 +18,6 @@ final class DeepLinkTests: XCTestCase {
         )
     }
 
-    /// The Kotlin defaults a missing surface to "sdk" rather than rejecting the
-    /// link, so a runner can omit it for the common case.
     func testMissingSurfaceDefaultsToTheSDKSheet() {
         XCTAssertEqual(
             parse("paycross-demo://run?merchant=Acme&scenario=Approve"),
@@ -136,15 +134,12 @@ final class SessionOutcomeTests: XCTestCase {
         XCTAssertEqual(result.phase, .failed)
     }
 
-    /// A session can complete with no payment transaction at all; reporting that
-    /// as success would be the worst possible bug in a test harness.
     func testCompletedWithNoPaymentTransactionFails() {
         let result = SessionOutcome.resolve(session: session(status: "completed"))
         XCTAssertEqual(result.phase, .failed)
         XCTAssertEqual(result.detail, "Completed with no payment transaction")
     }
 
-    /// Refunds and captures carry a parent; the primary payment does not.
     func testTransactionsWithAParentAreIgnored() {
         let result = SessionOutcome.resolve(session: session(
             status: "completed",
@@ -159,9 +154,6 @@ final class SessionOutcomeTests: XCTestCase {
         XCTAssertEqual(result.phase, .success)
     }
 
-    /// The non-payment entry sorts LATER, so removing the type filter changes the
-    /// answer. The previous version gave it an empty sort key, meaning it lost on
-    /// recency anyway and the test passed with the filter deleted.
     func testNonPaymentTypesAreIgnored() {
         let result = SessionOutcome.resolve(session: session(
             status: "completed",
@@ -176,9 +168,6 @@ final class SessionOutcomeTests: XCTestCase {
         XCTAssertEqual(result.phase, .success)
     }
 
-    /// The winner is FIRST in the array, so the sort-key comparison has to do the
-    /// work. Previously the winner was also last and the tie-break was `>=`, so
-    /// deleting the comparison entirely still passed.
     func testLatestTransactionWins() {
         let result = SessionOutcome.resolve(session: session(
             status: "completed",
@@ -194,9 +183,6 @@ final class SessionOutcomeTests: XCTestCase {
         XCTAssertEqual(result.phase, .success)
     }
 
-    /// One malformed element must not discard the rest. `as? [[String: Any]]`
-    /// fails wholesale on a single JSON null, which reported a session that HAD
-    /// taken the money as "Completed with no payment transaction".
     func testOneMalformedTransactionDoesNotHideThePayment() {
         let raw: [String: Any] = [
             "status": "completed",
@@ -214,8 +200,6 @@ final class SessionOutcomeTests: XCTestCase {
         XCTAssertEqual(result.amount, 2599)
     }
 
-    /// updated_at wins over created_at, and a missing updated_at must not sort
-    /// above a present one.
     func testSortKeyPrefersUpdatedAtAndTreatsMissingAsEmpty() {
         XCTAssertEqual(
             SessionOutcome.sortKey(["updated_at": "2026-02-01", "created_at": "2026-01-01"]),
@@ -276,7 +260,6 @@ final class SessionMinterTests: XCTestCase {
         XCTAssertEqual(minted.sessionID, "sess_1")
         XCTAssertEqual(minted.sessionToken, "jwt-1")
         XCTAssertEqual(minted.checkoutURL, "https://pay/x")
-        // payment_sessions must be normalised to the hyphenated API path.
         XCTAssertEqual(minted.sessionURL, "https://api.example.com/payment-sessions/sess_1")
 
         let requests = await recorder.requests
@@ -320,9 +303,6 @@ final class SessionMinterTests: XCTestCase {
         XCTAssertTrue(body.contains("paycross-demo://result?nav=return"))
     }
 
-    /// The regression test for the defect this file's own placeholder test
-    /// missed: its fixture contained no placeholders, so it passed while
-    /// substitution had no production caller at all.
     func testPlaceholdersAreSubstitutedInTheBodyThatIsPosted() async throws {
         let recorder = Recorder()
         let minter = SessionMinter { request in
@@ -349,8 +329,6 @@ final class SessionMinterTests: XCTestCase {
         XCTAssertTrue(body.contains("fixed-uuid"))
     }
 
-    /// Substitution must happen before the URL rewrite, or a {{uuid}} inside
-    /// return_url is substituted and then thrown away.
     func testSubstitutionHappensBeforeTheDeepLinkRewrite() async throws {
         let recorder = Recorder()
         let minter = SessionMinter { request in
@@ -378,8 +356,6 @@ final class SessionMinterTests: XCTestCase {
         XCTAssertFalse(body.contains("{{"))
     }
 
-    /// A browser or QR run opens this URL; swallowing a missing one made the run
-    /// open nothing and hang until the timeout.
     func testMissingCheckoutURLIsAnError() async {
         let minter = SessionMinter { request in
             let isToken = (request.url?.path ?? "").contains("token")
@@ -436,8 +412,6 @@ final class SessionMinterTests: XCTestCase {
         }
     }
 
-    /// The generated curl is copied into chat windows and shell histories, so it
-    /// must read the secret from the environment rather than embedding it.
     func testGeneratedCurlNeverEmbedsTheClientSecret() {
         let command = CurlBuilder.mintCommand(merchant: merchant(), body: #"{"amount":100}"#)
         XCTAssertFalse(command.contains("s3cret"))

@@ -18,14 +18,12 @@ final class RecoveryTests: XCTestCase {
         XCTAssertEqual(Recovery(apiValue: "Change_Method"), .changeMethod)
     }
 
-    /// Android: absent values default to RETRY.
     func testAbsentAndEmptyDefaultToRetry() {
         XCTAssertEqual(Recovery(apiValue: nil), .retry)
         XCTAssertEqual(Recovery(apiValue: ""), .retry)
         XCTAssertEqual(Recovery(apiValue: "   "), .retry)
     }
 
-    /// The whole point of the type: an unknown server value must not be retryable.
     func testUnknownValuesFailClosed() {
         let recovery = Recovery(apiValue: "some_future_value")
         XCTAssertEqual(recovery, .unrecognized("some_future_value"))
@@ -46,15 +44,10 @@ final class RecoveryTests: XCTestCase {
         )
     }
 
-    /// It is a value this SDK understands, unlike `unrecognized`. A merchant
-    /// telling the two apart is the difference between "check this transaction"
-    /// and "upgrade the SDK".
     func testVerifyBeforeRetryIsARecognizedValue() {
         XCTAssertTrue(Recovery.verifyBeforeRetry.isRecognized)
     }
 
-    /// Guards the reason Recovery is not RawRepresentable: a synthesised
-    /// init?(rawValue:) would be a fail-open parser next to the fail-closed one.
     func testUnrecognizedPreservesRawValueForTelemetry() {
         guard case .unrecognized(let raw) = Recovery(apiValue: "Weird_Value") else {
             return XCTFail("expected .unrecognized")

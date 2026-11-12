@@ -3,21 +3,10 @@ import XCTest
 @testable import PayCross
 @testable import PayCrossCore
 
-/// A `Text("Card Number")` inside a package resolves its key against
-/// `Bundle.main` — the merchant's app — so a merchant whose own strings file
-/// happens to define one of our labels repaints it. These assert the two halves
-/// of the fix: the strings ship with us, and lookups find them there. The last
-/// two cover the contract that replaced the accident — a merchant bundle that
-/// names one of our keys wins, and a key nobody defines still reads.
-///
-/// `@MainActor` because `L` is: the language the sheet speaks is main-actor
-/// state, installed once per presentation.
 @MainActor
 final class LocalizedTests: XCTestCase {
 
     override func tearDown() {
-        // Every one of these installs a language; leaving one installed would
-        // hand the next test class a sheet in whatever tongue this one ended in.
         SheetLanguage.reset()
         super.tearDown()
     }
@@ -33,19 +22,13 @@ final class LocalizedTests: XCTestCase {
     }
 
     func testKeysResolveFromTheSDKBundleNotTheFallback() {
-        // The fallback is deliberately wrong: if the key is missing, this fails.
         XCTAssertEqual(L("paycross_card_number", "MISSING"), "Card Number")
     }
 
     func testMerchantBundleOverridesTheSDKString() {
-        // This test target's own bundle defines paycross_card_number, playing
-        // the merchant app that wants its own wording for that one label.
         XCTAssertEqual(L("paycross_card_number", "MISSING", merchant: Bundle.module), "Kartennummer")
     }
 
-    /// The delete affordance's copy is only reachable under a session that
-    /// allows removal, so a key missing from the strings file would ship
-    /// unnoticed and read as its own name in the alert.
     func testTheRemovalKeysResolveFromTheSDKBundle() {
         for key in [
             "paycross_remove_card",
@@ -59,8 +42,6 @@ final class LocalizedTests: XCTestCase {
         }
     }
 
-    /// The delete button's label interpolates the row it belongs to, so an
-    /// override that drops the `%@` silently unnames every trash on the screen.
     func testTheRemoveCardLabelKeepsItsPlaceholder() {
         XCTAssertEqual(
             L("paycross_remove_card", "MISSING", "Visa •••• 1111"),
@@ -74,9 +55,6 @@ final class LocalizedTests: XCTestCase {
 
     // MARK: - The two files say the same things
 
-    /// A key in one file and not the other is the localization bug that ships:
-    /// English everywhere in QA, and one raw `paycross_` key in the middle of a
-    /// French sheet the day a shopper meets the branch it lives on.
     func testEveryKeyExistsInBothLanguages() throws {
         let english = try keys(in: "en")
         let french = try keys(in: "fr")
@@ -94,16 +72,12 @@ final class LocalizedTests: XCTestCase {
         XCTAssertEqual(try keys(in: "fr").count, 34)
     }
 
-    /// The prefix is the whole reason a merchant override is deliberate rather
-    /// than accidental, so a key added without one is a collision waiting.
     func testEveryKeyIsPrefixed() throws {
         for key in try keys(in: "en").union(keys(in: "fr")) {
             XCTAssertTrue(key.hasPrefix("paycross_"), "\(key) is not prefixed paycross_")
         }
     }
 
-    /// A translation that drops the placeholder loses the card, the amount or
-    /// the field name it was supposed to name.
     func testATranslationNeverDropsItsPlaceholder() throws {
         let english = try values(in: "en")
         let french = try values(in: "fr")
@@ -122,8 +96,6 @@ final class LocalizedTests: XCTestCase {
         }
     }
 
-    /// Eight keys carry one. Naming them pins the sheet against a ninth arriving
-    /// in one language only.
     func testThePlaceholderKeysAreTheOnesWeExpect() throws {
         let carrying = try values(in: "en").filter { $0.value.contains("%@") }.keys
         XCTAssertEqual(Set(carrying), [
@@ -138,10 +110,6 @@ final class LocalizedTests: XCTestCase {
         ])
     }
 
-    /// One key carries two, and a translation that keeps only the first passes
-    /// every check above while losing the limit the shopper needs. The length
-    /// message is the only string the SDK ships with more than one placeholder,
-    /// which is exactly why nothing else would have caught it.
     func testATranslationKeepsAsManyPlaceholdersAsTheEnglishHas() throws {
         let english = try values(in: "en")
         let french = try values(in: "fr")
@@ -155,8 +123,6 @@ final class LocalizedTests: XCTestCase {
         }
     }
 
-    /// Filled the way the sheet fills it: the sheet looks the template up and
-    /// Core, which ships no strings, puts the two values into it.
     func testTheLengthMessageNamesTheFieldAndTheLimitInBothLanguages() {
         XCTAssertEqual(
             Template.fill(L("paycross_field_max_length", "MISSING"), with: "Notes", "254"),
@@ -184,9 +150,6 @@ final class LocalizedTests: XCTestCase {
         XCTAssertEqual(L("paycross_card_number", "MISSING"), "Card Number")
     }
 
-    /// A language the SDK ships no `.lproj` for is a packaging mistake, not a
-    /// reason to crash a checkout. The resolver never hands one over — that is
-    /// what the clamp is for — so this stands one in by hand.
     func testAnUnshippedLanguageStillReads() {
         SheetLanguage.install(ResolvedLocale(language: "de", formattingTag: "de-DE"))
         XCTAssertNotEqual(L("paycross_card_number", "MISSING"), "MISSING")
@@ -198,8 +161,6 @@ final class LocalizedTests: XCTestCase {
         XCTAssertEqual(SheetLanguage.locale.identifier, "fr")
     }
 
-    /// The merchant's own French wording must not leak into an English sheet
-    /// just because the merchant happens to ship a French `.lproj`.
     func testTheEnglishSheetDoesNotReadTheMerchantsFrench() {
         SheetLanguage.reset()
         XCTAssertEqual(
@@ -207,11 +168,6 @@ final class LocalizedTests: XCTestCase {
         )
     }
 
-    /// A device nobody overrode keeps `Locale.current`, region and format
-    /// settings and all, which is what the SDK formatted with before it spoke a
-    /// second language. Rebuilding a locale from the device's language list
-    /// would have quietly rewritten the price for anyone whose Region does not
-    /// simply follow their language.
     func testADeviceOnlySheetFormatsWithTheDevicesOwnLocale() {
         SheetLanguage.install(LocaleResolution.resolve(device: ["de-DE"]))
         XCTAssertEqual(L("paycross_card_number", "MISSING"), "Card Number")
@@ -219,8 +175,6 @@ final class LocalizedTests: XCTestCase {
         XCTAssertEqual(SheetLanguage.locale, .current)
     }
 
-    /// An asked-for tag is used as asked for, so the region survives where the
-    /// language drops it.
     func testASwissFrenchSessionKeepsItsRegionForTheAmount() {
         SheetLanguage.install(LocaleResolution.resolve(session: "fr-CH"))
         XCTAssertEqual(L("paycross_card_number", "MISSING"), "Numéro de carte")
@@ -243,9 +197,6 @@ final class LocalizedTests: XCTestCase {
 
     // MARK: - The ladder, end to end
 
-    /// `LocaleResolutionTests` owns the rule on Linux. This is the half that
-    /// cannot run there: that the candidate which wins is the one whose words
-    /// appear.
     func testTheMerchantOverrideDecidesWhatTheSheetSays() {
         SheetLanguage.install(LocaleResolution.resolve(
             override: "fr", session: "en", device: ["en-US"]
@@ -265,18 +216,11 @@ final class LocalizedTests: XCTestCase {
         XCTAssertEqual(L("paycross_cancel", "MISSING"), "Annuler")
     }
 
-    /// The change the lead made after the first review: a candidate naming a
-    /// language the SDK does not ship is passed over rather than ending the
-    /// search, so this sheet is French and not English.
     func testAnUnsupportedOverrideFallsThroughToTheSession() {
         SheetLanguage.install(LocaleResolution.resolve(override: "de", session: "fr"))
         XCTAssertEqual(L("paycross_cancel", "MISSING"), "Annuler")
     }
 
-    /// Decision 3. An explicit locale and a reworded label answer different
-    /// questions, so asking for French does not switch a merchant's own wording
-    /// off — Adyen's rule, which the spec quoted, does not apply to a lookup
-    /// that reads the merchant bundle first whatever happens.
     func testAMerchantOverrideStillWinsUnderFrench() {
         SheetLanguage.install(LocaleResolution.resolve(override: "fr"))
         XCTAssertEqual(
@@ -285,15 +229,6 @@ final class LocalizedTests: XCTestCase {
         )
     }
 
-    /// The one a merchant would never predict. `Bundle.localizedString` picks a
-    /// localization from the *device's* language list, so asking it directly
-    /// hands a French sheet on an English phone the English override: SDK labels
-    /// in French and the merchant's reworded ones in English, from the single
-    /// call that was supposed to settle the language.
-    ///
-    /// The simulator these run on is English, and this test bundle plays the
-    /// merchant app with a reworded card-number label in both languages. Under a
-    /// French sheet the French one has to win.
     func testAMerchantOverrideComesOutInTheSheetsLanguageNotTheDevices() {
         SheetLanguage.install(LocaleResolution.resolve(override: "fr"))
         XCTAssertEqual(
@@ -309,9 +244,6 @@ final class LocalizedTests: XCTestCase {
         )
     }
 
-    /// A merchant who ships no `.lproj` for the sheet's language still gets
-    /// their override — whatever their own app would have resolved it to. Only
-    /// the English half of this bundle names this key.
     func testAnOverrideWithoutTheSheetsLanguageFallsBackToTheMerchantsOwnPick() {
         SheetLanguage.install(LocaleResolution.resolve(override: "fr"))
         let card = SavedCard(id: "a", brand: .visa, last4: "1111", expiryLabel: "12/30")
@@ -323,9 +255,6 @@ final class LocalizedTests: XCTestCase {
 
     // MARK: - The delete confirmation names its card
 
-    /// The English gained a `%@` this train, where it had none. A call site that
-    /// forgets to fill it puts a literal `%@` in front of a shopper about to
-    /// delete a card, in both languages.
     func testTheDeleteConfirmationNamesTheCard() {
         let card = SavedCard(id: "a", brand: .visa, last4: "1111", expiryLabel: "12/30")
 
@@ -343,11 +272,6 @@ final class LocalizedTests: XCTestCase {
 
     // MARK: - A merchant override is a string the SDK does not own
 
-    /// The hazard `Template.fill` exists for, on the one key that gained a
-    /// placeholder this train. A merchant who typed `%d` into an override of it
-    /// would, under `String(format:)`, have the sheet read an integer vararg
-    /// nobody passed — undefined behaviour reached from a text file, on a screen
-    /// holding a card number. The alert comes out with the `%d` intact instead.
     func testAnOverrideWithTheWrongPlaceholderIsNotTreatedAsAFormatString() {
         let card = SavedCard(id: "a", brand: .visa, last4: "1111", expiryLabel: "12/30")
         XCTAssertEqual(
@@ -356,7 +280,6 @@ final class LocalizedTests: XCTestCase {
         )
     }
 
-    /// The same override under French, since the alert is reached in both.
     func testAnOverrideWithTheWrongPlaceholderSurvivesInFrenchToo() {
         SheetLanguage.install(LocaleResolution.resolve(override: "fr"))
         let card = SavedCard(id: "a", brand: .visa, last4: "1111", expiryLabel: "12/30")
@@ -373,14 +296,6 @@ final class LocalizedTests: XCTestCase {
         )
     }
 
-    /// Every key that carries a `%@` goes through the filling lookup, in both
-    /// languages, so none of them can reach a shopper with the placeholder still
-    /// in it.
-    ///
-    /// Each key is filled with as many values as it carries placeholders, which
-    /// for all but one of them is one. `paycross_field_max_length` names the
-    /// field and the limit and is filled by Core rather than by `L`, so it is
-    /// filled here the way Core fills it.
     func testEveryPlaceholderKeyFillsInBothLanguages() throws {
         for language in ["en", "fr"] {
             SheetLanguage.install(ResolvedLocale(language: language, formattingTag: language))

@@ -1,9 +1,6 @@
 import XCTest
 @testable import PayCrossCore
 
-/// Guards the second-authorization path. Before this existed, a session the
-/// shopper had already paid rendered the card form again, and the retry minted a
-/// fresh idempotency key so the backend had no way to relate the two.
 final class SessionResolutionTests: XCTestCase {
 
     private var claims: SessionClaims {
@@ -33,8 +30,6 @@ final class SessionResolutionTests: XCTestCase {
         XCTAssertEqual(resolution, .resume(transactionID: "txn_1"))
     }
 
-    /// Paid, but the server named no transaction. Android reports success with an
-    /// empty id rather than charging again.
     func testCompletedSessionWithNoTransactionFinishesSuccessfully() {
         let resolution = SessionResolver.resolve(session(status: "completed"), claims: claims)
         XCTAssertEqual(resolution, .finish(.succeeded(
@@ -57,7 +52,6 @@ final class SessionResolutionTests: XCTestCase {
 
     // MARK: - Expiry
 
-    /// Failing here means the shopper is told before typing a card, not after.
     func testExpiredSessionFinishesWithRestart() {
         XCTAssertEqual(
             SessionResolver.resolve(session(status: "expired"), claims: claims),
@@ -82,8 +76,6 @@ final class SessionResolutionTests: XCTestCase {
         )
     }
 
-    /// Backgrounded mid-3DS and re-presented: resume the transaction instead of
-    /// creating a second one.
     func testOpenSessionWithALatestTransactionResumes() {
         XCTAssertEqual(
             SessionResolver.resolve(session(status: "open", latest: "txn_5"), claims: claims),
@@ -102,8 +94,6 @@ final class SessionResolutionTests: XCTestCase {
         )
     }
 
-    /// An empty string is not a transaction; resuming "" would poll a nonexistent
-    /// id until the deadline.
     func testBlankLatestTransactionIsTreatedAsAbsent() {
         XCTAssertEqual(
             SessionResolver.resolve(session(status: "open", latest: ""), claims: claims),
@@ -121,8 +111,6 @@ final class SessionResolutionTests: XCTestCase {
 
     // MARK: - Degraded cases
 
-    /// A failed fetch must still let the shopper pay; Android falls through to
-    /// the form too.
     func testFailedFetchShowsTheForm() {
         XCTAssertEqual(SessionResolver.resolve(nil, claims: claims), .showForm(nil))
     }

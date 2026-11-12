@@ -3,24 +3,11 @@ import XCTest
 @testable import PayCross
 @testable import PayCrossCore
 
-/// A cancelled payment still leaves a transaction on the server.
-///
-/// The sheet resolves its own cancellation immediately — the shopper tapped
-/// Cancel and the sheet has to go — so it never reads the id off the runner's
-/// final outcome. Core pins that the runner carries the id; what is pinned here is
-/// that the sheet has it at the moment the shopper walks away, which is the case
-/// the bug is about: a cancel during a 3-D Secure challenge, where the transaction
-/// is already sitting in `threeds_challenge_requested`.
 @MainActor
 final class CancelledTransactionIDTests: XCTestCase {
 
     private var originalUserAgentProvider: UserAgentProvider!
 
-    /// WebKit is never touched. `pay()` reads the user agent out of a throwaway
-    /// `WKWebView` on its way to the submit body, and building one waits on
-    /// WebKit's helper processes: on a loaded machine that holds the main actor
-    /// long enough that nothing else on it — including a test waiting for the
-    /// flow — makes any progress. `UserAgentWarmUpTests` covers that read.
     override func setUp() async throws {
         try await super.setUp()
         originalUserAgentProvider = DeviceInfo.userAgentProvider
@@ -66,12 +53,6 @@ final class CancelledTransactionIDTests: XCTestCase {
         func set(_ result: PaymentResult) { value = result }
     }
 
-    /// Installs the continuation, runs `act`, then reports what the sheet resolved.
-    ///
-    /// The install is waited on rather than slept over: `finish` drops a result
-    /// nothing is waiting for, so an `act` that gets there first loses the outcome
-    /// altogether. The timeouts bound the test rather than drive it — a result
-    /// that never arrives has to fail the test, not hang the suite.
     private func result(
         of model: PaymentSheetModel,
         after act: () async -> Void
@@ -81,8 +62,6 @@ final class CancelledTransactionIDTests: XCTestCase {
         let reported = expectation(description: "the sheet reported a result")
 
         Task { @MainActor in
-            // Nothing suspends between this and the continuation going in, so the
-            // wait below cannot return before the sheet is ready to be finished.
             waiting.fulfill()
             await box.set(await model.awaitResult())
             reported.fulfill()
@@ -105,8 +84,6 @@ final class CancelledTransactionIDTests: XCTestCase {
 
         let outcome = await result(of: model) {
             model.pay()
-            // The runner hands the id to the sheet before it starts polling, so
-            // the status request arriving is proof the sheet already has it.
             await transport.hasBeenAsked(for: 2)
             XCTAssertNotNil(
                 model.lastTransactionID, "the flow never reported a transaction id"
@@ -120,8 +97,6 @@ final class CancelledTransactionIDTests: XCTestCase {
         )
     }
 
-    /// Cancelled before anything was submitted: there is no transaction, and
-    /// inventing one would be worse than nil.
     func testCancellingBeforePayingNamesNothing() async {
         let model = makeModel(transport: StubTransport(status: 500))
 

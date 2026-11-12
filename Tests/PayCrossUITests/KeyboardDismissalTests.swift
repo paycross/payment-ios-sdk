@@ -5,13 +5,6 @@ import SwiftUI
 @testable import PayCross
 @testable import PayCrossCore
 
-/// Pins the way out of the numeric keypad.
-///
-/// The keypad `keyboardType(.numberPad)` raises has no Return key, and iOS gives
-/// it no accessory, so before this the CVV pad covered the lower third of the
-/// sheet with nothing on screen that would put it away. Core cannot see any of
-/// that; the affordance lives entirely in the view hierarchy, so it is asserted
-/// here on real hosted fields.
 @MainActor
 final class KeyboardDismissalTests: XCTestCase {
 
@@ -70,7 +63,6 @@ final class KeyboardDismissalTests: XCTestCase {
         }
     }
 
-    /// The saved-card path shows the CVV field alone; it needs the way out too.
     func testTheSavedCardCVVCarriesADoneControl() throws {
         let saved = SavedCard(id: "u", brand: .visa, last4: "1111", expiryLabel: "12/30")
         let window = hostForm(savedCards: [saved])
@@ -97,8 +89,6 @@ final class KeyboardDismissalTests: XCTestCase {
         XCTAssertFalse(cvv.isFirstResponder, "Done must put the keypad away")
     }
 
-    /// The Done button and the tap-anywhere gesture share this, so it is asserted
-    /// on its own rather than only through the button.
     func testDismissalResignsWhicheverFieldIsEditing() throws {
         let window = hostForm()
         let pan = try field(PayCrossTestIdentifiers.cardNumber.rawValue, in: window)
@@ -111,8 +101,6 @@ final class KeyboardDismissalTests: XCTestCase {
         XCTAssertFalse(pan.isFirstResponder)
     }
 
-    /// With no keypad up there is nothing to close, and the tap must not reach for
-    /// anything outside the sheet to find one.
     func testDismissalIsANoOpWhenNothingIsEditing() throws {
         _ = hostForm()
         XCTAssertFalse(KeypadDismissal.resignFirstResponder())
@@ -120,8 +108,6 @@ final class KeyboardDismissalTests: XCTestCase {
 
     // MARK: - Nothing else moved
 
-    /// The fields still feed the reducer: the CVV is the one the bug is about and
-    /// the one whose digits must still land in state.
     func testTypingStillReachesTheReducer() throws {
         let window = hostForm()
         let cvv = try field(PayCrossTestIdentifiers.cvv.rawValue, in: window)

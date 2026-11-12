@@ -4,24 +4,9 @@ import PassKit
 @testable import PayCross
 @testable import PayCrossCore
 
-/// Exercises the one file that talks to PassKit.
-///
-/// Every other test in this target hands the payment sheet a fake
-/// `WalletAuthorizing`, so before this file existed the adapter itself was
-/// never executed: three separate one-line mutations of it -- dropping 3-D
-/// Secure from the request, and never resuming the continuation -- left the
-/// whole suite green.
-///
-/// A simulator cannot present Apple's sheet, so this splits the file into the
-/// two halves that can be asserted without one. `makeRequest` is a pure
-/// function of the spec and needs nothing. The continuation discipline is
-/// driven through the delegate methods directly, against a controller that is
-/// built but never presented.
 @MainActor
 final class PassKitAdapterTests: XCTestCase {
 
-    /// Same reason as `ApplePayPresentationTests`: nothing here is about the user
-    /// agent, and WebKit's launch time must not decide whether these pass.
     private var originalUserAgentProvider: UserAgentProvider!
 
     override func setUp() {
@@ -61,9 +46,6 @@ final class PassKitAdapterTests: XCTestCase {
         XCTAssertEqual(request.currencyCode, "EUR")
     }
 
-    /// Every scheme the spec names, mapped by symbol. The device check asks
-    /// PassKit about this same list, so a network dropped here produces a
-    /// button that appears for a card the sheet will then refuse.
     func testTheRequestCarriesEveryNetworkTheSpecNames() {
         let request = PassKitWalletAuthorizer.makeRequest(spec())
 
@@ -73,9 +55,6 @@ final class PassKitAdapterTests: XCTestCase {
         )
     }
 
-    /// Apple requires 3-D Secure for in-app payments. Without this capability
-    /// the sheet refuses to present for every merchant, and the only report is
-    /// `present()` answering false.
     func testTheRequestKeepsTheThreeDSecureCapability() {
         let request = PassKitWalletAuthorizer.makeRequest(spec())
 
@@ -87,7 +66,6 @@ final class PassKitAdapterTests: XCTestCase {
         XCTAssertTrue(request.merchantCapabilities.contains(.capabilityDebit))
     }
 
-    /// The number the shopper reads before authorising, exact.
     func testTheSummaryItemQuotesTheAmountInMajorUnits() throws {
         let request = PassKitWalletAuthorizer.makeRequest(spec())
         let item = try XCTUnwrap(request.paymentSummaryItems.first)
@@ -98,9 +76,6 @@ final class PassKitAdapterTests: XCTestCase {
         XCTAssertEqual(item.amount, NSDecimalNumber(string: "25.99"))
     }
 
-    /// A zero-decimal currency is quoted whole. Dividing by 100 regardless
-    /// would offer a ¥2599 payment as ¥25.99, and the shopper would authorise
-    /// the wrong money.
     func testTheSummaryItemQuotesAZeroDecimalCurrencyWhole() throws {
         let request = PassKitWalletAuthorizer.makeRequest(
             spec(amount: Amount(minorUnits: 2599, currencyCode: "JPY"))
@@ -116,12 +91,6 @@ final class PassKitAdapterTests: XCTestCase {
         PKPaymentAuthorizationController(paymentRequest: PassKitWalletAuthorizer.makeRequest(spec()))
     }
 
-    /// The regression that hangs a payment forever.
-    ///
-    /// `didFinish` is the only thing that resumes, and it is reached after an
-    /// authorisation, a cancel and a swipe-away alike. If it stops resuming,
-    /// the sheet's task never returns, `isLoading` stays true, and the shopper
-    /// is left with a locked form and Cancel as their only way out.
     func testTheDelegateResumesTheWaitingCaller() async throws {
         let authorizer = PassKitWalletAuthorizer()
         let box = OutcomeBox()
@@ -138,8 +107,6 @@ final class PassKitAdapterTests: XCTestCase {
         await settle(waiter, resumed: resumed)
     }
 
-    /// `resume` clears the continuation before resuming, so a second callback
-    /// is a no-op rather than the double-resume that traps the process.
     func testASecondDidFinishIsHarmless() async throws {
         let authorizer = PassKitWalletAuthorizer()
         let box = OutcomeBox()
@@ -155,19 +122,12 @@ final class PassKitAdapterTests: XCTestCase {
         await settle(waiter, resumed: resumed)
     }
 
-    /// A second sheet on the same instance would overwrite the first
-    /// continuation and leave its caller waiting forever, reported only as
-    /// SWIFT TASK CONTINUATION MISUSE in the log.
     func testASecondAuthorizeIsRefusedWhileASheetIsOpen() async throws {
         let authorizer = PassKitWalletAuthorizer()
         let box = OutcomeBox()
         let waiter = Task { @MainActor in box.value = await authorizer.awaitDelegateOutcome() }
         _ = await waitUntil { authorizer.isAwaitingOutcome }
 
-        // Bounded, because the regression this catches is precisely a second
-        // authorize that goes on to `present()` -- which on a simulator with no
-        // entitlement neither succeeds nor returns. Awaiting it directly would
-        // hang the run instead of failing the test.
         let secondBox = OutcomeBox()
         let attempt = Task { @MainActor in secondBox.value = await authorizer.authorize(spec()) }
         let answered = await waitUntil { secondBox.value != nil }
@@ -183,20 +143,6 @@ final class PassKitAdapterTests: XCTestCase {
         await settle(waiter, resumed: resumed)
     }
 
-    /// The SDK's own worst error message.
-    ///
-    /// `present()` answers a bare false, and it answers it almost exclusively
-    /// for a misconfigured request: an identifier missing from the app's Apple
-    /// Pay entitlement, an unsupported country or currency. The shopper can
-    /// still pay by card, so the sentence they read hardly matters; the
-    /// merchant integrating the SDK has nothing else at all, and there is no
-    /// log line.
-    ///
-    /// Asserted on the message builder rather than on a real failure, because
-    /// the failure cannot be reached here: on this simulator `present()`
-    /// neither succeeds nor returns, measured at a three-second timeout, so a
-    /// test driving `authorize` skips rather than proving anything. That the
-    /// failure branch returns *this* message is by inspection.
     func testThePresentationFailureMessageNamesWhatIsWrong() {
         let message = PassKitWalletAuthorizer.presentationFailureMessage(
             for: spec(merchantIdentifier: "merchant.example.invalid")
@@ -212,14 +158,6 @@ final class PassKitAdapterTests: XCTestCase {
         )
     }
 
-    /// The seam repeats `authorize`'s guard, and this is what holds it there.
-    ///
-    /// `awaitDelegateOutcome` is internal, so anything in the module can reach
-    /// it, and it is the method that installs a continuation -- the one route
-    /// back to the leak the guard exists to prevent. Bounded for the same
-    /// reason the second-sheet check is: without the guard the call installs a
-    /// second continuation and never returns, which would hang the run instead
-    /// of failing this test.
     func testASecondWaitOnTheDelegateIsRefused() async throws {
         let authorizer = PassKitWalletAuthorizer()
         let box = OutcomeBox()
@@ -243,17 +181,6 @@ final class PassKitAdapterTests: XCTestCase {
 
     // MARK: - The token, as PassKit hands it over
 
-    /// The last function in this file that a device was the only thing
-    /// executing.
-    ///
-    /// Deleting the `paymentMethod` key from what `tokenJSON` emits left all
-    /// fifty tests green, because the authorised-path test walks a fixture the
-    /// fake authorizer supplies rather than anything this function produced.
-    /// The edge lifts three fields out of that object: `network` becomes the
-    /// card brand the vault seals into the wallet credential and the provider
-    /// forwards to the gateway, `displayName` becomes the masked digits, and
-    /// `type` becomes the funding type the back office shows. Losing it
-    /// degrades all three at once with no error anywhere.
     func testTheTokenCarriesEveryFieldTheEdgeReads() throws {
         let json = try XCTUnwrap(
             PassKitWalletAuthorizer.tokenJSON(StubPaymentToken()),
@@ -282,9 +209,6 @@ final class PassKitAdapterTests: XCTestCase {
         )
     }
 
-    /// `paymentData` is nested at the top level and not re-modelled on the way
-    /// through, so a field Apple adds tomorrow survives. Asserted by putting an
-    /// unknown key in the fixture and reading it back out.
     func testAnUnknownFieldInsideTheTokenSurvives() throws {
         let json = try XCTUnwrap(PassKitWalletAuthorizer.tokenJSON(StubPaymentToken()))
         let paymentData = try XCTUnwrap(try encoded(json)["paymentData"] as? [String: Any])
@@ -295,7 +219,6 @@ final class PassKitAdapterTests: XCTestCase {
         )
     }
 
-    /// The funding type the back office shows, mapped by symbol.
     func testTheFundingTypeIsNamedRatherThanNumbered() throws {
         for (type, expected) in [
             (PKPaymentMethodType.credit, "credit"),
@@ -311,9 +234,6 @@ final class PassKitAdapterTests: XCTestCase {
         }
     }
 
-    /// A card with neither name nor network still produces a body. The two are
-    /// optional on `PKPaymentMethod`, and emitting `null` for them would be a
-    /// different thing at the edge from omitting them.
     func testAnAnonymousCardOmitsTheFieldsItHasNothingFor() throws {
         let token = StubPaymentToken(
             method: StubPaymentMethod(type: .debit, displayName: nil, network: nil)
@@ -326,8 +246,6 @@ final class PassKitAdapterTests: XCTestCase {
         XCTAssertEqual(Set(method.keys), ["type"])
     }
 
-    /// Bytes that are not JSON cannot be forwarded, and the adapter reports
-    /// that rather than sending an empty body the vault would reject.
     func testATokenThatIsNotJSONConvertsToNothing() {
         let token = StubPaymentToken(paymentData: Data("not json at all".utf8))
 
@@ -336,32 +254,16 @@ final class PassKitAdapterTests: XCTestCase {
 
     // MARK: - Helpers
 
-    /// Joins the waiting task, but only when it actually resumed.
-    ///
-    /// Awaiting unconditionally would turn the regression these tests exist to
-    /// catch -- a `didFinish` that never resumes -- from a failed assertion
-    /// into a run that hangs until xcodebuild gives up, which reports nothing
-    /// and costs everyone ten minutes. A suspended task is simply abandoned;
-    /// the runtime logs a leaked continuation and the suite moves on.
     private func settle(_ waiter: Task<Void, Never>, resumed: Bool) async {
         guard resumed else { return waiter.cancel() }
         _ = await waiter.value
     }
 
-    /// Encodes a `JSONValue` and reads it back as a dictionary, so every
-    /// assertion above is against the JSON that goes on the wire rather than
-    /// against the enum the SDK happens to hold.
     private func encoded(_ value: JSONValue) throws -> [String: Any] {
         let data = try JSONEncoder().encode(value)
         return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
     }
 
-    /// Polls until `condition` holds, or the ceiling passes.
-    ///
-    /// Generous for the same reason as its twin in `ApplePayPresentationTests`: it
-    /// returns the instant the condition is true, so the ceiling only ever bounds a
-    /// failure. Every use here waits for something to happen, so none of them pay
-    /// for it.
     private func waitUntil(
         timeout: TimeInterval = 30,
         _ condition: () async -> Bool
@@ -375,12 +277,6 @@ final class PassKitAdapterTests: XCTestCase {
     }
 }
 
-/// A `PKPaymentToken` with the fields PassKit would have filled in.
-///
-/// Subclassed rather than constructed: PassKit hands these out and has no
-/// public initialiser that fills them, so the only alternative to a subclass is
-/// leaving the conversion executed by nothing but a real device. Both classes
-/// are Objective-C and every property here is readonly and overridable.
 private final class StubPaymentToken: PKPaymentToken {
     private let stubData: Data
     private let stubMethod: PKPaymentMethod
@@ -401,8 +297,6 @@ private final class StubPaymentToken: PKPaymentToken {
     override var paymentMethod: PKPaymentMethod { stubMethod }
     override var transactionIdentifier: String { stubTransactionIdentifier }
 
-    /// Carries an unknown key on purpose: the passthrough exists so a field
-    /// Apple adds without telling anyone still reaches the vault.
     static let paymentDataJSON = #"""
     {
       "version": "EC_v1",
