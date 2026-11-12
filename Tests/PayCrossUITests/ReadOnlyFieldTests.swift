@@ -86,7 +86,7 @@ final class ReadOnlyFieldTests: XCTestCase {
         textFields(in: window).compactMap { $0.placeholder ?? $0.attributedPlaceholder?.string }
     }
 
-    // MARK: - The two fields no longer draw the same
+    // MARK: - Read-only field drawing
 
     func testALockedFieldIsDrawnDifferentlyFromAnEditableOne() throws {
         XCTAssertGreaterThan(

@@ -21,7 +21,7 @@ final class SessionResolutionTests: XCTestCase {
         )
     }
 
-    // MARK: - The money bug
+    // MARK: - Completed sessions
 
     func testCompletedSessionWithATransactionResumesRatherThanShowingAForm() {
         let resolution = SessionResolver.resolve(
