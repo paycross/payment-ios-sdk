@@ -23,7 +23,6 @@ final class CardBrandTests: XCTestCase {
         XCTAssertEqual(CardBrand.detect("2811111111111111"), .unknown)
         XCTAssertEqual(CardBrand.detect("351111111111111"), .unknown)
         XCTAssertEqual(CardBrand.detect("6012111111111111"), .unknown)
-        XCTAssertEqual(CardBrand.detect("6012111111111111"), .unknown)
         XCTAssertEqual(CardBrand.detect("6611111111111111"), .unknown)
     }
 
