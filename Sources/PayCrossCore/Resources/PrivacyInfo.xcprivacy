@@ -2,16 +2,6 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!--
-	PayCrossCore audit (Sources/PayCrossCore/**/*.swift), re-run 2026-09-07:
-	grep -rnE "UserDefaults|NSUserDefaults|fileModificationDate|creationDate|
-	.systemUptime|ProcessInfo|systemBootTime|NSFileSystemFreeSize|
-	volumeAvailableCapacity" -> one hit, DeviceLanguages, which reads the
-	AppleLanguages key so the sheet can offer its own French on a French
-	phone whatever the host app is localized into. One read of one key the
-	system owns; the SDK writes no defaults at all, which the CI job pins.
-	Declared below as CA92.1, the reason for reading the app's own defaults.
-	-->
 	<key>NSPrivacyTracking</key>
 	<false/>
 	<key>NSPrivacyTrackingDomains</key>

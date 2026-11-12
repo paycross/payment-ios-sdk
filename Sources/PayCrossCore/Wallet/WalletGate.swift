@@ -1,40 +1,13 @@
 import Foundation
 
-/// Whether this session may offer a wallet, and whether this device and this
-/// configuration can actually deliver one.
-///
-/// Two separate questions, kept separate because they fail for different
-/// reasons and a merchant debugging a missing button needs to know which one
-/// answered no.
 package enum WalletGate {
-
-    /// The session-level rule, strict-false.
-    ///
-    /// Offered unless the snapshot says `apple_pay: false` in so many words.
-    /// An absent block and a null member are both "the server had no opinion",
-    /// and every session minted before the backend shipped the block is the
-    /// former.
-    ///
-    /// `account_funding` is not an answer to this question. It says the session
-    /// is an account-funding transfer, and core takes a wallet payment on one:
-    /// the payment carries the same transfer block a card payment carries and
-    /// reaches the acquirer as an AFT. The transfer's own sender and recipient
-    /// fields arrive as `field_groups` and are collected before the sheet opens,
-    /// exactly as on the card path.
+    // WHY: Only an explicit `apple_pay: false` disables the wallet; absent means no opinion.
+    // WHY: An account-funding session can take a wallet payment; its transfer fields come first.
     package static func allowsApplePay(_ data: SessionData?) -> Bool {
         data?.wallets?.applePay != false
     }
 
-    /// The whole eligibility question: the session allows it, the integration
-    /// configured an identifier, and the device has a card it can pay with.
-    ///
-    /// A blank identifier counts as unconfigured. Empty is what an unset build
-    /// constant produces and whitespace is what a hand-cleared text field
-    /// leaves behind, and the failure they cause downstream is the worst one
-    /// available -- the submit body omits `merchant_identifier` or carries one
-    /// the signed session claim cannot match, the edge reads the payment as a
-    /// web token, the vault derives the wrong key, and the shopper sees a
-    /// generic decline.
+    // WHY: A blank merchant identifier counts as unconfigured.
     package static func offersApplePay(
         data: SessionData?,
         merchantIdentifier: String?,

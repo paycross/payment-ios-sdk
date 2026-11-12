@@ -4,10 +4,7 @@ import Foundation
 public enum PayCrossEnvironment: Sendable, Hashable {
     case sandbox
     case production
-    /// Points the SDK at an arbitrary host. Intended for local backend work.
-    ///
-    /// This case carries the PAN, the CVV and the session JWT to whatever host it
-    /// names, so the SDK rejects any custom host that is not https.
+    /// Sends requests to the given host. The host must use https, since card data is sent to it.
     case custom(baseURL: URL)
 
     package var baseURL: URL {
@@ -23,13 +20,11 @@ public enum PayCrossEnvironment: Sendable, Hashable {
         }
     }
 
-    /// Card-form prefill is ignored in production, matching `effectiveTestPrefill()`
-    /// in the Android SDK.
+    /// Card prefill is disabled in production, matching the Android SDK.
     package var allowsTestCardPrefill: Bool {
         self != .production
     }
 
-    /// Rejects a `custom` environment that would send card data over cleartext.
     package var isUsable: Bool {
         baseURL.scheme?.lowercased() == "https"
     }

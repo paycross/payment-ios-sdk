@@ -1,6 +1,5 @@
 import Foundation
 
-/// A card the shopper has previously saved.
 package struct SavedCard: Sendable, Hashable, Identifiable {
     package let id: String
     package let brand: CardBrand
@@ -14,25 +13,11 @@ package struct SavedCard: Sendable, Hashable, Identifiable {
         self.expiryLabel = expiryLabel
     }
 
-    /// How this card is named wherever a shopper has to tell it from another:
-    /// the picker row, the delete button's VoiceOver label, and the sentence in
-    /// the delete confirmation. One composition, so the alert cannot name a card
-    /// differently from the row it was raised on.
-    ///
-    /// Carries no SDK copy: a brand name is a proper noun, which is why it is
-    /// not translated, and the rest is bullets and digits. `CardBrand.unknown`
-    /// is the exception — its `displayName` is the word `Card`, which now lands
-    /// inside a French sentence in the delete confirmation. Whether that
-    /// deserves its own key is the copy owner's call, not this file's.
     package var rowTitle: String {
         "\(brand.displayName) •••• \(last4)"
     }
 }
 
-/// Whether the shopper is entering a new card or re-confirming a saved one.
-///
-/// Modelled as a sum type rather than `selectedCardID: String?` alongside a
-/// `isNewCard: Bool`, which makes "saved card selected but id is nil" unrepresentable.
 package enum CardEntrySource: Sendable, Hashable {
     case newCard
     case saved(SavedCard)
@@ -43,27 +28,15 @@ package enum CardEntrySource: Sendable, Hashable {
     }
 }
 
-/// Everything the card form holds.
-///
-/// Digits only — no formatting characters are ever stored, so the value that goes
-/// on the wire needs no cleaning step. Formatting is a display concern.
 package struct CardFormState: Sendable, Equatable {
-    /// The stored cards this checkout may offer, as the session listed them and
-    /// in the order it listed them, most recently used first.
-    ///
-    /// Held beside the selection rather than read from the session snapshot,
-    /// because removing one changes both at once: the row goes, and if it was
-    /// the selected row the entry mode goes with it. Splitting that across two
-    /// owners is how a sheet ends up selecting a card it no longer shows.
+    // WHY: Held beside the selection, because removing a saved card must change the row and the selected entry mode together.
     package var savedCards: [SavedCard] = []
     package var source: CardEntrySource = .newCard
     package private(set) var panDigits = ""
-    /// MMYY, exactly as Android stores it.
     package private(set) var expiryDigits = ""
     package private(set) var cvvDigits = ""
     package var cardholderName = ""
     package var saveCard = false
-    /// Set after a decline; cleared as soon as the shopper edits anything.
     package var inlineError: String?
 
     package static let maxExpiryDigits = 4
@@ -82,9 +55,7 @@ package struct CardFormState: Sendable, Equatable {
         }
     }
 
-    /// The brand that governs CVV length. A saved card carries its own brand, so an
-    /// Amex keeps its 4-digit CID; forcing `.unknown` here capped it at 3 and left
-    /// the card unusable once saved.
+    // WHY: A saved card's own brand sets the CVV length: an Amex keeps its 4-digit CID, which `.unknown` would cap at 3.
     package var cvvBrand: CardBrand {
         brand
     }
@@ -93,7 +64,6 @@ package struct CardFormState: Sendable, Equatable {
         String(expiryDigits.prefix(2))
     }
 
-    /// Android stores YY and prefixes "20" when submitting.
     package var expiryYear: String {
         expiryDigits.count > 2 ? "20" + expiryDigits.dropFirst(2) : ""
     }
@@ -132,7 +102,6 @@ package struct CardFormState: Sendable, Equatable {
         isPANValid() && isExpiryValid(now: now) && isCVVValid() && isNameValid()
     }
 
-    /// The wire payload for this form. Nil when the form is not submittable.
     package func cardData(now: Date = Date()) -> CardData? {
         guard canSubmit(now: now) else { return nil }
         switch source {
@@ -151,7 +120,6 @@ package struct CardFormState: Sendable, Equatable {
     }
 }
 
-/// Events the form reacts to.
 package enum CardFormEvent: Sendable, Equatable {
     case panChanged(String)
     case expiryChanged(String)
@@ -159,29 +127,19 @@ package enum CardFormEvent: Sendable, Equatable {
     case nameChanged(String)
     case saveCardToggled(Bool)
     case sourceSelected(CardEntrySource)
-    /// A stored card was deleted server-side and must leave the picker.
     case savedCardRemoved(uuid: String)
     case paySubmitted
-    /// A card payment was declined. Clears the CVV.
     case declined(message: String)
-    /// A wallet payment was declined. Keeps the CVV.
-    ///
-    /// Separate from `declined` rather than a flag on it: the two differ in
-    /// whether the card on the form was ever authorized, and that is the whole
-    /// question. A wallet payment carries a payment token, so the CVV typed here
-    /// never left the device.
     case walletDeclined(message: String)
 }
 
 package enum CardFormReducer {
-
     package static func reduce(state: inout CardFormState, event: CardFormEvent) {
         switch event {
         case .panChanged(let raw):
             state.clearError()
             let digits = raw.filter(\.isNumber)
             state.setPAN(String(digits.prefix(state.brandLimitFor(digits))))
-            // A brand change can invalidate an already-typed CVV length.
             state.trimCVVToBrand()
 
         case .expiryChanged(let raw):
@@ -202,25 +160,16 @@ package enum CardFormReducer {
         case .sourceSelected(let source):
             state.source = source
             state.clearError()
-            // Switching entry mode must not carry a CVV across.
             state.setCVV("")
 
         case .savedCardRemoved(let uuid):
-            // Whatever the banner was saying is now about a card that is gone,
-            // and a failed removal followed by a successful one must not leave
-            // its message standing.
             state.clearError()
             state.savedCards.removeAll { $0.id == uuid }
-            // Removing a card nobody had picked changes nothing else. Removing
-            // the picked one is the same transition as picking "Use a new card"
-            // by hand, CVV clearing included: the digits on the form belong to a
-            // card that no longer exists.
             guard case .saved(let card) = state.source, card.id == uuid else { return }
             reduce(state: &state, event: .sourceSelected(.newCard))
 
         case .paySubmitted:
-            // PCI DSS 3.3.1: sensitive authentication data must not be retained
-            // after authorization. The CVV is gone the moment it is handed off.
+            // WHY: PCI DSS 3.3.1 forbids keeping the CVV after authorization, so it is cleared on submit.
             state.setCVV("")
 
         case .declined(let message):
@@ -228,10 +177,7 @@ package enum CardFormReducer {
             state.setCVV("")
 
         case .walletDeclined(let message):
-            // No CVV clearing: PCI DSS 3.3.1 is about data retained *after
-            // authorization*, and this card was never authorized. Wiping it would
-            // make the shopper retype three digits for a payment method they
-            // abandoned, at the moment they have just been told something failed.
+            // WHY: PCI DSS 3.3.1 covers data kept after authorization; this card was never authorized, so the CVV stays.
             state.inlineError = message
         }
     }
@@ -256,11 +202,9 @@ private extension CardFormState {
     }
 }
 
-/// Display formatting for card entry fields.
 package enum CardEntryFormatter {
 
-    /// Groups a PAN in fours. Amex is 4-6-5 in the wild, but Android groups
-    /// everything in fours and this mirrors it.
+    // WHY: Amex is 4-6-5 in the wild, but every brand is grouped in fours to match Android.
     package static func groupPAN(_ digits: String) -> String {
         stride(from: 0, to: digits.count, by: 4).map { offset in
             let start = digits.index(digits.startIndex, offsetBy: offset)
@@ -269,7 +213,6 @@ package enum CardEntryFormatter {
         }.joined(separator: " ")
     }
 
-    /// MMYY becomes MM/YY once past the month.
     package static func slashExpiry(_ digits: String) -> String {
         guard digits.count > 2 else { return digits }
         return digits.prefix(2) + "/" + digits.dropFirst(2)

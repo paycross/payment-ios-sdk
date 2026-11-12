@@ -1,16 +1,9 @@
 import Foundation
 
 /// A colour, packed as ARGB.
-///
-/// Deliberately neither `UIColor` nor SwiftUI's `Color`: this type lives in
-/// `PayCrossCore`, which imports no UI framework, so the precedence and
-/// contrast rules that decide what the sheet draws are tested on Linux on every
-/// commit rather than only on a Mac. The packing is the same one the Flutter
-/// plugin sends over the channel, so a single number means the same colour on
-/// iOS, on Android and in Dart.
 public struct PayCrossColor: Sendable, Hashable {
 
-    /// `0xAARRGGBB`.
+    /// The colour as `0xAARRGGBB`.
     public let argb: UInt32
 
     public init(argb: UInt32) {
@@ -30,10 +23,7 @@ public struct PayCrossColor: Sendable, Hashable {
     public static let white = PayCrossColor(red: 0xFF, green: 0xFF, blue: 0xFF)
 }
 
-/// Which palette the sheet draws with.
-///
-/// A pinned mode applies to the payment sheet only. The host app's own
-/// appearance is never touched.
+/// Which palette the sheet draws with. A pinned mode applies to the payment sheet only.
 public enum PayCrossThemeMode: String, Sendable, Hashable, CaseIterable {
     case system
     case light
@@ -42,9 +32,7 @@ public enum PayCrossThemeMode: String, Sendable, Hashable, CaseIterable {
 
 /// One palette, used twice: once for light, once for dark.
 ///
-/// Every role is nullable, and null means "keep the platform default" -- the
-/// system colour the sheet already draws. An empty palette is therefore a
-/// no-op, and a merchant who wants one colour changed sets one role.
+/// A null role keeps the platform default colour. An empty palette changes nothing.
 public struct PayCrossColors: Sendable, Hashable {
 
     /// Pay button fill and selection accents.
@@ -101,8 +89,7 @@ public struct PayCrossShapes: Sendable, Hashable {
     /// The Pay button and the Apple Pay button. Falls back to `cornerRadius`,
     /// then to 12.
     public var buttonCornerRadius: Double?
-    /// Input and row border thickness. Null draws no border at all, which is
-    /// what the sheet does today.
+    /// Input and row border thickness. Null draws no border.
     public var borderWidth: Double?
 
     public init(
@@ -148,11 +135,10 @@ public struct PayCrossPrimaryButton: Sendable, Hashable {
     }
 }
 
-/// Type sizing. A font family is deliberately not exposed in this release.
+/// Type sizing. Font families cannot be set.
 public struct PayCrossTypography: Sendable, Hashable {
 
-    /// Multiplies every font size, on top of Dynamic Type rather than instead
-    /// of it. Clamped to 0.8...1.3; null means 1.
+    /// Multiplies every font size on top of Dynamic Type. Clamped to 0.8...1.3; null means 1.
     public var sizeScaleFactor: Double?
 
     public init(sizeScaleFactor: Double? = nil) {
@@ -160,11 +146,7 @@ public struct PayCrossTypography: Sendable, Hashable {
     }
 }
 
-/// How the payment sheet looks.
-///
-/// Roles rather than per-element styles, and no layout control of any kind: the
-/// sheet's structure, the card-input internals, the wallet buttons' own colours
-/// and labels, the 3DS page and the error copy are all fixed by design.
+/// How the payment sheet looks. Only colour roles and shape values can be set; the layout is fixed.
 ///
 /// ```swift
 /// PayCrossAPI.configure(
@@ -201,7 +183,7 @@ public struct PayCrossAppearance: Sendable, Hashable {
         self.typography = typography
     }
 
-    /// One brand colour in both appearances and platform defaults for the rest.
+    /// Sets one brand colour in both appearances and keeps the platform defaults for the rest.
     public static func brand(_ color: PayCrossColor) -> PayCrossAppearance {
         PayCrossAppearance(
             light: PayCrossColors(brand: color),

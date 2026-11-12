@@ -1,16 +1,11 @@
 import Foundation
 
-/// Claims read out of a PayCross session JWT.
-///
-/// The signature is **not** verified here — it is verified server-side. This
-/// decodes the payload only, to learn the session id and the amount to display.
 package struct SessionClaims: Sendable, Hashable {
     package let sessionID: String
     package let merchantID: String
     package let customerID: String
     package let brandingID: String?
     package let amount: Amount
-    /// Token expiry, epoch seconds.
     package let expiresAt: Int64?
 
     package func isExpired(now: Date = Date()) -> Bool {
@@ -25,7 +20,7 @@ package enum SessionTokenError: Error, Sendable, Equatable {
     case missingField(String)
 }
 
-/// Decodes a PayCross session JWT payload.
+// WHY: The signature is verified server-side, so this reads the payload only.
 package enum SessionTokenDecoder {
 
     package static func decode(_ token: String) throws -> SessionClaims {
@@ -66,14 +61,14 @@ package enum SessionTokenDecoder {
             sessionID: sessionID,
             merchantID: object.nonNullString("merchant") ?? "",
             customerID: object.nonNullString("customer") ?? "",
-            // Android maps an empty branding string to null; keep that.
+            // WHY: Android maps an empty branding string to null.
             brandingID: object.nonNullString("branding").flatMap { $0.isEmpty ? nil : $0 },
             amount: Amount(minorUnits: amount, currencyCode: currency),
             expiresAt: object.nonNullInt64("exp")
         )
     }
 
-    /// JWT uses base64url without padding; Foundation's decoder needs both fixed.
+    // WHY: Foundation's base64 decoder needs the standard alphabet and padding.
     static func base64URLDecode(_ input: String) -> Data? {
         var s = input.replacingOccurrences(of: "-", with: "+")
             .replacingOccurrences(of: "_", with: "/")

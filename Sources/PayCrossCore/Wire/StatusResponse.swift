@@ -1,9 +1,5 @@
 import Foundation
 
-/// A 3DS step the server is asking the client to perform.
-///
-/// Declared here once and referenced everywhere else — the design had this type
-/// specified in two sections with different members.
 package struct ThreeDSAction: Codable, Sendable, Hashable {
     package let url: String
     package let method: String
@@ -15,7 +11,6 @@ package struct ThreeDSAction: Codable, Sendable, Hashable {
         self.data = data
     }
 
-    /// True when the action must be submitted as a form POST rather than a GET.
     package var isPost: Bool {
         method.uppercased() == "POST"
     }
@@ -28,12 +23,7 @@ package struct StatusResponse: Codable, Sendable, Hashable {
     package let currency: String?
     package let action: ThreeDSAction?
     package let recovery: String?
-    /// The token for a card this payment stored, on a terminal status only.
-    ///
-    /// The wire also carries `used_token`, naming the stored card this payment
-    /// was taken from. It is deliberately not decoded: the sheet picked that
-    /// card, so the merchant already knows it, and the only new fact here is
-    /// the token that did not exist before this payment.
+    // WHY: used_token is not decoded: the sheet already picked that stored card.
     package let savedToken: String?
 
     enum CodingKeys: String, CodingKey {
@@ -89,10 +79,7 @@ package struct SubmitCardResponse: Codable, Sendable, Hashable {
     }
 }
 
-/// The transaction statuses the flow reacts to.
-///
-/// Anything not listed here is ignored and polling continues, matching the
-/// Kotlin `else -> return false`.
+// WHY: Unknown statuses keep polling, as on Android.
 package enum TransactionStatus: String, Sendable {
     case success
     case authorized

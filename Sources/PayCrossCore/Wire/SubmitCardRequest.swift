@@ -1,26 +1,14 @@
 import Foundation
 
-/// Device characteristics required for 3DS v2 risk assessment.
-///
-/// The model lives in Core so it can be asserted on Linux; the *collection* of
-/// these values is platform-bound and lives in the iOS target.
 package struct BrowserInfo: Codable, Sendable, Hashable {
     package let userAgent: String
-    /// The submit-card Lambda derives this from the request (the Cloudflare
-    /// connecting-IP header, falling back to the source IP) whenever the client
-    /// sends none, so the SDK no longer resolves the shopper's public IP itself
-    /// -- there is no third-party lookup here. A client-supplied value still
-    /// wins: `nil` must encode as an absent key, not `"ip_address": null`, or
-    /// the server has nothing to fall back to.
+    // WHY: nil must encode as an absent key, not null, so the server can fall back to the request IP.
     package let ipAddress: String?
     package let screenWidth: Int
     package let screenHeight: Int
     package let colorDepth: Int
-    /// Minutes **west** of UTC, with DST applied — the JavaScript
-    /// `Date.getTimezoneOffset()` convention that 3DS expects. A device at UTC+2
-    /// reports -120, not +120.
+    // WHY: Minutes west of UTC, the JavaScript sign that 3DS expects: UTC+2 is -120.
     package let timezoneOffset: Int
-    /// BCP-47 language tag, e.g. "en-GB".
     package let language: String
     package let acceptHeader: String
     package let javaEnabled: Bool
@@ -66,7 +54,6 @@ package struct BrowserInfo: Codable, Sendable, Hashable {
         self.javascriptEnabled = javascriptEnabled
     }
 
-    /// Minutes west of UTC for `timeZone` at `date`, matching the Kotlin.
     package static func timezoneOffsetMinutes(
         timeZone: TimeZone = .current,
         at date: Date = Date()
@@ -74,17 +61,10 @@ package struct BrowserInfo: Codable, Sendable, Hashable {
         -timeZone.secondsFromGMT(for: date) / 60
     }
 
-    /// The backend validates `language` as `max:10`, and EMVCo 3DS caps
-    /// browserLanguage at 8 characters, but a full BCP-47 identifier can carry
-    /// extension subtags: a device whose Region differs from the language's
-    /// home region produces "en-US-u-rg-lvzzzz", which fails validation and
-    /// kills the payment server-side after submit already returned 200. Keep
-    /// the meaningful prefix (language, script, region) and drop the rest.
+    // WHY: Extension subtags (such as "-u-rg-lvzzzz") fail the backend's max:10 check, so they are dropped.
     package static func clampedLanguageTag(_ tag: String) -> String {
         let maxLength = 10
         var subtags = tag.split(separator: "-").map(String.init)
-        // A single-character subtag ("u", "x") starts an extension or
-        // private-use section; nothing after it is a language fact.
         if let singleton = subtags.firstIndex(where: { $0.count == 1 }) {
             subtags = Array(subtags[..<singleton])
         }
@@ -94,14 +74,11 @@ package struct BrowserInfo: Codable, Sendable, Hashable {
             guard candidate.count <= maxLength else { break }
             clamped = candidate
         }
-        // Purely private-use ("x-private") or an oversized first subtag leaves
-        // nothing; the backend also requires the field non-blank, so send a
-        // hard-truncated prefix rather than an empty string.
+        // WHY: The backend rejects a blank language, so an all-extension tag falls back to a prefix.
         return clamped.isEmpty ? String(tag.prefix(maxLength)) : clamped
     }
 }
 
-/// Card details for submission. New card or saved card; never both.
 package struct CardData: Codable, Sendable, Hashable {
     package let savedUUID: String?
     package let cardholderName: String?
@@ -119,7 +96,6 @@ package struct CardData: Codable, Sendable, Hashable {
         case pan, cvv, save
     }
 
-    /// A newly entered card.
     package static func newCard(
         cardholderName: String,
         pan: String,
@@ -139,7 +115,6 @@ package struct CardData: Codable, Sendable, Hashable {
         )
     }
 
-    /// A previously saved card, re-confirmed with its CVV.
     package static func savedCard(uuid: String, cvv: String) -> CardData {
         CardData(
             savedUUID: uuid,
@@ -153,7 +128,7 @@ package struct CardData: Codable, Sendable, Hashable {
     }
 }
 
-/// Redacted so a PAN cannot reach a log through string interpolation.
+// WHY: A PAN must not reach a log through string interpolation.
 extension CardData: CustomStringConvertible, CustomDebugStringConvertible {
     package var description: String {
         let tail = (pan?.count ?? 0) >= 4 ? String(pan!.suffix(4)) : ""
@@ -164,20 +139,7 @@ extension CardData: CustomStringConvertible, CustomDebugStringConvertible {
     package var debugDescription: String { description }
 }
 
-/// A wallet payment's token, as the submit endpoint takes it.
-///
-/// `merchantIdentifier` is not optional, and that is the point. Apple's key
-/// derivation hashes the merchant's own Apple merchant identifier into every
-/// token's key, and the edge reads an absent field as "this is a web token" --
-/// so an omitted identifier is not refused anywhere. It makes the vault derive
-/// the environment default key, fail to open the envelope, and answer a 400
-/// that reads exactly like a decline. A non-optional field cannot be omitted by
-/// the encoder, which is the only guarantee available here.
-///
-/// The value itself is a presence flag once it reaches the edge: it is compared
-/// against the signed session token's `apple_merchant_id` claim and then
-/// discarded, and the claim's copy is what reaches the vault. Nothing this SDK
-/// sends can steer key derivation.
+// WHY: merchantIdentifier is not optional: an omitted one fails Apple Pay key derivation and reads as a decline.
 package struct WalletToken: Codable, Sendable {
     package let type: String
     package let data: JSONValue
@@ -188,21 +150,8 @@ package struct WalletToken: Codable, Sendable {
         case type, data
     }
 
-    /// The only way to build an Apple Pay token. It trims the identifier and
-    /// refuses one that is empty once trimmed.
-    ///
-    /// Trimming, rather than passing the caller's string through, because
-    /// `WalletGate.offersApplePay` trims before it offers the button. Anything
-    /// this guard treats differently from that one is a padded identifier that
-    /// gets as far as Face ID and then loses: the edge compares the body
-    /// against the signed session claim byte for byte. A merchant reads this
-    /// value out of a plist, an environment variable or a copied console
-    /// field, so padding is how it actually arrives.
-    ///
-    /// Nil rather than a `precondition`: the caller has already asked the
-    /// gate, so reaching here with a blank identifier is a bug -- and crashing
-    /// a merchant's app is a worse answer to that bug than not offering the
-    /// button.
+    // WHY: Trims like WalletGate.offersApplePay: the server compares the identifier byte for byte.
+    // WHY: Returns nil rather than trapping: a crash in a merchant's app is worse than no button.
     package static func applePay(data: JSONValue, merchantIdentifier: String) -> WalletToken? {
         let identifier = merchantIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !identifier.isEmpty else { return nil }
@@ -245,9 +194,7 @@ package struct SubmitCardRequest: Codable, Sendable {
         self.fieldGroups = fieldGroups
     }
 
-    /// A wallet payment. The payment method is taken from the token rather
-    /// than passed separately, because the edge refuses a body where the two
-    /// disagree and two arguments would be two chances to make them.
+    // WHY: The payment method comes from the token: the server refuses a body where the two disagree.
     package init(
         session: String,
         walletToken: WalletToken,
