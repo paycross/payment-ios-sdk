@@ -5,6 +5,7 @@ import PayCrossCore
 // WHY: A SwiftUI Text in a package resolves its key against the merchant's Bundle.main, so every literal goes through L.
 // WHY: The sheet's own language is searched in the merchant bundle first, since Bundle.localizedString follows the device's languages.
 @MainActor
+// Keys carry the paycross_ prefix, so no plausible merchant string collides with one by chance.
 func L(_ key: String, _ fallback: String, merchant: Bundle? = nil) -> String {
     let app = merchant ?? .main
     let inSheetLanguage = merchant == nil

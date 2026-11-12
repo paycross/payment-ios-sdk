@@ -18,7 +18,7 @@ struct NumericField: UIViewRepresentable {
         field.keyboardType = .numberPad
         field.isSecureTextEntry = isSecure
         field.textContentType = contentType
-        // WHY: UIKit's own re-scaling ignores the sheet's size clamp, so applyStyle scales the font instead.
+        // WHY: UIKit's own re-scaling ignores the sheet's size clamp, so applyStyle scales the font through UIFontMetrics instead.
         field.adjustsFontForContentSizeCategory = false
         applyStyle(to: field)
         field.accessibilityIdentifier = identifier

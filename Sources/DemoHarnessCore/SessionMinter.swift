@@ -12,6 +12,7 @@ public struct MintedSession: Sendable, Equatable {
     public let sentBody: String
 }
 
+// Demo only: the client secret must never ship in a merchant app. Mint sessions on your server.
 public struct SessionMinter: Sendable {
     public typealias Transport = @Sendable (URLRequest) async throws -> (Data, HTTPURLResponse)
 
@@ -127,6 +128,7 @@ public struct SessionMinter: Sendable {
     }
 }
 
+// The secret is read from the environment, so a copied command cannot leak it into a chat window or shell history.
 public enum CurlBuilder {
     public static func mintCommand(merchant: Merchant, body: String) -> String {
         """

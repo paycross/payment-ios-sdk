@@ -1,8 +1,8 @@
 import Foundation
 
 // WHY: Unknown fields in Apple's token must survive, so this is not a Codable struct.
-// WHY: Integers above Int64.max decode as Double and lose precision.
-// WHY: Key order and number spelling are not preserved; Apple's signature covers values.
+// Integers above Int64.max decode as Double and lose precision; Apple's token cannot carry one, so widening needs a reason.
+// Key order and number spelling are not preserved; Apple's EC_v1 signature covers values, so do not add byte-order preservation.
 package enum JSONValue: Codable, Sendable, Hashable {
     case object([String: JSONValue])
     case array([JSONValue])

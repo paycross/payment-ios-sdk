@@ -149,15 +149,7 @@ final class PaymentSheetModel: ObservableObject {
         )
     }
 
-    /// The configured identifier, trimmed, or nil when nothing usable is set.
-    ///
-    /// Trimmed here because this is the point where the string stops being a
-    /// gate input and becomes payload. `WalletGate.offersApplePay` trims before
-    /// answering and `WalletToken.applePay` trims before building the body, so
-    /// an untrimmed value reaching `PKPaymentRequest` would put an identifier
-    /// Apple cannot match beside a submit body carrying the right one: the
-    /// sheet never opens and the shopper is told only that Apple Pay could not
-    /// be presented.
+    // Trimmed here, where the string becomes payload, so the gate and the request agree.
     private var applePayMerchantIdentifier: String? {
         guard let configured = configuration.applePayMerchantIdentifier else { return nil }
         let trimmed = configured.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -668,13 +660,6 @@ enum DeviceInfo {
 
 struct PaymentSheetView: View {
     @ObservedObject var model: PaymentSheetModel
-    /// Where VoiceOver goes when the cancel confirmation closes without
-    /// cancelling: back to the control that raised it.
-    ///
-    /// Only this one. The trash that raises the *other* confirmation is gone
-    /// from the sheet whenever that question is answered yes, and keying a
-    /// focus state by card id through the picker to reach the rows that survive
-    /// is more plumbing than the case is worth.
     @AccessibilityFocusState private var cancelFocused: Bool
 
     var body: some View {

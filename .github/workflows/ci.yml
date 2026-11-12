@@ -305,7 +305,7 @@ jobs:
       - name: The shopper's typing is never cut short
         run: |
           set -euo pipefail
-          # max_length is a validation rule checked on Pay, not a trim while typing; no unit test sees the difference.
+          # max_length is a validation rule checked on Pay, not a trim while typing.
           status=0
           file=Sources/PayCross/UI/FieldGroupsView.swift
           test -f "$file" || {

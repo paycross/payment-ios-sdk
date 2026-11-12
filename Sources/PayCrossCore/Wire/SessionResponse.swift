@@ -53,7 +53,7 @@ package struct SessionData: Codable, Sendable, Hashable {
 
     package var allowsSavingCard: Bool { saveCardConfig != nil }
 
-    // WHY: defaults to off for sessions minted before the backend sent the block.
+    // defaults to off when the session omits the block.
     package var allowsSavedCardRemoval: Bool { savedCardsConfig?.allowRemoval ?? false }
 
     package var preselectsSavedCard: Bool { savedCardsConfig?.preselect ?? false }
@@ -107,13 +107,7 @@ package struct SessionData: Codable, Sendable, Hashable {
     }
 }
 
-/// Reads a wire boolean the backend may have spelled as a string or a number.
-///
-/// `true`, `"true"` and `1` are all yes; `false`, `"false"` and `0` are all no.
-/// Anything else is nil -- the server said something this SDK cannot read, which
-/// is not the same as the server saying no. Never throws, because the callers
-/// that use it have decided a bad value costs one field rather than the whole
-/// message.
+// A value this SDK cannot read is nil, not false, and never throws, so one bad field does not drop the message.
 private extension KeyedDecodingContainer {
     func decodeLenientBoolIfPresent(forKey key: Key) -> Bool? {
         guard contains(key), (try? decodeNil(forKey: key)) == false else { return nil }
@@ -152,7 +146,7 @@ package struct Branding: Codable, Sendable, Hashable {
     }
 }
 
-// WHY: only an explicit false refuses a wallet; a nil member means the server had no opinion.
+// only an explicit false refuses a wallet; a nil member means the server had no opinion. A wallet flag must never throw, or nil would read as permission.
 package struct WalletsAvailability: Codable, Sendable, Hashable {
     package let applePay: Bool?
     package let googlePay: Bool?

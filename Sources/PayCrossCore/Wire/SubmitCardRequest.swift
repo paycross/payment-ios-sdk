@@ -2,6 +2,7 @@ import Foundation
 
 package struct BrowserInfo: Codable, Sendable, Hashable {
     package let userAgent: String
+    // The server derives the IP when none is sent; the SDK makes no third-party IP lookup.
     // WHY: nil must encode as an absent key, not null, so the server can fall back to the request IP.
     package let ipAddress: String?
     package let screenWidth: Int

@@ -1,6 +1,4 @@
-/// The text-size steps, smallest first.
-///
-/// SwiftUI's `DynamicTypeSize` and UIKit's `UIContentSizeCategory` state the same setting and do not share a ceiling.
+// SwiftUI and UIKit state the text size in two systems, so the ceiling is written once here, not as two literals.
 package enum TypeSizeStep: Int, Sendable, Comparable, CaseIterable {
     case xSmall
     case small

@@ -14,7 +14,7 @@ public struct Amount: Sendable, Hashable {
 
 /// The outcome of a payment flow. A decline is `.failed`, not a thrown error.
 public enum PaymentResult: Sendable, Hashable {
-    /// The payment completed. `savedCardToken` is nil when the payment stored no card.
+    /// The payment completed. `savedCardToken` is nil when the payment stored no card. It is not a card number and works only on this merchant's account.
     case succeeded(
         transactionID: String,
         status: String,

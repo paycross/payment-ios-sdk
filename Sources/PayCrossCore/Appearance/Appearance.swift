@@ -86,8 +86,7 @@ public struct PayCrossShapes: Sendable, Hashable {
 
     /// Inputs, stored-card rows, field groups and the error banner. Default 10.
     public var cornerRadius: Double?
-    /// The Pay button and the Apple Pay button. Falls back to `cornerRadius`,
-    /// then to 12.
+    /// The Pay button and the Apple Pay button. Unset, the Pay button uses 12 and the Apple Pay button uses 10.
     public var buttonCornerRadius: Double?
     /// Input and row border thickness. Null draws no border.
     public var borderWidth: Double?

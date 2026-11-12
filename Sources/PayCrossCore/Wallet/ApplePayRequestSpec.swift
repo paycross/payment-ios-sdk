@@ -1,5 +1,6 @@
 import Foundation
 
+// PayCrossCore may not import PassKit (ci.yml greps for it). The list mirrors Android's CARD_NETWORKS, so both clients offer the same schemes.
 package enum ApplePayNetwork: String, Sendable, Hashable, CaseIterable {
     case visa
     case mastercard
@@ -37,8 +38,10 @@ package struct ApplePayRequestSpec: Sendable, Hashable {
             // WHY: Apple refuses a request with no country, and the session may name none; US is a default, not an inference about the shopper.
             countryCode: (data?.merchantCountry ?? "US").uppercased(),
             amount: claims.amount,
+            // The sheet shows the merchant's name from its Apple Merchant ID; the SDK adds none, so it must not invent one.
             summaryItemLabel: "Total",
             supportedNetworks: [.visa, .mastercard, .amex, .discover, .jcb],
+            // Apple requires Three-D Secure for in-app payments; credit and debit say the sheet may offer either kind of card.
             capabilities: [.threeDSecure, .credit, .debit]
         )
     }

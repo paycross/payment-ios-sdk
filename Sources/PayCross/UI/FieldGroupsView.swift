@@ -14,7 +14,7 @@ struct FieldGroupsView: View {
     var body: some View {
         ForEach(groups, id: \.key) { group in
             let groupValues = values[group.key] ?? [:]
-            // WHY: A declined group draws no fields, matching the validation and submission in Core.
+            // A declined group draws no fields, matching the validation and submission.
             let visible = FieldGroupLogic.isActive(group, optedIn: optedInGroups)
                 ? (group.fields ?? []).filter {
                     FieldGroupLogic.fieldState(for: $0, groupValues: groupValues).isVisible
