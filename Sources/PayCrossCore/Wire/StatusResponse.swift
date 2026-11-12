@@ -23,7 +23,7 @@ package struct StatusResponse: Codable, Sendable, Hashable {
     package let currency: String?
     package let action: ThreeDSAction?
     package let recovery: String?
-    // Used_token is not decoded: the sheet already picked that stored card.
+    // used_token is not decoded: the sheet already picked that stored card.
     package let savedToken: String?
 
     enum CodingKeys: String, CodingKey {

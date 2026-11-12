@@ -3,7 +3,7 @@ import Foundation
 package struct BrowserInfo: Codable, Sendable, Hashable {
     package let userAgent: String
     // The server derives the IP when none is sent; the SDK makes no third-party IP lookup.
-    // Nil must encode as an absent key, not null, so the server can fall back to the request IP.
+    // nil must encode as an absent key, not null, so the server can fall back to the request IP.
     package let ipAddress: String?
     package let screenWidth: Int
     package let screenHeight: Int
@@ -140,7 +140,7 @@ extension CardData: CustomStringConvertible, CustomDebugStringConvertible {
     package var debugDescription: String { description }
 }
 
-// MerchantIdentifier is not optional: an omitted one fails Apple Pay key derivation and reads as a decline.
+// merchantIdentifier is not optional: an omitted one fails Apple Pay key derivation and reads as a decline.
 package struct WalletToken: Codable, Sendable {
     package let type: String
     package let data: JSONValue

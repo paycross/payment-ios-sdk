@@ -44,7 +44,7 @@ struct CardFormView: View {
                             Text(L("paycross_or_pay_with_card", "Or pay with card"))
                                 .font(style.font(.footnote))
                                 .foregroundStyle(style.foreground(\.textSecondary, default: .secondary))
-                                // LayoutPriority rather than fixedSize, so the caption wraps at accessibility sizes instead of overflowing.
+                                // layoutPriority rather than fixedSize, so the caption wraps at accessibility sizes instead of overflowing.
                                 .layoutPriority(1)
                             VStack { Divider() }
                         }

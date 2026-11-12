@@ -66,7 +66,7 @@ package enum LocaleResolution {
         return nil
     }
 
-    // Fr_CA arrives from server payloads and Locale.identifier, so _ becomes -.
+    // fr_CA arrives from server payloads and Locale.identifier, so _ becomes -.
     private static func cleaned(_ tag: String) -> String? {
         let trimmed = tag
             .trimmingCharacters(in: .whitespacesAndNewlines)

@@ -138,7 +138,7 @@ final class PaymentSheetModel: ObservableObject {
         FieldGroupLogic.activeGroups(fieldGroups, optedIn: optedInGroups)
     }
 
-    // SessionData stays nil when load() fails, and the button needs the session's currency and amount.
+    // sessionData stays nil when load() fails, and the button needs the session's currency and amount.
     var showsApplePayButton: Bool {
         guard sessionData != nil else { return false }
 
@@ -338,7 +338,7 @@ final class PaymentSheetModel: ObservableObject {
                 )
                 self.drop(card)
             } catch PayCrossError.notFound {
-                // NotFound means the card is already gone, so the row is dropped without an error.
+                // notFound means the card is already gone, so the row is dropped without an error.
                 self.drop(card)
             } catch PayCrossError.sessionExpired {
                 // A retry cannot succeed on an expired session.

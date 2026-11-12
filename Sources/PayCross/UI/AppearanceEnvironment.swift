@@ -303,7 +303,7 @@ extension View {
         }
     }
 
-    // Tint(nil) clears a tint the host app set on the window, so an unset colour keeps self.
+    // tint(nil) clears a tint the host app set on the window, so an unset colour keeps self.
     @ViewBuilder
     func payCrossTint(_ color: Color?) -> some View {
         if let color {

@@ -85,7 +85,7 @@ package struct PayCrossAPIClient: Sendable {
     // MARK: - Plumbing
 
     private func makeRequest(path: [String], method: String) -> URLRequest {
-        // AppendingPathComponent percent-encodes each segment, so an id cannot leave its path.
+        // appendingPathComponent percent-encodes each segment, so an id cannot leave its path.
         let url = path.reduce(baseURL) { $0.appendingPathComponent($1) }
         var request = URLRequest(url: url)
         request.httpMethod = method

@@ -43,7 +43,7 @@ final class PassKitWalletAuthorizer: NSObject, WalletAuthorizing {
         return await awaitDelegateOutcome()
     }
 
-    // Present() returns a bare false for a misconfigured request, so this message is the only clue.
+    // present() returns a bare false for a misconfigured request, so this message is the only clue.
     static func presentationFailureMessage(for spec: ApplePayRequestSpec) -> String {
         L(
             "paycross_error_apple_pay_presentation",

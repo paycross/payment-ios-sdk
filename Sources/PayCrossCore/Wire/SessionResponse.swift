@@ -258,7 +258,7 @@ package struct FieldGroup: Codable, Sendable, Hashable {
     package let key: String
     package let label: String?
     package let labels: [String: String]?
-    // Nil and false both mean the group is mandatory, since older sessions omit the flag.
+    // nil and false both mean the group is mandatory, since older sessions omit the flag.
     package let optIn: Bool?
     package let fields: [FieldDefinition]?
 
@@ -281,7 +281,7 @@ package struct FieldGroup: Codable, Sendable, Hashable {
         self.fields = fields
     }
 
-    // Opt_in is read leniently, because losing it leaves the group mandatory.
+    // opt_in is read leniently, because losing it leaves the group mandatory.
     // Every CodingKeys case must be decoded here, since there is no synthesised init.
     package init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
