@@ -100,11 +100,7 @@ struct DynamicPalette: Sendable {
 
         let componentFill = dynamic(\.component)
         component = componentFill
-        // Resolved at draw time rather than muted up front, because the colour
-        // being muted may be the platform's: `secondarySystemGroupedBackground`
-        // is near-white in one appearance and near-black in the other, and only
-        // the traits in hand say which. A fill with no RGB reading at all -- a
-        // pattern colour -- is left exactly as it is rather than guessed at.
+        // WHY: System colours have no fixed RGB, so the muted fill resolves at draw time from the traits.
         componentMuted = UIColor { traits in
             let base = (componentFill ?? .secondarySystemGroupedBackground)
                 .resolvedColor(with: traits)
@@ -125,23 +121,10 @@ struct DynamicPalette: Sendable {
     }
 }
 
-/// The resolved appearance, as the sheet's views read it.
-///
-/// Bridges Core's platform-free palettes to SwiftUI and UIKit. Every colour
-/// accessor answers nil when the merchant set nothing for that role, so a call
-/// site keeps the system colour it already drew and an unset appearance leaves
-/// the sheet byte for byte where it was.
 struct AppearanceStyle: Sendable, Equatable {
     let resolved: ResolvedAppearance
-    /// The shopper's text-size setting as the sheet resolved it, which is what
-    /// the merchant's size factor is multiplied against. `.large` is the
-    /// system default and what a style built outside the sheet reads.
     let typeSize: TypeSizeStep
     private let palette: DynamicPalette
-    /// Built with the style rather than per call, for the reason the palette
-    /// is: `font(_:)` reads it once per font per render and `NumericField`
-    /// reads it on every `updateUIView`, and it depends on nothing but
-    /// `typeSize`.
     let scaledTraits: UITraitCollection
 
     init(resolved: ResolvedAppearance, typeSize: TypeSizeStep = .large) {
@@ -160,32 +143,16 @@ struct AppearanceStyle: Sendable, Equatable {
         scaledTraits = Self.traits(for: typeSize)
     }
 
-    /// The traits a UIKit font resolves its size against: the shopper's
-    /// setting, held at the ceiling.
-    ///
-    /// Clamped here as well as at the sheet's root, because a style built
-    /// outside the sheet — a screenshot, a preview — has no root modifier over
-    /// it, and this is the one place the merchant's factor gets multiplied.
     private static func traits(for typeSize: TypeSizeStep) -> UITraitCollection {
         UITraitCollection(preferredContentSizeCategory: typeSize.clamped.contentSizeCategory)
     }
 
-    /// The same appearance reading a different text size.
-    ///
-    /// The palette comes across rather than being rebuilt: it is fourteen
-    /// dynamic colours, this is called on every render, and none of them
-    /// depends on the type size.
     func withTypeSize(_ step: TypeSizeStep) -> Self {
         Self(resolved: resolved, typeSize: step, palette: palette)
     }
 
-    /// What the sheet looks like when nobody has themed it.
     static let unstyled = AppearanceStyle(resolved: .unstyled)
 
-    /// Two styles are equal when they were resolved from the same values. The
-    /// palette is derived from `resolved` and carries no identity of its own,
-    /// and comparing freshly built dynamic colours would report every style as
-    /// different and re-render the sheet for nothing.
     static func == (one: AppearanceStyle, other: AppearanceStyle) -> Bool {
         one.resolved == other.resolved && one.typeSize == other.typeSize
     }
@@ -198,8 +165,6 @@ struct AppearanceStyle: Sendable, Equatable {
         palette[keyPath: role].map(Color.init)
     }
 
-    /// The same, as a shape style, so a call site can keep a hierarchical
-    /// default such as `.secondary` that has no single colour to fall back to.
     func foreground(
         _ role: KeyPath<DynamicPalette, UIColor?>,
         default fallback: some ShapeStyle
@@ -207,35 +172,22 @@ struct AppearanceStyle: Sendable, Equatable {
         color(role).map { AnyShapeStyle($0) } ?? AnyShapeStyle(fallback)
     }
 
-    /// The fill a read-only box draws: whatever an editable one would draw,
-    /// muted.
-    ///
-    /// Answers a colour always, unlike the role accessors, so it has an
-    /// accessor of its own rather than a keypath into the palette: the roles
-    /// are nil when the merchant named nothing and the call site keeps the
-    /// system colour, and here the system colour is the thing being muted.
     var readOnlyComponent: Color { Color(palette.componentMuted) }
 
-    /// The radius for inputs, rows, groups and the banner. The fallback is the
-    /// literal the call site used before it asked.
     func cornerRadius(or fallback: Double) -> CGFloat {
         CGFloat(resolved.cornerRadius ?? fallback)
     }
 
-    /// The radius for the Pay button and the wallet button, which is the only
-    /// property of the wallet button the SDK may change.
     func buttonCornerRadius(or fallback: Double) -> CGFloat {
         CGFloat(resolved.buttonCornerRadius ?? fallback)
     }
 
-    /// Nil draws no border, which is what the sheet does today.
     var borderWidth: CGFloat? { resolved.borderWidth.map { CGFloat($0) } }
 
     func buttonHeight(or fallback: Double) -> CGFloat {
         CGFloat(resolved.buttonHeight ?? fallback)
     }
 
-    /// The style to pin the sheet's own window to. Unspecified follows the device.
     var userInterfaceStyle: UIUserInterfaceStyle {
         switch resolved.themeMode {
         case .system: .unspecified
@@ -244,16 +196,7 @@ struct AppearanceStyle: Sendable, Equatable {
         }
     }
 
-    /// A text style, multiplied by the merchant's scale factor.
-    ///
-    /// At the default factor this is the plain SwiftUI style, which keeps
-    /// Dynamic Type entirely as it was — bounded by the sheet's own clamp, like
-    /// every other semantic font. A merchant who set a factor gets a font built
-    /// from the *clamped* Dynamic Type size times their factor: the
-    /// multiplication has to happen in points, and a `Font` carrying a `UIFont`
-    /// is the one form SwiftUI will not scale a second time, so resolving
-    /// against the device's raw size here would put the product outside the
-    /// clamp the shopper can see everywhere else.
+    // WHY: A Font built from a UIFont is not scaled again by SwiftUI, so the merchant's factor is applied to the clamped size here.
     func font(_ style: Font.TextStyle, weight: Font.Weight? = nil) -> Font {
         let scale = resolved.sizeScaleFactor
         guard scale != 1 else {
@@ -267,7 +210,6 @@ struct AppearanceStyle: Sendable, Equatable {
         return Font(UIFont.systemFont(ofSize: size * scale, weight: Self.uiWeight(weight)))
     }
 
-    /// The point size a UIKit field should ask `UIFontMetrics` to scale.
     func scaledPointSize(_ base: Double) -> CGFloat {
         CGFloat(base * resolved.sizeScaleFactor)
     }
@@ -315,13 +257,6 @@ extension EnvironmentValues {
 }
 
 extension View {
-    /// Paints the sheet's own chrome: the ground behind the loading spinner and
-    /// the navigation bar the form sits under.
-    ///
-    /// Applied only when a surface resolved, so an unthemed sheet keeps the
-    /// system bar it has always had. Without it a merchant who paints the sheet
-    /// gets their colour framed by a system-coloured bar, which reads as a
-    /// rendering fault rather than as a theme.
     @ViewBuilder
     func payCrossSheetChrome(_ style: AppearanceStyle) -> some View {
         if let surface = style.color(\.surface) {
@@ -333,18 +268,6 @@ extension View {
         }
     }
 
-    /// Paints the sheet's component ground: an input, a stored-card row, a
-    /// field group.
-    ///
-    /// One seam for all three, so the merchant's component colour, corner
-    /// radius and border arrive at every box that is meant to have them and at
-    /// none of the ones that are not. The border is drawn only when a width was
-    /// asked for, because the sheet has never drawn one.
-    ///
-    /// `muted` is the read-only variant of the same box. It stays on this seam
-    /// rather than becoming a second one so that a locked field cannot drift
-    /// away from the shape, radius and border of the fields beside it: the only
-    /// thing that differs is the fill.
     func payCrossComponentBackground(
         _ style: AppearanceStyle, muted: Bool = false
     ) -> some View {
@@ -362,12 +285,6 @@ extension View {
         }
     }
 
-    /// Drops text to the supporting colour, and only when asked.
-    ///
-    /// Conditional rather than a ternary at the call site so that the field
-    /// this does not apply to keeps exactly the colour it drew before: an
-    /// editable field inherits the sheet's own text colour, and naming
-    /// `.primary` there would be a different answer dressed as the same one.
     @ViewBuilder
     func payCrossMutedForeground(_ style: AppearanceStyle, _ isMuted: Bool) -> some View {
         if isMuted {
@@ -377,8 +294,6 @@ extension View {
         }
     }
 
-    /// Sets the primary text colour only when the merchant chose one, so an
-    /// unthemed sheet is left with the system's own hierarchy untouched.
     @ViewBuilder
     func payCrossForeground(_ color: Color?) -> some View {
         if let color {
@@ -388,11 +303,7 @@ extension View {
         }
     }
 
-    /// Tints only when a brand colour resolved.
-    ///
-    /// `.tint(nil)` is not the same as not tinting: it clears whatever the host
-    /// app set on the window, so an unthemed sheet inside a tinted app would
-    /// come back to system blue.
+    // WHY: tint(nil) clears a tint the host app set on the window, so an unset colour keeps self.
     @ViewBuilder
     func payCrossTint(_ color: Color?) -> some View {
         if let color {

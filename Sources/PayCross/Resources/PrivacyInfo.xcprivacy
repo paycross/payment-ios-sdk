@@ -2,20 +2,7 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!--
-	PayCross audit (Sources/PayCross/**/*.swift), 2026-08-20:
-	grep -rnE "UserDefaults|NSUserDefaults|fileModificationDate|creationDate|
-	.systemUptime|ProcessInfo|systemBootTime|NSFileSystemFreeSize|
-	volumeAvailableCapacity" -> zero hits. No required-reason API usage,
-	so NSPrivacyAccessedAPITypes is empty.
-
-	Collected-data types below are declared here too, alongside Core: the
-	card/name/email/phone fields are gathered in this target's UI (CardFormView,
-	FieldGroupsView) even though PayCrossCore performs the wire transmission.
-	Each module that participates in the pipeline declares the data type so
-	Apple's aggregation across both pods reflects the SDK's actual behaviour
-	regardless of which pod a merchant happens to inspect.
-	-->
+	<!-- WHY: Declared here as well as in PayCrossCore, because this target's UI collects the card, name, email and phone fields. -->
 	<key>NSPrivacyTracking</key>
 	<false/>
 	<key>NSPrivacyTrackingDomains</key>

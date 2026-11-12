@@ -13,21 +13,18 @@ import PayCrossCore
 /// case .succeeded(let id, _, let amount, let savedCardToken): …
 /// case .failed(_, let recovery) where recovery.isRetryable: …
 /// case .failed: …
-/// case .pending(let transactionID, _): // Unknown. Reconcile before charging again.
+/// case .pending(let transactionID, _): // Reconcile before charging again.
 /// case .cancelled(let transactionID): …
 /// }
 /// ```
 ///
-/// Nothing here throws: a decline is `.failed`, not a Swift `Error`, so the happy
-/// path needs no `catch` and the compiler still checks the recovery branch.
+/// Nothing throws: a decline is returned as `.failed`, not as a Swift `Error`.
 @MainActor
 public final class PaymentSheet {
     private let sessionToken: String
 
-    /// Saved cards, field groups and whether saving is offered all come from the
-    /// session, not from the integrator — the server decides what this checkout
-    /// may show. An earlier version took `savedCards` as a parameter, which put
-    /// the merchant app in charge of something it does not own.
+    /// Creates a sheet for a session token from your server. The session decides
+    /// the saved cards, field groups and whether saving is offered.
     public init(sessionToken: String) {
         self.sessionToken = sessionToken
     }
@@ -51,9 +48,6 @@ public final class PaymentSheet {
             return .failed(transactionID: nil, recovery: .restart)
         }
 
-        // Everything that can be known without the network. The session's own
-        // `locale` is the only rung that can still move this, and the model
-        // installs it again the moment the fetch returns.
         SheetLanguage.install(LocaleResolution.resolve(
             override: configuration.locale,
             device: DeviceLanguages.preferred()
@@ -66,7 +60,6 @@ public final class PaymentSheet {
         )
 
         let host = PaymentHostController(model: model)
-        // The shopper must not be able to swipe the sheet away mid-authorization.
         host.isModalInPresentation = true
         model.threeDSPresenter = WebKitThreeDSPresenter(
             host: host,
@@ -78,27 +71,15 @@ public final class PaymentSheet {
 
         let result = await model.awaitResult()
         await host.dismissSelf()
-        // The sheet is off screen and nothing of ours reads a string again, so
-        // the language stops being installed rather than waiting to be replaced.
-        //
-        // One sheet at a time is assumed here, not enforced: two presentations
-        // that somehow overlapped would have the first to finish reset the
-        // language under the second. UIKit declines the second presentation, so
-        // that sheet is already broken before its words are.
         SheetLanguage.reset()
         return result
     }
 }
 
-/// Hosts the SwiftUI form and applies the platform hardening.
 @MainActor
 final class PaymentHostController: UIHostingController<PaymentSheetView> {
-
     init(model: PaymentSheetModel) {
         super.init(rootView: PaymentSheetView(model: model))
-        // The sheet's own window only. A merchant pinning the sheet to dark is
-        // not asking for their whole app to go dark, and the mode is a code
-        // setting, so it is known before the session is fetched.
         overrideUserInterfaceStyle = model.appearance.userInterfaceStyle
     }
 
@@ -117,50 +98,17 @@ final class PaymentHostController: UIHostingController<PaymentSheetView> {
     }
 }
 
-/// Owns the form state and drives the flow.
 @MainActor
 final class PaymentSheetModel: ObservableObject {
     @Published var form: CardFormState
     @Published private(set) var isLoading = false
-    /// True until the session has been fetched; the form cannot be shown before
-    /// then because the server decides what it contains.
     @Published private(set) var isPreparing = true
     @Published private(set) var sessionData: SessionData?
-    /// What the sheet draws with. Re-resolved once the session lands, because
-    /// the merchant's back-office brand colour arrives with it.
     @Published private(set) var appearance: AppearanceStyle
-    /// The appearance the contrast warnings were last written for, so a session
-    /// re-read does not repeat them.
     private var warnedAppearance: ResolvedAppearance?
-    /// The locale the amount is formatted in, kept in step with the language the
-    /// sheet resolved. Published because the session can move it after the form
-    /// has already drawn once.
     @Published private(set) var formattingLocale: Locale = SheetLanguage.locale
-    /// The language the sheet is drawing in.
-    ///
-    /// Published for the repaint as much as for the read: `L` reads
-    /// `SheetLanguage`, which is not observable, so a session that moves the
-    /// language without moving the formatting locale — `configure(locale: "de")`
-    /// over an `fr` session does exactly that — would otherwise repaint only
-    /// because `load()` happens to set `isPreparing` on every branch. It is read
-    /// too, by the form and by the validation, both of which pick their wording
-    /// out of maps the server sends rather than out of our own bundle.
     @Published private(set) var languageTag: String = SheetLanguage.tag
     @Published var fieldValues: [String: [String: String]] = [:]
-    /// The opt-in groups the shopper has ticked, empty until they tick one.
-    ///
-    /// On the model rather than in the form, because the toggle decides what is
-    /// validated when Pay is pressed and what goes on the wire, and neither of
-    /// those is a question the view is asked.
-    ///
-    /// Declining a group drops whatever it was complaining about. Nothing draws
-    /// those messages today — an error is drawn under its own field and a
-    /// declined group draws none — so this changes nothing on screen. It is
-    /// here for the reading that comes later: an error summary or a
-    /// scroll-to-first-error would take this list wholesale and put a complaint
-    /// about the shipping address back in front of a shopper whose answer to it
-    /// was to decline the group. Being told the row is gone and being told it
-    /// is still wrong are contradictory, and only one of them is true.
     @Published var optedInGroups: Set<String> = [] {
         didSet {
             guard optedInGroups != oldValue else { return }
@@ -169,20 +117,11 @@ final class PaymentSheetModel: ObservableObject {
         }
     }
     @Published private(set) var fieldErrors: [FieldGroupError] = []
-    /// Drives the "Cancel Payment?" confirmation. On the model rather than in the
-    /// view because a 3DS challenge covers the toolbar, so the request also
-    /// arrives from the challenge's own bar.
     @Published var isConfirmingCancel = false
-    /// The card the "Remove this card?" confirmation is asking about, and the
-    /// flag that raises it. One value rather than two, so the prompt cannot be
-    /// shown with no card behind it or left naming a card it is no longer about.
     @Published var cardPendingRemoval: SavedCard?
 
     let claims: SessionClaims
 
-    /// Whether the session invited the shopper to delete a stored card. The
-    /// picker holds the cards themselves, because removing one also moves the
-    /// selection.
     var allowsCardRemoval: Bool {
         sessionData?.allowsSavedCardRemoval ?? false
     }
@@ -195,33 +134,11 @@ final class PaymentSheetModel: ObservableObject {
         sessionData?.fieldGroups ?? []
     }
 
-    /// The groups that count right now: every mandatory one, plus the opt-in
-    /// ones the shopper has ticked.
-    ///
-    /// What gets validated and what gets submitted, and the two read the same
-    /// list on purpose -- a group validated but not sent, or sent but not
-    /// validated, is the shape of bug this filter exists to make impossible.
-    /// The form is handed `fieldGroups` instead, because a declined group is
-    /// still on screen: its toggle is how the shopper changes their mind.
     var activeFieldGroups: [FieldGroup] {
         FieldGroupLogic.activeGroups(fieldGroups, optedIn: optedInGroups)
     }
 
-    /// Whether to offer the button, decided by Core and asked three questions:
-    /// does the session allow the wallet, did the integration configure an
-    /// identifier, and does this device have a card.
-    ///
-    /// Plus a fourth this layer answers for itself: has the session loaded at
-    /// all. Core's gate is deliberately permissive about a nil snapshot -- an
-    /// absent `wallets` block is "the server had no opinion" and every session
-    /// minted before the backend shipped the block reads that way -- but a
-    /// snapshot that never arrived is a different thing from one that says
-    /// nothing. `load()` swallows a transport failure and a 5xx alike, so
-    /// `sessionData` is nil after both, and the request spec needs the
-    /// session's own currency and amount. A button that opens onto nothing, or
-    /// onto a sheet quoting the wrong money, is worse than no button. The rule
-    /// lives here rather than in Core because this is where the render is
-    /// decided; Core's semantics are unchanged.
+    // WHY: sessionData stays nil when load() fails, and the button needs the session's currency and amount.
     var showsApplePayButton: Bool {
         guard sessionData != nil else { return false }
 
@@ -250,40 +167,15 @@ final class PaymentSheetModel: ObservableObject {
     private let sessionToken: String
     private let configuration: Configuration
     private var continuation: CheckedContinuation<PaymentResult, Never>?
-    /// Retained so cancelling stops the poll loop. Android gets this for free -
-    /// finishing the Activity tears down the viewModelScope - but a bare Task
-    /// here would keep polling for the full deadline after the sheet is gone.
     private var paymentTask: Task<Void, Never>?
-    /// Ends the sheet once the session can no longer take a payment. Only ever
-    /// armed while the form is re-armed after a retryable decline.
     private var sessionDeadlineTask: Task<Void, Never>?
-    /// The saved-card removal in flight, named so a test can await the request
-    /// and the state change it causes rather than a stretch of wall clock. Two
-    /// removals in a row each run to completion; only the handle is replaced.
     private(set) var removalTask: Task<Void, Never>?
-    /// The last transaction this sheet created, so a cancellation can name it.
-    /// The server keeps its own record and a payment cancelled mid-authorization
-    /// may still complete; without this the merchant has nothing to reconcile it by.
     private(set) var lastTransactionID: String?
-    /// Set once the host controller exists, since the presenter needs somewhere
-    /// to attach its web view.
     var threeDSPresenter: (any ThreeDSPresenting)?
     private let walletAuthorizer: (any WalletAuthorizing)?
 
-    /// What the API client sends over.
-    ///
-    /// Injected for the same reason `PaymentFlowRunner` takes one in Core: the
-    /// authorised half of the wallet branch -- the submit body, the poll, a
-    /// decline -- is otherwise reachable only by opening a real socket to the
-    /// checkout API, so the one path that carries a payment token would have
-    /// been first executed on a shopper's device.
     private let transport: any HTTPTransport
 
-    /// Injected so the visibility rule is testable. On the CI simulator the
-    /// real one is always false -- a fresh device has an empty Wallet -- so a
-    /// model that called PassKit directly would answer "no button" to every
-    /// test, and every negative case would pass for the same irrelevant
-    /// reason while no positive case could exist at all.
     private let deviceCanPay: @Sendable () -> Bool
 
     init(
@@ -314,7 +206,6 @@ final class PaymentSheetModel: ObservableObject {
         )
 
         var initial = CardFormState(source: .newCard)
-        // Prefill is a test convenience and is nil in production by construction.
         if let prefill = configuration.effectiveTestCardPrefill {
             CardFormReducer.reduce(state: &initial, event: .nameChanged(prefill.cardholderName))
             CardFormReducer.reduce(state: &initial, event: .panChanged(prefill.pan))
@@ -340,14 +231,8 @@ final class PaymentSheetModel: ObservableObject {
         )
     }
 
-    /// Fetches the session and acts on what it says.
-    ///
-    /// A completed session must never render the form: the shopper would pay a
-    /// second time, and the new idempotency key gives the backend nothing to
-    /// relate the two submissions by.
     func load() async {
-        // Started, not awaited. The form must not be gated on WebKit; the value is
-        // collected at submit, by which time a healthy WebKit has long answered.
+        // WHY: the form must not wait on WebKit; the user agent is read at submit.
         DeviceInfo.startReadingUserAgent()
 
         let response = try? await makeClient()
@@ -381,13 +266,6 @@ final class PaymentSheetModel: ObservableObject {
         }
     }
 
-    /// Re-resolves the sheet's language now that the session has answered.
-    ///
-    /// `PaymentSheet.present` installed what could be known without the network.
-    /// The session is a new candidate in the middle of the list, so it can move
-    /// the answer whatever the merchant set: an override the SDK ships no
-    /// strings for is passed over, and the session's language is then the next
-    /// one asked.
     private func installLanguage(session sessionLocale: String?) {
         SheetLanguage.install(LocaleResolution.resolve(
             override: configuration.locale,
@@ -398,11 +276,6 @@ final class PaymentSheetModel: ObservableObject {
         languageTag = SheetLanguage.tag
     }
 
-    /// The sentences Core shows, resolved here because Core cannot resolve them.
-    ///
-    /// Built fresh at each use rather than cached: it is five dictionary reads,
-    /// and a cached copy would be the one thing on the sheet still speaking the
-    /// language the session had before it was read.
     var flowMessages: FlowMessages {
         FlowMessages(
             paymentFailed: L("paycross_error_payment_failed", "Payment failed. Please try again."),
@@ -427,26 +300,16 @@ final class PaymentSheetModel: ObservableObject {
         )
         warnAboutContrast()
         fieldValues = FieldGroupLogic.initialValues(data.fieldGroups ?? [])
-        // Off to begin with, every time the session is read. An opt-in group is
-        // a question the shopper answers, and a session refreshed mid-payment
-        // must not arrive with it answered for them.
+        // WHY: a session re-read must not carry over a group the shopper opted into.
         optedInGroups = []
         form.savedCards = data.savedCards?.map(\.presentable) ?? []
 
-        // Preselection is a merchant opt-in, and safe under one because a saved
-        // card still needs its CVV: no tap on this sheet can charge one on its own.
+        // WHY: a preselected saved card still needs its CVV before it can be charged.
         if data.preselectsSavedCard, let first = form.savedCards.first {
             CardFormReducer.reduce(state: &form, event: .sourceSelected(.saved(first)))
         }
     }
 
-    /// Reports colour pairs a shopper will not be able to read, in debug builds
-    /// only and once per distinct appearance.
-    ///
-    /// Here rather than in the resolver, which is pure and is called again every
-    /// time the session is re-read. The merchant chose these colours and the SDK
-    /// does not correct them; a sheet that silently ignores what it was told is
-    /// worse than one that says so while the integration is being written.
     private func warnAboutContrast() {
         #if DEBUG
         guard warnedAppearance != appearance.resolved else { return }
@@ -457,14 +320,10 @@ final class PaymentSheetModel: ObservableObject {
         #endif
     }
 
-    /// The shopper pressed a row's trash. Raises the confirmation; deletes nothing.
     func requestRemoval(of card: SavedCard) {
         cardPendingRemoval = card
     }
 
-    /// The confirmation's answer. Named rather than left to the alert's own
-    /// dismissal, so the path a shopper takes to keep a card is a thing the
-    /// sheet does and not a side effect of a binding.
     func cancelRemoval() {
         cardPendingRemoval = nil
     }
@@ -475,16 +334,8 @@ final class PaymentSheetModel: ObservableObject {
         removeSavedCard(card)
     }
 
-    /// Deletes a stored card, then drops it from the picker.
-    ///
-    /// Server first, and only then the row: a card that vanishes on the tap and
-    /// comes back next session is a promise the sheet did not keep. A failure
-    /// leaves the row exactly where it was and says so in the banner.
     func removeSavedCard(_ card: SavedCard) {
-        // Belt to the view's braces, which takes the trash away while a payment
-        // runs. Deleting a card the server is in the middle of charging is not a
-        // state worth having, and a tap already in flight when the payment
-        // started would otherwise still land.
+        // WHY: a card is not removed while a payment that may charge it is running.
         guard !isLoading else { return }
 
         removalTask = Task { [weak self] in
@@ -495,15 +346,10 @@ final class PaymentSheetModel: ObservableObject {
                 )
                 self.drop(card)
             } catch PayCrossError.notFound {
-                // The server says this card is not the session customer's, which
-                // is the state the shopper asked for. Showing "try again" would
-                // ask them to repeat a request that has already been answered,
-                // against a row that can never go.
+                // WHY: notFound means the card is already gone, so the row is dropped without an error.
                 self.drop(card)
             } catch PayCrossError.sessionExpired {
-                // Nothing is retryable on a dead session, this least of all, and
-                // the same token is about to fail the payment itself. Say that
-                // rather than blaming the card.
+                // WHY: a retry cannot succeed on an expired session.
                 self.show(L(
                     "paycross_session_expired",
                     "This payment session has expired. Start again."
@@ -521,10 +367,8 @@ final class PaymentSheetModel: ObservableObject {
         CardFormReducer.reduce(state: &form, event: .savedCardRemoved(uuid: card.id))
     }
 
-    /// Puts a message on the form's banner without going through the reducer:
-    /// nothing about the card being entered changed, and a decline-shaped event
-    /// would clear a CVV the shopper still needs.
     private func show(_ message: String) {
+        // WHY: not a reducer event, which would clear the CVV the shopper still needs.
         form.inlineError = message
     }
 
@@ -534,23 +378,16 @@ final class PaymentSheetModel: ObservableObject {
         }
     }
 
-    /// Abandons the flow at the shopper's request.
-    ///
-    /// The server keeps its own record, so a payment cancelled mid-authorization
-    /// may still complete; the merchant reconciles that server-side. Android
-    /// behaves the same way. What matters is that the shopper is never trapped.
     func cancel() {
         paymentTask?.cancel()
         paymentTask = nil
         finish(.cancelled(transactionID: lastTransactionID))
     }
 
-
     func pay() {
         guard let card = form.cardData(), !isLoading else { return }
 
-        // Server-driven fields are validated here, not in the form reducer: only
-        // visible fields count, and visibility depends on sibling values.
+        // WHY: validated here, not in the form reducer, because visibility depends on sibling values.
         fieldErrors = FieldGroupLogic.validate(
             groups: activeFieldGroups, values: fieldValues,
             messages: flowMessages, language: languageTag
@@ -558,10 +395,8 @@ final class PaymentSheetModel: ObservableObject {
         guard fieldErrors.isEmpty else { return }
 
         isLoading = true
-        // A payment is in flight again, so the re-armed form's deadline no longer
-        // applies; the poll deadline takes over.
         sessionDeadlineTask?.cancel()
-        // Clears the CVV from form state the moment it is handed off (Req 3.3.1).
+        // WHY: the CVV is cleared from form state on hand-off (Req 3.3.1).
         CardFormReducer.reduce(state: &form, event: .paySubmitted)
 
         paymentTask = Task { [weak self] in
@@ -577,28 +412,16 @@ final class PaymentSheetModel: ObservableObject {
         }
     }
 
-    /// The wallet's own entry point: `pay()` without the card, plus the sheet.
-    ///
-    /// Deliberately a sibling rather than a branch inside `pay()`. Two short
-    /// methods sharing a tail read better than one guard with a mode in it, and
-    /// the card path must not gain a way to be wrong.
     func payWithApplePay() {
-        // The same re-entry guard as pay(), without `form.cardData()`: a wallet
-        // payment has no card data and would return at that line forever.
+        // WHY: a wallet payment has no card data, so pay()'s guard cannot be used.
         guard !isLoading else { return }
 
-        // Above the validation, so a sheet that could never have opened does
-        // not first decorate the form with field errors and then do nothing.
-        // Unreachable through the button, which is only offered when the
-        // identifier is set.
+        // WHY: checked before validation, so no field errors appear when no sheet can open.
         guard let merchantIdentifier = applePayMerchantIdentifier,
               let authorizer = walletAuthorizer
         else { return }
 
-        // Before the sheet, not after. Core validates field groups server-side
-        // ahead of the wallet branch, so a payment that fails them after Face ID
-        // has spent the shopper's authorisation on a rejection they could have
-        // been shown first.
+        // WHY: validated before the wallet sheet, so a rejection is shown before Face ID is asked.
         fieldErrors = FieldGroupLogic.validate(
             groups: activeFieldGroups, values: fieldValues,
             messages: flowMessages, language: languageTag
@@ -621,8 +444,6 @@ final class PaymentSheetModel: ObservableObject {
 
             switch outcome {
             case .cancelled:
-                // The shopper dismissed a sheet. They are still looking at the
-                // card form and there is nothing to report.
                 self.isLoading = false
 
             case .failed(let message):
@@ -639,11 +460,7 @@ final class PaymentSheetModel: ObservableObject {
     }
 
     private func submitWallet(_ token: JSONValue, merchantIdentifier: String) async {
-        // Unreachable through the button, which is only offered for a non-blank
-        // identifier, and fail-closed rather than force-unwrapped: the builder
-        // returns nil exactly when the identifier could not be sent, and a body
-        // without `merchant_identifier` reads at the edge as a web token and
-        // derives the wrong key.
+        // WHY: fails closed rather than force-unwrapping, because a body without `merchant_identifier` reads as a web token.
         guard let walletToken = WalletToken.applePay(
             data: token, merchantIdentifier: merchantIdentifier
         ) else {
@@ -670,38 +487,23 @@ final class PaymentSheetModel: ObservableObject {
         }
     }
 
-    /// Re-arms the form after a card decline. The CVV goes with it: it was
-    /// handed off, and PCI DSS 3.3.1 forbids keeping it after authorization.
     func reArm(with message: String) {
         reArm(showing: .declined(message: message))
     }
 
-    /// Re-arms after a wallet decline. The CVV stays: that submission carried a
-    /// payment token, so the card on the form was never authorized and there is
-    /// nothing to discard.
     func reArmAfterWalletDecline(with message: String) {
         reArm(showing: .walletDeclined(message: message))
     }
 
-    /// The tail all the re-arm routes share — a resumed transaction, a card
-    /// payment, a wallet payment — so the session deadline below cannot be
-    /// attached to some of them and left off the others.
     private func reArm(showing event: CardFormEvent) {
         isLoading = false
         CardFormReducer.reduce(state: &form, event: event)
         startSessionDeadline()
     }
 
-    /// Ends the payment once the session can no longer take one.
-    ///
-    /// A re-armed form has nothing else bounding it: the 480s poll deadline went
-    /// with the poll it belonged to. Without this the sheet sits on a live Pay
-    /// button long after the session has expired server-side, and the shopper's
-    /// next tap can only fail.
     private func startSessionDeadline() {
         sessionDeadlineTask?.cancel()
-        // No expiry claim is not the same as an expired session; leave it unbounded
-        // rather than guessing a lifetime the server never stated.
+        // WHY: without an expiry claim the session is unbounded, not expired.
         guard let remaining = SessionLifetime.remaining(claims: claims) else { return }
 
         sessionDeadlineTask = Task { [weak self] in
@@ -714,9 +516,7 @@ final class PaymentSheetModel: ObservableObject {
     private func makeRunner() -> PaymentFlowRunner {
         PaymentFlowRunner(
             client: makeClient(),
-            // If the presenter is missing the sheet has no host, so a 3DS step
-            // could not be shown. Reporting .failed rather than .completed keeps
-            // an unanswered challenge from looking like an answered one.
+            // WHY: a missing presenter reports .failed, so an unanswered challenge is not shown as answered.
             presenter: threeDSPresenter ?? ThreeDSPresenterStub(),
             claims: claims,
             messages: flowMessages,
@@ -732,8 +532,7 @@ final class PaymentSheetModel: ObservableObject {
             session: sessionToken,
             card: card,
             browserInfo: await DeviceInfo.browserInfo(),
-            // Only visible, non-blank values go on the wire; a hidden field's
-            // stale value must not be submitted.
+            // WHY: a hidden field's stale value must not be submitted.
             fieldGroups: FieldGroupLogic.submissionValues(
                 groups: activeFieldGroups, values: fieldValues
             ).nilIfEmpty
@@ -741,9 +540,6 @@ final class PaymentSheetModel: ObservableObject {
         return await runner.run(request)
     }
 
-    /// The card path's twin, and identical after the request is built: submit,
-    /// retry-after, poll, terminal. `SubmitCardRequest` has no initialiser that
-    /// takes both a card and a wallet token, so the two cannot be confused.
     private func runFlow(with walletToken: WalletToken) async -> FlowOutcome {
         let runner = makeRunner()
         let request = SubmitCardRequest(
@@ -765,15 +561,11 @@ final class PaymentSheetModel: ObservableObject {
     }
 }
 
-/// A fail-closed fallback used when no presenter is attached. Reports failure rather than
-/// silently succeeding, so a 3DS session cannot appear to pass without one.
 private struct ThreeDSPresenterStub: ThreeDSPresenting {
     func present(_ step: ThreeDSStep) async -> ThreeDSOutcome { .failed }
     func dismiss() async {}
 }
 
-/// Resumes its continuation at most once, so the first of two racing tasks wins
-/// and the loser is dropped rather than awaited.
 @MainActor
 private final class FirstAnswer {
     private var continuation: CheckedContinuation<String?, Never>?
@@ -788,21 +580,10 @@ private final class FirstAnswer {
     }
 }
 
-/// Where the real user agent comes from.
-///
-/// A seam, so a unit test never depends on WebKit launching its helper processes.
 typealias UserAgentProvider = @MainActor @Sendable () async -> String?
 
-/// How long the read is allowed to take before the fallback is used.
-///
-/// A seam for the same reason as the provider above. The bound is the only thing
-/// between a shopper and a WebKit that never answers, so it is worth a test, and a
-/// wall clock cannot give one: a 100ms bound asserted against a loaded CI runner
-/// that stalls for seconds is a coin toss, and a stopwatch cannot tell a read that
-/// ended because its bound elapsed from one that ended for some other reason.
 typealias BoundedWait = @MainActor @Sendable (Duration) async -> Void
 
-/// Reads the user agent out of a throwaway web view.
 @MainActor
 enum WebKitUserAgent {
     static func read() async -> String? {
@@ -811,28 +592,12 @@ enum WebKitUserAgent {
     }
 }
 
-/// Collects the device characteristics 3DS v2 requires.
-///
-/// Every field here except `ip_address` is validated non-blank by
-/// `validateBrowserInfo` in the submit-card service, so this is assembled from
-/// real values rather than placeholders. `ip_address` itself is omitted: the
-/// submit-card Lambda derives it from the request when absent.
 @MainActor
 enum DeviceInfo {
-
-    /// The real device user agent, which the ACS fingerprints against.
-    ///
-    /// Android sends `WebSettings.getDefaultUserAgent(context)`; sending the SDK
-    /// version string instead is a value the backend accepts and the ACS does
-    /// not recognise, which raises the odds of a forced challenge.
     private static var cachedUserAgent: String?
 
-    /// The read in flight, if one is. Held rather than awaited, so the caller that
-    /// starts it is not the caller that pays for it.
     private static var reading: Task<String?, Never>?
 
-    /// Replacing the provider discards anything read from the previous one, which
-    /// is what a test switching to a stub wants.
     static var userAgentProvider: UserAgentProvider = WebKitUserAgent.read {
         didSet {
             cachedUserAgent = nil
@@ -841,42 +606,21 @@ enum DeviceInfo {
         }
     }
 
-    /// Cancellation is swallowed rather than propagated: a cancelled bound has
-    /// still stopped waiting, and the caller wants the fallback either way.
     static var boundedWait: BoundedWait = { duration in
         try? await Task.sleep(for: duration)
     }
 
-    /// Starts reading the real user agent, and returns immediately.
-    ///
-    /// Nothing awaits this. `evaluateJavaScript` waits on WebKit's helper
-    /// processes, which can take tens of seconds to launch on a loaded machine and
-    /// need not answer at all — so a sheet that awaited it before fetching its
-    /// session showed no form until WebKit was ready, and none at all when WebKit
-    /// never came up.
     static func startReadingUserAgent() {
         guard cachedUserAgent == nil, reading == nil else { return }
         reading = Task { await userAgentProvider() }
     }
 
-    /// The real user agent if it has arrived, or arrives within `timeout`; the
-    /// fallback otherwise.
-    ///
-    /// Awaited only where the value is actually consumed, which is the submit body.
-    /// A shopper spends many seconds typing a card, so a healthy WebKit has long
-    /// since answered and the bound is never reached. The bound is short because by
-    /// this point the shopper is waiting on a payment.
-    ///
-    /// The fallback is not free — `defaultUserAgent` is non-blank and the backend
-    /// accepts it, but the ACS does not recognise it, which raises the odds of a
-    /// forced challenge — so it is reached only when WebKit is genuinely dead.
     static func userAgent(timeout: Duration = .seconds(2)) async -> String {
         if let cachedUserAgent { return cachedUserAgent }
         startReadingUserAgent()
         guard let reading else { return defaultUserAgent }
 
-        // Not a task group: that waits for every child before it returns, and
-        // walking away from a read that may never finish is the whole point.
+        // WHY: not a task group, which would wait for a read that may never finish.
         let resolved = await withCheckedContinuation { continuation in
             let answer = FirstAnswer(continuation)
             Task { @MainActor in answer.resume(await reading.value) }
@@ -895,32 +639,25 @@ enum DeviceInfo {
     }
 
     private static func browserInfo(userAgent: String) -> BrowserInfo {
-
         let bounds = screenBounds()
         let scale = UITraitCollection.current.displayScale
         return BrowserInfo(
             userAgent: userAgent,
-            // Pixels, not points: 3DS specifies browserScreenWidth in pixels and
-            // Android sends displayMetrics.widthPixels.
+            // WHY: 3DS wants pixels, not points.
             screenWidth: Int(bounds.width * scale),
             screenHeight: Int(bounds.height * scale),
             timezoneOffset: BrowserInfo.timezoneOffsetMinutes(),
-            // BCP-47 ("en-GB"), not the ICU identifier ("en_GB") that
-            // Locale.identifier returns — clamped, because a device whose
-            // Region differs from the language's home region yields a tag with
-            // extension subtags ("en-US-u-rg-lvzzzz") that the backend rejects.
+            // WHY: the backend rejects extension subtags, so the BCP-47 tag is clamped.
             language: BrowserInfo.clampedLanguageTag(Locale.current.identifier(.bcp47))
         )
     }
 
-    /// Used only until the real user agent resolves; still non-blank so a
-    /// submission is never rejected outright for want of it.
     static let defaultUserAgent =
         "Mozilla/5.0 (iPhone; CPU iPhone OS like Mac OS X) AppleWebKit/605.1.15 "
         + "(KHTML, like Gecko) PayCrossSDK-iOS/\(PayCrossAPI.version)"
 
     private static func screenBounds() -> CGRect {
-        // UIScreen.main is deprecated in iOS 16; read the active scene instead.
+        // WHY: UIScreen.main is deprecated from iOS 16, so the active scene is read.
         let scene = UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
             .first { $0.activationState == .foregroundActive }
@@ -968,9 +705,7 @@ struct PaymentSheetView: View {
             }
             .payCrossContainerIdentifier(.sheet)
             .task { await model.load() }
-            // The amount is the one string the sheet builds rather than looks
-            // up, and `Payer €12.00` reads as a bug. SwiftUI's own formatting
-            // follows this too.
+            // WHY: SwiftUI's formatting must follow the locale the amount is formatted in.
             .environment(\.locale, model.formattingLocale)
             .payCrossTint(model.appearance.color(\.brand))
             .payCrossSheetChrome(model.appearance)
@@ -978,44 +713,26 @@ struct PaymentSheetView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    // Never disabled. Authorization runs for up to the full poll
-                    // deadline, the sheet is isModalInPresentation so it cannot be
-                    // swiped away, and there is no back gesture - gating this on
-                    // isLoading left a shopper whose ACS never returns with no way
-                    // out at all. Android's back handler is likewise unconditional.
+                    // WHY: never disabled, so a shopper whose challenge never returns can still cancel.
                     Button(L("paycross_cancel", "Cancel")) { model.isConfirmingCancel = true }
                         .payCrossIdentifier(PayCrossTestIdentifiers.cancel)
                         .accessibilityFocused($cancelFocused)
                 }
             }
-            // Both confirmations are drawn by the SDK rather than raised as
-            // `.alert`s. `ConfirmationDialog` says why: SwiftUI does not carry a
-            // button's identifier onto the `UIAlertAction` it builds, so a
-            // merchant's test could not press either answer by name.
+            // WHY: not an `.alert`, because SwiftUI does not carry button identifiers onto `UIAlertAction`.
             .overlay { confirmation }
             .onChange(of: model.isConfirmingCancel) { isConfirming in
                 if !isConfirming { cancelFocused = true }
             }
         }
-        // Outside the NavigationStack, so the bar, the toolbar's Cancel and both
-        // confirmations are held to the same ceiling as the form under them.
-        //
-        // The 3-D Secure challenge is not, and cannot be from here: it is a
-        // child view controller with a UIKit trait collection of its own, and
-        // the page inside it is the issuer's web content, which sizes its own
-        // text. The README says so rather than leaving it to be discovered.
+        // WHY: the 3-D Secure challenge is not capped by this type scale; its page sizes its own text.
         .payCrossTypeScale(model.appearance)
     }
 
-    /// Whichever question is outstanding, or nothing.
-    ///
-    /// Cancel wins when both are, which the two-alert arrangement could not
-    /// express: abandoning the payment settles the other question anyway.
     @ViewBuilder
     private var confirmation: some View {
         if model.isConfirmingCancel {
-            // Same two-step as Android, so a stray tap cannot abandon a payment
-            // that is already in flight.
+            // WHY: two steps, so a stray tap cannot abandon a payment in flight.
             ConfirmationDialog(
                 identifier: PayCrossTestIdentifiers.cancelDialog,
                 title: L("paycross_cancel_payment_title", "Cancel Payment?"),
@@ -1035,10 +752,7 @@ struct PaymentSheetView: View {
                 )
             )
         } else if let card = model.cardPendingRemoval {
-            // Beside the cancel confirmation rather than inside the picker, for
-            // the same reason: deleting a stored card is not undoable from the
-            // sheet, and the trash sits a thumb's width from the row that
-            // selects the card.
+            // WHY: deleting a card is not undoable, and the trash sits next to the row that selects it.
             ConfirmationDialog(
                 identifier: PayCrossTestIdentifiers.removeDialog,
                 title: L("paycross_remove_card_title", "Remove this card?"),
@@ -1064,6 +778,5 @@ struct PaymentSheetView: View {
 #endif
 
 private extension Dictionary {
-    /// Sends nothing rather than an empty object when there is nothing to send.
     var nilIfEmpty: Self? { isEmpty ? nil : self }
 }
