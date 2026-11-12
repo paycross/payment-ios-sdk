@@ -2,57 +2,24 @@
 import SwiftUI
 import PayCrossCore
 
-/// The card entry form.
-///
-/// Holds no logic of its own: every keystroke goes through `CardFormReducer` in
-/// Core, which is where formatting, brand limits, validation and the PCI-driven
-/// CVV clearing live. That keeps this file a rendering concern and keeps the
-/// behaviour testable on Linux.
 struct CardFormView: View {
     @Environment(\.payCrossAppearance) private var style
-    /// Read for one decision: whether the expiry and the CVV still fit beside
-    /// each other. Everything else about the size is handled by the fonts.
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    /// The wallet button's height, tracking the text beside it. Apple's control
-    /// draws a fixed-size label, so this is the box it is given rather than the
-    /// type inside it, and a shopper at an accessibility size gets a button in
-    /// proportion to the rest of the sheet instead of a 48pt strip under a
-    /// 40pt total.
     @ScaledMetric(relativeTo: .body) private var walletButtonHeight: CGFloat = 48
-    /// The cardholder field is the one SwiftUI-backed input on the form, and
-    /// SwiftUI centres a one-line `UITextField` inside whatever frame it is
-    /// given rather than filling it. A minimum height makes the box a target
-    /// and leaves the control 22pt tall in the middle of it, so the box asks
-    /// for the focus itself.
     @FocusState private var cardholderFocused: Bool
     @Binding var state: CardFormState
     let amount: Amount
     let allowsSaving: Bool
-    /// Whether the session invited the shopper to delete a stored card.
     var allowsCardRemoval: Bool = false
     let isLoading: Bool
     let fieldGroups: [FieldGroup]
     @Binding var fieldValues: [String: [String: String]]
-    /// Which opt-in groups the shopper has ticked.
-    ///
-    /// Not defaulted, for the reason `language` below is not: a caller that
-    /// forgot it would draw the wrong thing and nothing would say so. Here the
-    /// ending is worse than a silently wrong string. A `.constant` binding
-    /// swallows every write, so the toggle would render and refuse to turn on,
-    /// leaving the shopper exactly where issue #60 found them but now with a
-    /// control that looks like the way out.
     @Binding var optedInGroups: Set<String>
     let fieldErrors: [FieldGroupError]
-    /// The language the sheet resolved, which picks the server's own wording for
-    /// the field groups. Not defaulted: a caller that forgot it would draw a
-    /// French sheet's fields in English and nothing would say so.
     let language: String
     let onPay: () -> Void
     var showsApplePayButton: Bool = false
     var onApplePay: () -> Void = {}
-    /// Called when the shopper presses a row's trash. Nothing is deleted here:
-    /// the sheet confirms first, then calls the server, and the row goes only
-    /// once the server has taken the card.
     var onRemoveRequested: (SavedCard) -> Void = { _ in }
 
     private var canPay: Bool { state.canSubmit() && !isLoading }
@@ -63,12 +30,6 @@ struct CardFormView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     AmountHeader(amount: amount)
 
-                    // Directly under the total, not at the end of the column.
-                    // Last meant below the fields, the field groups and the save
-                    // toggle, which on a form with server-driven fields put it off
-                    // the bottom of the screen: the shopper saw an unchanged form
-                    // and a Pay button that had gone disabled, with no reason for
-                    // either. Here it is on screen whatever the session asks for.
                     if let error = state.inlineError {
                         ErrorBanner(message: error)
                     }
@@ -78,23 +39,12 @@ struct CardFormView: View {
                             .frame(height: max(walletButtonHeight, style.buttonHeight(or: 0)))
                             .payCrossIdentifier(.walletButton)
 
-                        // A separator rather than nothing: without it the card
-                        // fields read as part of the Apple Pay button, and a
-                        // shopper who has already decided reads "or" faster
-                        // than they read a gap.
                         HStack {
                             VStack { Divider() }
                             Text(L("paycross_or_pay_with_card", "Or pay with card"))
                                 .font(style.font(.footnote))
                                 .foregroundStyle(style.foreground(\.textSecondary, default: .secondary))
-                                // The rules give, not the caption. English sits
-                                // two characters inside the width this row has,
-                                // so "Ou payer par carte" wrapped mid-phrase
-                                // between two lines that had room to spare.
-                                // Priority rather than fixedSize: the dividers
-                                // still shrink first, but once they are gone the
-                                // caption wraps instead of running off a sheet
-                                // it can no longer fit on at accessibility sizes.
+                                // layoutPriority rather than fixedSize, so the caption wraps at accessibility sizes instead of overflowing.
                                 .layoutPriority(1)
                             VStack { Divider() }
                         }
@@ -136,13 +86,8 @@ struct CardFormView: View {
                 }
                 .padding(20)
             }
-            // Dragging the form is the gesture a shopper reaches for first when
-            // something covers what they want to read.
             .scrollDismissesKeyboard(.interactively)
 
-            // Pinned rather than trailing the fields. A Pay button that floats
-            // mid-screen reads as unfinished, and on a taller device it drifts
-            // further from the thumb the longer the form is.
             VStack(spacing: 0) {
                 Divider()
                 PayButton(amount: amount, isLoading: isLoading, isEnabled: canPay, action: onPay)
@@ -152,16 +97,11 @@ struct CardFormView: View {
         }
         .background(style.color(\.surface) ?? Color(.systemGroupedBackground))
         .payCrossForeground(style.color(\.text))
-        // A tap off the fields is the other habit. Buttons and the toggle still
-        // win their own taps; this only claims the gaps between them.
         .contentShape(Rectangle())
         .onTapGesture { KeypadDismissal.resignFirstResponder() }
     }
 
     private var newCardFields: some View {
-        // Each heading is read into a local and used twice: drawn above the box,
-        // and spoken as the field's name. A control whose only accessible name
-        // is its placeholder announces the example rather than the field.
         let cardholderTitle = L("paycross_cardholder_name", "Cardholder Name")
         let cardNumberTitle = L("paycross_card_number", "Card Number")
 
@@ -180,11 +120,7 @@ struct CardFormView: View {
             }
 
             LabeledField(title: cardNumberTitle, trailing: BrandBadge(brand: state.brand)) {
-                // NOTE: Android uses KeyboardType.NumberPassword here, which
-                // makes the framework withhold the field's contents from the
-                // keyboard process. UIKeyboardType has no such variation, so
-                // iOS has NO equivalent protection on this field today. Do not
-                // record this as covered in a security review.
+                // UIKeyboardType has no equivalent of Android's NumberPassword, so iOS gives this field no keyboard-side protection.
                 NumericField(
                     placeholder: "1234 5678 9012 3456",
                     text: panBinding,
@@ -194,12 +130,7 @@ struct CardFormView: View {
                 )
             }
 
-            // An explicit gate rather than `ViewThatFits`. `NumericField` sets
-            // low hugging and low compression resistance on purpose, so the
-            // side-by-side candidate always reports that it fits and shrinks the
-            // two fields to slivers instead: at an accessibility size the
-            // shopper would get a four-digit CVV box two characters wide rather
-            // than the vertical layout they need.
+            // ViewThatFits would always pick the side-by-side layout, because NumericField sets low hugging and compression resistance.
             if dynamicTypeSize.isAccessibilitySize {
                 expiryField
                 cvvField
@@ -239,8 +170,6 @@ struct CardFormView: View {
 
     // MARK: - Bindings
 
-    /// Display-formatted text in, digits out. The reducer strips everything else,
-    /// so a paste of "4111-1111-1111-1111" lands correctly.
     private var panBinding: Binding<String> {
         Binding(
             get: { state.formattedPAN },
@@ -288,8 +217,6 @@ struct CardFormView: View {
 
 private struct AmountHeader: View {
     @Environment(\.payCrossAppearance) private var style
-    /// Set by the sheet from the language it resolved, so the amount and the
-    /// words around it agree on where the comma goes.
     @Environment(\.locale) private var locale
     let amount: Amount
 
@@ -302,16 +229,11 @@ private struct AmountHeader: View {
                 .font(style.font(.footnote, weight: .medium))
                 .foregroundStyle(style.foreground(\.textSecondary, default: .secondary))
                 .textCase(.uppercase)
-                // Its words are in the amount's label below. Left visible it is
-                // read twice, and read first as the letters T-O-T-A-L, because
-                // VoiceOver spells short uppercase runs.
+                // VoiceOver spells uppercase text letter by letter, and the amount label below already says the words.
                 .accessibilityHidden(true)
             Text(total)
                 .font(style.font(.largeTitle, weight: .semibold))
                 .monospacedDigit()
-                // A bare "25,99 €" is a number with no noun. The caption above
-                // it is the noun, and it is already translated, so the label
-                // composes the two rather than introducing copy of its own.
                 .accessibilityLabel("\(caption), \(total)")
                 .payCrossIdentifier(.amount)
         }
@@ -323,8 +245,6 @@ private struct LabeledField<Content: View, Trailing: View>: View {
     @Environment(\.payCrossAppearance) private var style
     let title: String
     var trailing: Trailing
-    /// What a tap on the box, rather than on the control inside it, should do.
-    /// Nil for the UIKit-backed fields, which fill their box already.
     var focus: (() -> Void)?
     @ViewBuilder let content: Content
 
@@ -345,20 +265,11 @@ private struct LabeledField<Content: View, Trailing: View>: View {
             Text(title)
                 .font(style.font(.footnote, weight: .medium))
                 .foregroundStyle(style.foreground(\.textSecondary, default: .secondary))
-                // All four fields this wraps now carry the same words as their
-                // own name, so a visible heading here is the field announced
-                // twice. Same reason the amount's caption is hidden.
+                // Each field's own accessibility label already says these words.
                 .accessibilityHidden(true)
             HStack {
                 content
-                    // On the field rather than around it. A `UITextField` is one
-                    // line of its font tall — 22pt at the default size, measured
-                    // — and the 12pt of padding this box used to carry is not
-                    // part of it: a tap landing in the padding hit the
-                    // background and focused nothing, so the real target was
-                    // half Apple's 44pt minimum inside a box that looked twice
-                    // the size. The field now fills the box it is drawn in, and
-                    // the box is 2pt shorter than the padding made it.
+                    // A UITextField is only one line tall, so the 44pt tap target is set on the field itself.
                     .frame(minHeight: 44)
                     .font(style.font(.body).monospacedDigit())
                 trailing
@@ -390,19 +301,16 @@ private struct BrandBadge: View {
     }
 }
 
-/// Internal rather than private so its announcement can be asserted on a real
-/// render; nothing outside the sheet builds one.
 struct ErrorBanner: View {
     @Environment(\.payCrossAppearance) private var style
     let message: String
-    /// The seam. Defaulted, so every call site in the sheet stays a one-liner.
     var announce: (String) -> Void = { SheetAnnouncement.post($0) }
 
     private var errorColor: Color { style.color(\.error) ?? Color(.systemRed) }
 
     var body: some View {
         HStack(spacing: 8) {
-            // Never colour alone: the icon carries the meaning too.
+            // The icon carries the meaning too, so colour is not the only cue.
             Image(systemName: "exclamationmark.triangle.fill")
             Text(message)
         }
@@ -415,9 +323,6 @@ struct ErrorBanner: View {
             in: RoundedRectangle(cornerRadius: style.cornerRadius(or: 10))
         )
         .payCrossIdentifier(.errorBanner)
-        // On appear and on change: a decline arrives while the shopper is
-        // somewhere else on the form, and a second decline with a different
-        // reason reuses this view rather than building a new one.
         .onAppear { announce(message) }
         .onChange(of: message) { announce($0) }
     }
@@ -425,16 +330,7 @@ struct ErrorBanner: View {
 
 private struct PayButton: View {
     @Environment(\.payCrossAppearance) private var style
-    /// Grows with the label inside it. A fixed 50pt clipped `Payer 25,99 €` at
-    /// an accessibility size, on the one control the shopper has to press.
-    ///
-    /// Relative to `.body` rather than to this button's own `.headline`, so the
-    /// two primary buttons climb at the same rate: Apple draws the wallet
-    /// button's label at a fixed size, which gives its height nothing of its own
-    /// to track, and two buttons of the same shape growing differently reads as
-    /// a bug.
     @ScaledMetric(relativeTo: .body) private var height: CGFloat = 50
-    /// Same reason as `AmountHeader`: the button reads `Payer 12,00 €`.
     @Environment(\.locale) private var locale
     let amount: Amount
     let isLoading: Bool
@@ -449,12 +345,6 @@ private struct PayButton: View {
         }
     }
 
-    /// White is only right on a dark fill. The accent colour is the merchant
-    /// app's to choose, and a light one left the amount and the spinner
-    /// invisible on the one control the shopper has to press, so the label
-    /// follows the fill's own luminance -- the rule Android has been applying
-    /// since it started taking a brand colour. The disabled fill is the SDK's
-    /// own grey and keeps the white it has always drawn.
     private var labelColor: Color {
         if isEnabled {
             style.color(\.buttonLabel) ?? .onBrand(of: .accentColor)

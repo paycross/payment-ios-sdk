@@ -3,14 +3,6 @@ import SwiftUI
 import UIKit
 import PayCrossCore
 
-/// The two ladders iOS states the shopper's text-size setting on.
-///
-/// SwiftUI's `DynamicTypeSize` is what the root modifier clamps and what a
-/// `Font.system` style scales against. UIKit's `UIContentSizeCategory` is what a
-/// font resolved through `UIFontMetrics` or
-/// `preferredFont(forTextStyle:compatibleWith:)` answers to, which is the path a
-/// merchant's size factor takes. Both are mapped from `TypeSizeStep` so the
-/// clamp is one value rather than two literals that can drift apart.
 extension TypeSizeStep {
 
     init(_ size: DynamicTypeSize) {
@@ -67,22 +59,13 @@ extension TypeSizeStep {
 }
 
 extension View {
-    /// Bounds the sheet's text size, and tells the appearance what it settled on.
-    ///
-    /// Two jobs that have to happen in this order. The clamp goes on the outside
-    /// so everything below it, including the reader, sees the bounded size; the
-    /// reader then hands that size to `AppearanceStyle`, which is where a
-    /// merchant's size factor is multiplied in. Without the second half the
-    /// factor would multiply against whatever the device reports and the product
-    /// would be unbounded — the clamp would hold for the SDK's own semantic
-    /// fonts and for nothing a themed sheet draws.
+    // The clamp wraps the reader, so the merchant's size factor multiplies the clamped size, not the device's raw one.
     func payCrossTypeScale(_ style: AppearanceStyle) -> some View {
         TypeScaledAppearance(style: style) { self }
             .dynamicTypeSize(...TypeSizeStep.ceiling.dynamicTypeSize)
     }
 }
 
-/// Reads the clamped size and puts it on the appearance the sheet's views read.
 private struct TypeScaledAppearance<Content: View>: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let style: AppearanceStyle

@@ -3,40 +3,10 @@ import Foundation
 import PassKit
 import PayCrossCore
 
-/// Presents Apple's payment sheet and answers with the token it produced.
-///
-/// The only file in this SDK that talks to PassKit's payment machinery.
-/// `UI/ApplePayButtonView.swift` imports the framework too, but only to name
-/// Apple's button. Every decision around this one -- whether to offer the
-/// button, what to ask Apple for, what to put on the wire -- lives in
-/// `PayCrossCore` and is proved on Linux. What is left here is presentation and
-/// one mapping.
-///
-/// The continuation discipline is the one `WebKitThreeDSPresenter` documents
-/// and for the same reason: `PKPaymentAuthorizationController` reports the
-/// authorisation and the dismissal through two separate delegate callbacks, so
-/// an outcome is recorded by the first and delivered by the second. Resuming in
-/// the first would leave a sheet on screen over a finished flow; not resuming
-/// in the second would hang the payment forever if the shopper swipes the sheet
-/// away.
-///
-/// The delivery happens in `didFinish` itself rather than in `dismiss`'s
-/// completion block. That completion is not promised to run when there is
-/// nothing to dismiss -- a controller already gone, a presenting window torn
-/// down -- and this path has no timeout, so waiting on it can leave the form
-/// locked on `isLoading` for the life of the sheet. Dismissal is therefore
-/// asked for and not waited on. Nothing that matters is given up: the next
-/// thing that happens is a network submit, so the merchant's UI has no reason
-/// to wait for Apple's sheet to finish animating away.
-///
-/// `@MainActor`, like that class (`ThreeDSWebViewController.swift:193-194`),
-/// and for a reason the compiler will not catch: `authorize` witnesses a
-/// nonisolated `async` protocol requirement, so without the annotation it hops
-/// off the main actor and presents a UIKit sheet from a cooperative-pool
-/// thread, while PassKit writes the three properties below from the main
-/// queue. A `@MainActor` class is `Sendable` for free and its mutable state is
-/// protected by the actor, which is why there is no `@unchecked Sendable` here.
-/// Adding one would silence the compiler rather than make the race go away.
+// PassKit reports the authorisation and the dismissal through two delegate callbacks, so
+// the continuation is resumed only by the second.
+// Authorize witnesses a nonisolated async requirement; without @MainActor it would present
+// UIKit from a background thread while PassKit writes the state from the main queue.
 @MainActor
 final class PassKitWalletAuthorizer: NSObject, WalletAuthorizing {
 
@@ -44,27 +14,14 @@ final class PassKitWalletAuthorizer: NSObject, WalletAuthorizing {
     private var outcome: WalletAuthorizationOutcome = .cancelled
     private var controller: PKPaymentAuthorizationController?
 
-    /// Whether this device has a card it could pay one of these networks with.
-    ///
-    /// `canMakePayments(usingNetworks:)`, not the bare `canMakePayments()`: the
-    /// bare one answers "this device supports Apple Pay", which is true of a
-    /// phone with an empty Wallet, and a button that opens onto "no cards"
-    /// is worse than no button.
-    ///
-    /// Deliberately `nonisolated`: it reads no state, and the model calls it
-    /// from a property getter.
+    // The bare canMakePayments() is true for a device with an empty Wallet.
+    // Nonisolated, because the model reads it from a property getter.
     nonisolated static func canMakePayments(networks: [ApplePayNetwork]) -> Bool {
         PKPaymentAuthorizationController.canMakePayments(usingNetworks: networks.map(paymentNetwork))
     }
 
     func authorize(_ spec: ApplePayRequestSpec) async -> WalletAuthorizationOutcome {
-        // A second sheet on the same instance would overwrite the first
-        // continuation, and its caller would then wait forever with nothing to
-        // read but a SWIFT TASK CONTINUATION MISUSE line in the log. It would
-        // also drop a controller that is still on screen. The payment sheet's
-        // own `guard !isLoading` serialises this today, but that guard lives in
-        // another file, and a second caller is the kind of thing a plugin
-        // bridge adds without noticing.
+        // A second sheet would overwrite the continuation, and its caller would wait forever.
         guard continuation == nil else {
             return .failed(L(
                 "paycross_error_apple_pay_busy",
@@ -86,19 +43,7 @@ final class PassKitWalletAuthorizer: NSObject, WalletAuthorizing {
         return await awaitDelegateOutcome()
     }
 
-    /// What the SDK says when Apple refuses to open the sheet.
-    ///
-    /// Named, because `present()` answers a bare false and answers it almost
-    /// exclusively for a misconfigured request: an identifier that is not in
-    /// the app's Apple Pay entitlement, an unsupported country or currency, an
-    /// empty network list. The shopper can pay by card either way, so the
-    /// sentence hardly matters to them; the merchant integrating the SDK has
-    /// nothing else to go on, and this identifier is not a secret.
-    ///
-    /// A separate function because the failure it describes cannot be reached
-    /// from a test -- `present()` neither succeeds nor returns on a simulator
-    /// with no entitlement -- and a message that names nothing is exactly the
-    /// regression worth pinning.
+    // present() returns a bare false for a misconfigured request, so this message is the only clue.
     static func presentationFailureMessage(for spec: ApplePayRequestSpec) -> String {
         L(
             "paycross_error_apple_pay_presentation",
@@ -108,13 +53,6 @@ final class PassKitWalletAuthorizer: NSObject, WalletAuthorizing {
         )
     }
 
-    /// Everything the sheet is asked for, as a pure function of the spec.
-    ///
-    /// Separated from `authorize` so it can be asserted without a sheet. It is
-    /// the only place the SDK translates its own vocabulary into Apple's, and a
-    /// silent mistake here -- a dropped capability, a network list that does
-    /// not match what the device check asked about -- produces a sheet that
-    /// refuses to present, for every merchant, with nothing to grep for.
     static func makeRequest(_ spec: ApplePayRequestSpec) -> PKPaymentRequest {
         let request = PKPaymentRequest()
         request.merchantIdentifier = spec.merchantIdentifier
@@ -132,23 +70,8 @@ final class PassKitWalletAuthorizer: NSObject, WalletAuthorizing {
         return request
     }
 
-    /// Installs the continuation the delegate resumes, and does nothing else.
-    ///
-    /// Split out of `authorize` to be reachable from a test. A simulator has no
-    /// Apple Pay entitlement, and `present()` there neither succeeds nor
-    /// returns -- measured at a three-second timeout, twice -- so a test that
-    /// drove `authorize` end to end would hang rather than reach this line,
-    /// leaving the resume discipline, the one thing in this file that can hang
-    /// a payment, executed by nothing but a real device. Anything testing this
-    /// path must bound its own wait.
-    ///
-    /// It repeats `authorize`'s guard rather than trusting it. The guard exists
-    /// to stop a second caller overwriting the first's continuation and leaving
-    /// it waiting forever, and this is the method that installs one, so leaving
-    /// the check upstream would make the seam the one route back to the leak.
-    /// It also closes a window `authorize` alone cannot: two callers can both
-    /// pass the guard there and then suspend on `present()` before either
-    /// arrives here.
+    // Repeats authorize's guard, since two callers can both pass it and suspend on present()
+    // before either arrives here.
     func awaitDelegateOutcome() async -> WalletAuthorizationOutcome {
         guard continuation == nil else {
             return .failed(L(
@@ -162,28 +85,18 @@ final class PassKitWalletAuthorizer: NSObject, WalletAuthorizing {
         }
     }
 
-    /// Whether a caller is waiting on the delegate.
-    ///
-    /// Read-only, and here so a test can tell the continuation is installed
-    /// before driving the delegate. Resuming one that is not there yet would
-    /// hang the test rather than fail it.
     var isAwaitingOutcome: Bool { continuation != nil }
 
     private func resume(_ value: WalletAuthorizationOutcome) {
-        // Cleared before resuming, so a second delegate callback cannot
-        // resume a continuation that is already gone. The same shape as
-        // WebKitThreeDSPresenter.resolve, and for the same reason.
+        // Cleared before resuming, so a second delegate callback cannot resume it again.
         guard let continuation else { return }
         self.continuation = nil
         self.controller = nil
         continuation.resume(returning: value)
     }
 
-    /// `nonisolated` because `canMakePayments` above is, and a `@MainActor`
-    /// class makes its static members `@MainActor` too. Swift 6 rejects passing
-    /// an isolated function as a plain `(ApplePayNetwork) -> PKPaymentNetwork`
-    /// to `map`. The mapping reads no state, so dropping the isolation is
-    /// honest rather than a workaround.
+    // Nonisolated, because Swift 6 rejects passing an isolated function to map as a plain
+    // (ApplePayNetwork) -> PKPaymentNetwork.
     nonisolated private static func paymentNetwork(_ network: ApplePayNetwork) -> PKPaymentNetwork {
         switch network {
         case .visa: .visa
@@ -202,27 +115,8 @@ final class PassKitWalletAuthorizer: NSObject, WalletAuthorizing {
         }
     }
 
-    /// The token, shaped exactly as the web checkout posts it.
-    ///
-    /// `paymentData` at the top level is not a preference: the edge looks for
-    /// `data.paymentData` and falls back to `data.token.paymentData`, and
-    /// anything else is a 400 that names nothing.
-    ///
-    /// `paymentMethod` is read too, and dropping it would be worse than
-    /// untidy. The edge lifts three fields out of it
-    /// (the card handler's wallet edge): `network`
-    /// becomes the card brand the vault seals into the wallet credential and
-    /// the provider forwards to the gateway, `displayName` becomes the masked
-    /// digits, and `type` becomes the funding type the back office shows. Only
-    /// `transactionIdentifier` is carried for fidelity alone.
-    /// Internal rather than private so a test can hand it a token.
-    ///
-    /// `PKPaymentToken` and `PKPaymentMethod` are Objective-C classes whose
-    /// relevant properties are readonly and overridable, so a test-local
-    /// subclass supplies one without a sheet. Worth the visibility: dropping
-    /// `paymentMethod` from what this emits costs the card brand the vault
-    /// seals into the wallet credential, the masked digits and the funding
-    /// type, all at once, and nothing anywhere reports it.
+    // The server reads paymentData from the top level and paymentMethod for the card brand,
+    // the masked digits and the funding type.
     static func tokenJSON(_ token: PKPaymentToken) -> JSONValue? {
         guard let paymentData = try? JSONDecoder().decode(JSONValue.self, from: token.paymentData) else {
             return nil
@@ -262,12 +156,7 @@ extension PassKitWalletAuthorizer: PKPaymentAuthorizationControllerDelegate {
         didAuthorizePayment payment: PKPayment,
         handler completion: @escaping (PKPaymentAuthorizationResult) -> Void
     ) {
-        // Apple wants the result of this sheet, not the result of the payment.
-        // Reporting .success here means "the token is well formed and we have
-        // it"; the payment itself is submitted afterwards and can still
-        // decline, which the card form already knows how to show. Holding the
-        // sheet open until the server answers would put a PassKit spinner in
-        // front of a flow that can take minutes.
+        // Success means the token is well formed; the payment is submitted afterwards and can still decline.
         if let token = Self.tokenJSON(payment.token) {
             outcome = .authorized(token)
             completion(PKPaymentAuthorizationResult(status: .success, errors: nil))
@@ -281,16 +170,9 @@ extension PassKitWalletAuthorizer: PKPaymentAuthorizationControllerDelegate {
     }
 
     func paymentAuthorizationControllerDidFinish(_ controller: PKPaymentAuthorizationController) {
-        // The only place the continuation is resumed. Reached after an
-        // authorisation, after a cancel, and after a dismissal -- which is why
-        // `outcome` defaults to .cancelled at the top of every authorize call.
-        // The dismissal is asked for and not waited on: resuming from its
-        // completion block would make the whole payment conditional on a
-        // callback Apple does not promise to run, with no timeout anywhere on
-        // the path, and the symptom would be a form locked on `isLoading` until
-        // the shopper cancels. It would also put the resume inside an
-        // unisolated `@Sendable` closure, needing an `assumeIsolated` whose
-        // failure mode in a shipped payments SDK is a trap mid-payment.
+        // Resumed only here, after an authorisation, a cancel or a dismissal.
+        // The dismissal is not waited on: its completion is not promised to run, and the form
+        // would stay locked on isLoading.
         controller.dismiss(completion: nil)
         resume(outcome)
     }

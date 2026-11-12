@@ -1,10 +1,6 @@
 import XCTest
 @testable import PayCrossCore
 
-/// The one rule that decides what language the sheet speaks and how it writes an
-/// amount. It is pure and it lives in Core precisely so it is asserted on Linux
-/// on every commit: the bundle lookup it feeds only compiles on a Mac, so this is
-/// the half that can be proved cheaply and often.
 final class LocaleResolutionTests: XCTestCase {
 
     private func language(
@@ -39,11 +35,6 @@ final class LocaleResolutionTests: XCTestCase {
 
     // MARK: - Falling through
 
-    /// A candidate naming a language the SDK does not ship is passed over, not
-    /// treated as the final answer. A merchant asking for German over a French
-    /// session gets the French sheet, because French is a language this shopper
-    /// was already going to be shown and German is one nobody can be. Same rule
-    /// as the hosted checkout page, which matches each candidate separately.
     func testAnUnsupportedOverrideGivesTheSessionItsTurn() {
         XCTAssertEqual(language(override: "de", session: "fr", device: ["en-US"]), "fr")
     }
@@ -56,8 +47,6 @@ final class LocaleResolutionTests: XCTestCase {
         XCTAssertEqual(language(override: "de", device: ["de-DE"]), "en")
     }
 
-    /// An empty string is not an answer. A merchant reading their own config into
-    /// `locale:` should get the session's language, not the default.
     func testABlankOverrideStillLetsTheSessionAndDeviceSpeak() {
         XCTAssertEqual(language(override: "  ", session: "fr"), "fr")
         XCTAssertEqual(language(override: "", device: ["fr-FR"]), "fr")
@@ -90,14 +79,10 @@ final class LocaleResolutionTests: XCTestCase {
         XCTAssertEqual(language(override: "fr-Latn-CA"), "fr")
     }
 
-    /// `Locale.identifier` and server payloads both hand out POSIX-style tags.
     func testAnUnderscoreSeparatorIsAccepted() {
         XCTAssertEqual(language(override: "fr_CA"), "fr")
     }
 
-    /// A merchant reading `Locale.current.identifier` straight into `locale:`
-    /// hands over `fr_FR`. It has to behave as `fr-FR` on both halves at once,
-    /// or the words come out French and the price comes out of the fallback.
     func testAPOSIXStyleTagBehavesAsItsHyphenatedForm() {
         let underscored = LocaleResolution.resolve(override: "fr_FR")
         XCTAssertEqual(underscored, LocaleResolution.resolve(override: "fr-FR"))
@@ -119,9 +104,6 @@ final class LocaleResolutionTests: XCTestCase {
         XCTAssertEqual(language(device: ["de-DE", "fr-FR", "en"]), "fr")
     }
 
-    /// Each candidate is tried exact-then-subtag before the next one is looked
-    /// at. Sweeping the whole list for exact matches first would hand a shopper
-    /// who ranked Canadian French above English the English sheet.
     func testARegionalPreferenceBeatsALaterExactMatch() {
         XCTAssertEqual(language(device: ["fr-CA", "en"]), "fr")
     }
@@ -136,26 +118,18 @@ final class LocaleResolutionTests: XCTestCase {
 
     // MARK: - Formatting is a separate answer, and is not clamped
 
-    /// The device never supplies a formatting tag. Its language list carries no
-    /// region and none of the shopper's format settings, so the caller reaches
-    /// for `Locale.current` instead — which is what the SDK formatted with
-    /// before it spoke a second language.
     func testTheDeviceNeverSuppliesAFormattingTag() {
         let resolved = LocaleResolution.resolve(device: ["de-DE"])
         XCTAssertEqual(resolved.language, "en")
         XCTAssertNil(resolved.formattingTag, "the device's own Locale is better than its tag")
     }
 
-    /// The strings clamp to what the SDK ships; an asked-for tag does not,
-    /// because Foundation formats currency for any locale at all.
     func testAnAskedForTagWeShipNoWordsForStillFormats() {
         let resolved = LocaleResolution.resolve(override: "de-AT")
         XCTAssertEqual(resolved.language, "en")
         XCTAssertEqual(resolved.formattingTag, "de-AT")
     }
 
-    /// The region is kept where the language drops it, which is the whole point:
-    /// Swiss French does not write an amount the way France does.
     func testTheRegionSurvivesIntoTheFormattingTag() {
         let resolved = LocaleResolution.resolve(session: "fr-CH")
         XCTAssertEqual(resolved.language, "fr")
@@ -176,19 +150,12 @@ final class LocaleResolutionTests: XCTestCase {
         XCTAssertNil(formatting())
     }
 
-    /// `fr_CH` and `fr-CH` are the same locale, and Foundation is happier with
-    /// one of them. The case is left alone, because a region subtag is
-    /// conventionally uppercase and this string goes straight into a `Locale`.
     func testTheFormattingTagIsNormalisedButNotLowercased() {
         XCTAssertEqual(formatting(session: " fr_CH "), "fr-CH")
     }
 
     // MARK: - A tag that is not shaped like one never formats an amount
 
-    /// `Locale(identifier:)` accepts anything and quietly formats nonsense with
-    /// root data, so a typo would otherwise do double damage: wrong words *and*
-    /// a wrong price format. A candidate that is not shaped like a language tag
-    /// is passed over for formatting, and the next one supplies it.
     func testAMalformedCandidateDoesNotFormatTheAmount() {
         for typo in [
             "français", "f-r", "f", "frenchy", "fr!", "fr-", "-fr", "fr--CA", "123",
@@ -218,9 +185,6 @@ final class LocaleResolutionTests: XCTestCase {
         XCTAssertNil(formatting(override: "f-r", session: "!!", device: ["fr-FR"]))
     }
 
-    /// The shape of typo this rule is for: a merchant who wrote the language's
-    /// name where its tag belongs. It picks neither the words nor the number
-    /// format, and the device supplies both.
     func testALanguageNameInsteadOfATagPicksNeitherTheWordsNorTheFormat() {
         let resolved = LocaleResolution.resolve(override: "français", session: "de-DE")
         XCTAssertEqual(resolved.language, "en")
@@ -233,29 +197,18 @@ final class LocaleResolutionTests: XCTestCase {
         XCTAssertEqual(resolved.formattingTag, "de-DE")
     }
 
-    /// The words are more forgiving than the amount, on purpose. `fr-` is a typo
-    /// that plainly means French and reads as French; it just does not get to
-    /// decide how a price is written.
     func testAMalformedCandidateCanStillChooseTheLanguage() {
         let resolved = LocaleResolution.resolve(override: "fr-", session: "de-DE")
         XCTAssertEqual(resolved.language, "fr")
         XCTAssertEqual(resolved.formattingTag, "de-DE")
     }
 
-    /// The two clamps are different, and this is the case that shows it. `frr`
-    /// is Northern Frisian: a real language, a well-formed tag, and one the SDK
-    /// ships no strings for. So the words fall through to English while the
-    /// amount is formatted as Frisian, which is exactly the point of leaving
-    /// formatting unclamped — Foundation has number formats for far more
-    /// languages than this SDK has words.
     func testAWellFormedTagWeShipNoStringsForStillFormatsTheAmount() {
         let resolved = LocaleResolution.resolve(override: "frr", device: ["de-DE"])
         XCTAssertEqual(resolved.language, "en", "the SDK ships no Frisian")
         XCTAssertEqual(resolved.formattingTag, "frr")
     }
 
-    /// The seam is a set of languages, not a set of lowercase languages. A
-    /// caller passing `["EN"]` should get English, not silently match nothing.
     func testTheSupportedSetIsMatchedWhateverCaseItIsWrittenIn() {
         XCTAssertEqual(
             LocaleResolution.resolve(override: "EN-gb", supported: ["EN", "FR"]).language, "en"

@@ -6,11 +6,6 @@ import SwiftUI
 import DemoHarnessCore
 import DemoHarnessUI
 
-/// Renders the card form in each of its meaningful states and writes PNGs.
-///
-/// This exists because the author develops on Linux and cannot open a simulator.
-/// CI runs these on a macOS runner and uploads the PNGs as build artifacts, which
-/// is the only way anyone sees this UI before a Mac arrives.
 @MainActor
 final class ScreenshotTests: XCTestCase {
 
@@ -24,12 +19,6 @@ final class ScreenshotTests: XCTestCase {
         return url
     }
 
-    /// Renders through a real `UIHostingController` in a real window.
-    ///
-    /// `ImageRenderer` looks like the obvious tool and produces blank images here:
-    /// it cannot render UIKit-backed views, and `TextField`/`SecureField` are
-    /// exactly that. Hosting in a window and calling `drawHierarchy` renders the
-    /// genuine view hierarchy, text fields included.
     private func capture(
         _ name: String,
         overrideUserInterfaceStyle: UIUserInterfaceStyle = .unspecified,
@@ -37,11 +26,7 @@ final class ScreenshotTests: XCTestCase {
     ) throws {
         let controller = UIHostingController(rootView: content())
         let window = UIWindow(frame: CGRect(origin: .zero, size: Self.size))
-        // On the window, which is where the sheet pins its own appearance, so
-        // the capture exercises the path a merchant's themeMode takes.
         window.overrideUserInterfaceStyle = overrideUserInterfaceStyle
-        // Attach to the live scene when there is one. A SwiftPM test bundle often
-        // has no foreground scene, which is why drawHierarchy alone renders blank.
         if let scene = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene }).first {
             window.windowScene = scene
@@ -53,12 +38,9 @@ final class ScreenshotTests: XCTestCase {
         controller.view.frame = window.bounds
         controller.view.setNeedsLayout()
         controller.view.layoutIfNeeded()
-        // Let SwiftUI commit its layout and UIKit-backed subviews draw their text.
         RunLoop.current.run(until: Date().addingTimeInterval(0.3))
 
         let renderer = UIGraphicsImageRenderer(bounds: window.bounds)
-        // layer.render(in:) walks the layer tree directly and does not require the
-        // window to be attached to a live screen, unlike drawHierarchy.
         var image = renderer.image { context in
             window.layer.render(in: context.cgContext)
         }
@@ -72,16 +54,11 @@ final class ScreenshotTests: XCTestCase {
         let url = outputDirectory.appendingPathComponent("\(name).png")
         try data.write(to: url)
 
-        // Also attach, so the PNG survives in the .xcresult even if the artifact
-        // upload path changes.
         let attachment = XCTAttachment(image: image)
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
 
-        // A blank render is comfortably larger than 1KB, so size proves nothing.
-        // The first version of this harness shipped seven byte-identical blank
-        // PNGs and passed. Assert the image actually has content in it.
         XCTAssertTrue(
             Self.hasVariedContent(image),
             "\(name) rendered as a flat colour - the view hierarchy did not draw"
@@ -89,7 +66,6 @@ final class ScreenshotTests: XCTestCase {
         Self.captured.insert(data.count)
     }
 
-    /// True when the image contains meaningfully more than one colour.
     private static func hasVariedContent(_ image: UIImage) -> Bool {
         guard let cgImage = image.cgImage else { return false }
         let width = min(cgImage.width, 80)
@@ -109,7 +85,6 @@ final class ScreenshotTests: XCTestCase {
         let first = Array(pixels.prefix(4))
         for index in stride(from: 0, to: pixels.count, by: 4) {
             let pixel = Array(pixels[index..<index + 4])
-            // Any pixel differing by more than a rounding wobble means content.
             if zip(pixel, first).contains(where: { abs(Int($0) - Int($1)) > 8 }) {
                 return true
             }
@@ -129,8 +104,6 @@ final class ScreenshotTests: XCTestCase {
         showsApplePayButton: Bool = false,
         allowsCardRemoval: Bool = false
     ) -> some View {
-        // Read out here: the two wrappers take escaping closures, which are not
-        // on the main actor, and this is what the sheet hands the form anyway.
         let language = SheetLanguage.tag
         return StatefulPreviewWrapper([String: [String: String]]()) { values in
         StatefulPreviewWrapper(state) { binding in
@@ -207,8 +180,6 @@ final class ScreenshotTests: XCTestCase {
         try capture("07-new-card-with-saved") { form(state) }
     }
 
-    /// The same picker under a session that allowed removal: every stored row
-    /// gains a trash button, and the "Use a new card" row does not.
     func testSavedCardsWithRemovalAllowed() throws {
         let state = CardFormState(savedCards: Self.savedCards)
         try capture("14-saved-card-removable") { form(state, allowsCardRemoval: true) }
@@ -216,14 +187,6 @@ final class ScreenshotTests: XCTestCase {
 
     // MARK: - French
 
-    /// The form in the other language the SDK ships, rendered the way the sheet
-    /// renders it: the resolved `.lproj` installed, and the amount formatted in
-    /// the same language so it reads `Payer 25,99 €` rather than `Payer €25.99`.
-    ///
-    /// Worth a picture and not only an assertion. French runs about a third
-    /// longer than English here, and `Enregistrer la carte pour une utilisation
-    /// future` is 48 characters against a checkbox on a 390pt sheet — the one row
-    /// most likely to wrap into the field below it.
     func testFrenchForm() throws {
         SheetLanguage.install(LocaleResolution.resolve(override: "fr"))
         defer { SheetLanguage.reset() }
@@ -240,9 +203,6 @@ final class ScreenshotTests: XCTestCase {
         }
     }
 
-    /// The French sheet on its worst screen: the decline banner and a failed
-    /// server-driven field, both of them sentences that used to be English
-    /// literals inside `PayCrossCore` and now arrive through `FlowMessages`.
     func testFrenchFormAfterADecline() throws {
         SheetLanguage.install(LocaleResolution.resolve(override: "fr"))
         defer { SheetLanguage.reset() }
@@ -278,9 +238,6 @@ final class ScreenshotTests: XCTestCase {
 
     // MARK: - The confirmations
 
-    /// Both questions the sheet asks, drawn by the SDK rather than raised as
-    /// system alerts so their buttons can carry identifiers. New surfaces, so
-    /// they get looked at.
     func testCancelConfirmation() throws {
         let model = sheetModel()
         model.isConfirmingCancel = true
@@ -293,7 +250,6 @@ final class ScreenshotTests: XCTestCase {
         try capture("26-remove-confirmation") { PaymentSheetView(model: model) }
     }
 
-    /// The same question at the ceiling, where its two buttons stack.
     func testCancelConfirmationAtTheAccessibilityCeiling() throws {
         let model = sheetModel()
         model.isConfirmingCancel = true
@@ -302,12 +258,6 @@ final class ScreenshotTests: XCTestCase {
         }
     }
 
-    /// The worst case the card has to hold: the longest French message, at the
-    /// ceiling, in a dialog with no scroll view of its own.
-    ///
-    /// The language arrives through the configuration rather than through
-    /// `SheetLanguage.install`, because the sheet installs its own on `load()`
-    /// and would put English back over anything set here first.
     func testFrenchRemoveConfirmationAtTheAccessibilityCeiling() throws {
         defer { SheetLanguage.reset() }
 
@@ -318,8 +268,6 @@ final class ScreenshotTests: XCTestCase {
         }
     }
 
-    /// And the longest French buttons: `Continuer le paiement` above
-    /// `Oui, annuler`, which is why the two answers stack at every size.
     func testFrenchCancelConfirmationAtTheAccessibilityCeiling() throws {
         defer { SheetLanguage.reset() }
 
@@ -346,14 +294,6 @@ final class ScreenshotTests: XCTestCase {
 
     // MARK: - The accessibility ceiling
 
-    /// The sheet at the largest size it will render, which is the one the
-    /// clamp produces when the shopper asks for the largest size iOS offers.
-    ///
-    /// `.accessibility5` is passed on purpose rather than `.accessibility3`:
-    /// the picture is only worth looking at if it proves the clamp held. What
-    /// to look for is the expiry above the CVV rather than beside it, a Pay
-    /// button that has grown with its label instead of clipping it, and every
-    /// field box still wider than the digits in it.
     func testFormAtTheAccessibilityCeiling() throws {
         var state = CardFormState()
         CardFormReducer.reduce(state: &state, event: .nameChanged("A Person"))
@@ -367,10 +307,6 @@ final class ScreenshotTests: XCTestCase {
         }
     }
 
-    /// The same, in the language whose words are a third longer. This is where
-    /// a layout that merely survives English gives up: `Enregistrer la carte
-    /// pour une utilisation future` at an accessibility size, above a Pay
-    /// button reading `Payer 25,99 €`.
     func testFrenchFormAtTheAccessibilityCeiling() throws {
         SheetLanguage.install(LocaleResolution.resolve(override: "fr"))
         defer { SheetLanguage.reset() }
@@ -397,8 +333,6 @@ final class ScreenshotTests: XCTestCase {
         SavedCard(id: "b", brand: .mastercard, last4: "4444", expiryLabel: "01/29")
     ]
 
-    /// A checkout the server has decorated with extra fields, one of them
-    /// conditional and one showing a validation failure.
     func testFormWithServerDrivenFields() throws {
         var state = CardFormState()
         CardFormReducer.reduce(state: &state, event: .nameChanged("A Person"))
@@ -429,10 +363,6 @@ final class ScreenshotTests: XCTestCase {
         }
     }
 
-    /// The wallet branch as the shopper meets it: Apple's own button above the
-    /// card fields, with the separator that keeps the two from reading as one
-    /// control. Every capture above it passes the parameter's default of false,
-    /// so none of them changes.
     func testFormWithApplePayButton() throws {
         try capture("09-apple-pay") {
             form(CardFormState(), showsApplePayButton: true)
@@ -441,10 +371,6 @@ final class ScreenshotTests: XCTestCase {
 
     // MARK: - Branded
 
-    /// A merchant's own colours in both appearances, so the role substitutions
-    /// are looked at rather than only compiled. The brand is deliberately a
-    /// light amber: white on it is the contrast defect this train fixed, and
-    /// the Pay button's label should be black in both captures.
     private static let branded = AppearanceStyle(
         resolved: AppearanceResolver.resolve(appearance: brandedAppearance)
     )
@@ -510,12 +436,6 @@ final class ScreenshotTests: XCTestCase {
         }
     }
 
-    /// The whole sheet rather than the card form alone.
-    ///
-    /// The navigation bar, its ground and the toolbar are the part a merchant
-    /// surface has to reach as well: a themed form framed by a system-coloured
-    /// bar reads as a rendering fault rather than as a theme, and the card-form
-    /// captures above cannot show it because they render no bar.
     private func brandedSheet() -> PaymentSheetView {
         PaymentSheetView(model: PaymentSheetModel(
             sessionToken: "header.payload.signature",
@@ -638,7 +558,6 @@ final class ScreenshotTests: XCTestCase {
     }
 }
 
-/// Gives a `@Binding` to a value in a context that has no `@State`.
 private struct StatefulPreviewWrapper<Value, Content: View>: View {
     @State private var value: Value
     private let content: (Binding<Value>) -> Content

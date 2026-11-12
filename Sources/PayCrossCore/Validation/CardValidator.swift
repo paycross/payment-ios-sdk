@@ -1,11 +1,5 @@
 import Foundation
 
-/// Client-side card field validation.
-///
-/// Mirrors `CardValidator` in the Android SDK. Every function here is pure, so the
-/// whole type is asserted on Linux — the expiry check takes its "now" as a
-/// parameter rather than reading the system clock, which is the only deviation
-/// from the Kotlin and exists so the year-boundary cases are testable.
 package enum CardValidator {
 
     package static func isValidPAN(_ pan: String) -> Bool {
@@ -15,11 +9,6 @@ package enum CardValidator {
         return luhnCheck(cleaned)
     }
 
-    /// - Parameters:
-    ///   - month: 1-12, with or without a leading zero.
-    ///   - year: two or four digits. Two-digit years resolve to 2000+year.
-    ///   - now: the reference date. Defaults to the current date.
-    ///   - calendar: defaults to the current calendar.
     package static func isValidExpiry(
         month: String,
         year: String,

@@ -5,28 +5,13 @@ import SwiftUI
 @testable import PayCross
 @testable import PayCrossCore
 
-/// A decline the shopper cannot see is a decline that did not happen.
-///
-/// The banner was the last thing in the scrolling column, below the fields, the
-/// field groups and the save toggle, and under the pinned footer. On a form with
-/// server-driven field groups it landed off the bottom of the screen: the shopper
-/// got a form that looked unchanged, a Pay button that had gone disabled because
-/// the CVV was cleared, and no reason for either.
-///
-/// Asserted by rendering, because that is the only thing that answers the actual
-/// question. Nothing in the accessibility tree or the view hierarchy distinguishes
-/// "in the layout" from "on the screen", and the banner was always the former.
 @MainActor
 final class DeclineBannerTests: XCTestCase {
 
-    private static let size = CGSize(width: 390, height: 844) // iPhone 17 portrait
+    private static let size = CGSize(width: 390, height: 844)
 
-    /// Held for the duration of the test; a released window takes the hierarchy
-    /// under test with it.
     private var windows: [UIWindow] = []
 
-    /// Enough server-driven fields to push the column past one screen, which is
-    /// the condition the bug was found under.
     private func fieldGroups(_ count: Int) -> [FieldGroup] {
         (0..<count).map { index in
             FieldGroup(
@@ -64,7 +49,6 @@ final class DeclineBannerTests: XCTestCase {
         controller.view.frame = window.bounds
         controller.view.setNeedsLayout()
         controller.view.layoutIfNeeded()
-        // Let SwiftUI commit its layout before the layer tree is read.
         RunLoop.current.run(until: Date().addingTimeInterval(0.4))
         windows.append(window)
 
@@ -73,8 +57,6 @@ final class DeclineBannerTests: XCTestCase {
         }
     }
 
-    /// The regression itself. With eight field groups the banner used to change
-    /// nothing at all on screen — exactly zero pixels.
     func testADeclineIsVisibleOnAFormTallerThanTheScreen() throws {
         let plain = render(declineMessage: nil, fieldGroupCount: 8)
         let declined = render(

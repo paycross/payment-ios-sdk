@@ -17,14 +17,11 @@ final class CardBrandTests: XCTestCase {
         XCTAssertEqual(CardBrand.detect("4111 1111 1111 1111"), .visa)
     }
 
-    /// Android's mastercard pattern is `^(5[1-5]|2[2-7])`, so 56 and 21 are not it.
     func testPrefixBoundariesMatchTheKotlinRegexes() {
         XCTAssertEqual(CardBrand.detect("5611111111111111"), .unknown)
         XCTAssertEqual(CardBrand.detect("2111111111111111"), .unknown)
         XCTAssertEqual(CardBrand.detect("2811111111111111"), .unknown)
-        // Amex is 34/37 only; 35 is not.
         XCTAssertEqual(CardBrand.detect("351111111111111"), .unknown)
-        // Discover is 6011 or 65; 6012 and 66 are not.
         XCTAssertEqual(CardBrand.detect("6012111111111111"), .unknown)
         XCTAssertEqual(CardBrand.detect("6611111111111111"), .unknown)
     }
@@ -55,8 +52,8 @@ final class CardValidatorTests: XCTestCase {
     }
 
     func testRejectsOutOfRangeLengths() {
-        XCTAssertFalse(CardValidator.isValidPAN("411111111111"))        // 12
-        XCTAssertFalse(CardValidator.isValidPAN("41111111111111111111")) // 20
+        XCTAssertFalse(CardValidator.isValidPAN("411111111111"))
+        XCTAssertFalse(CardValidator.isValidPAN("41111111111111111111"))
     }
 
     func testRejectsNonDigits() {

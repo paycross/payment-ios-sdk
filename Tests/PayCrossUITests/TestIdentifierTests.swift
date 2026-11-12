@@ -4,35 +4,6 @@ import SwiftUI
 @testable import PayCross
 @testable import PayCrossCore
 
-/// The identifier contract: the strings themselves, and the ones a hosted tree
-/// can be made to admit to.
-///
-/// **What this cannot reach.** SwiftUI builds its accessibility elements only
-/// when the test bundle runs inside an app host. `PayCrossUITests` is a SwiftPM
-/// test target, which `xctest` loads with no host, so a `Text` or a `Button`
-/// carrying `.accessibilityIdentifier` appears nowhere in the hosted hierarchy.
-/// Measured again on 2026-09-07, while fixing the containers below, because the
-/// fix would have been worth a rendered-tree test: on a hosted `PaymentSheetView`
-/// the whole window carries exactly three identifiers, the three `UITextField`s
-/// that set their own, and `accessibilityElements` answers with plain subviews
-/// rather than SwiftUI nodes. `UIApplication.shared.connectedScenes` is empty and
-/// `_AXSApplicationAccessibilityEnabled()` already answers true, so neither a
-/// scene nor the accessibility switch is what is missing. And SwiftUI does not
-/// write an inherited identifier down onto a `UIViewRepresentable`'s `UIView`
-/// either — a representable leaf under an identified container reports nil — so
-/// there is no UIKit-level shadow of the propagation to read.
-///
-/// The UIKit-backed leaves are a different matter, because their identifier is
-/// set on a `UIView` that exists whether anything is reading the accessibility
-/// tree or not, and those are asserted below on a real render. For everything
-/// SwiftUI draws, what can be asserted here is the composed *type* of the view,
-/// which is what the compiler hands SwiftUI to build the tree from.
-///
-/// The rest is held by three other things: the Invariants job greps that every
-/// case in `PayCrossTestIdentifiers` is applied somewhere in `Sources/PayCross`
-/// and that no 0.6.0 flat name survives; the campaign's E2E driver addresses the
-/// sheet by these strings through WebDriverAgent, which is a real accessibility
-/// client in a real app; and the screenshots show the rendered result.
 @MainActor
 final class TestIdentifierTests: XCTestCase {
 
@@ -67,9 +38,6 @@ final class TestIdentifierTests: XCTestCase {
         XCTAssertEqual(Set(raw).count, raw.count)
     }
 
-    /// The composed ones are Android's strings character for character.
-    /// `SavedCard.id` is filled from the wire's `uuid`, which is the field
-    /// Android tags its rows with, so one string addresses one card on both.
     func testTheComposedIdentifiersMatchTheAndroidStrings() {
         let uuid = "6f1c9c3e-0d5a-4a3f-9c2b-4d0e1f2a3b4c"
         XCTAssertEqual(
@@ -88,18 +56,6 @@ final class TestIdentifierTests: XCTestCase {
         )
     }
 
-    /// The pin on the one rule these strings cannot express.
-    ///
-    /// The dot is the separator and nothing escapes it, so a dotted component
-    /// collides with the pair beside it. Both halves are our own wire keys —
-    /// snake_case names the server sends in `field_groups` — where a dot has
-    /// never been valid, and Android joins the same way, so an escaping rule
-    /// would have to be invented on both platforms and kept identical for one
-    /// identifier to keep naming one field.
-    ///
-    /// This asserts the collision rather than a fix for it. Anyone who starts
-    /// allowing a dot in a group key or a field name lands here, and can go and
-    /// change Android in the same breath.
     func testADottedComponentCollides() {
         XCTAssertEqual(
             PayCrossTestIdentifiers.field(group: "a.b", name: "c"),
@@ -108,8 +64,6 @@ final class TestIdentifierTests: XCTestCase {
         )
     }
 
-    /// The row identifier is built from the card's own id and nothing else, so
-    /// a session that lists two cards produces two distinct handles.
     func testEachStoredCardGetsAHandleOfItsOwn() {
         let first = SavedCard(id: "a", brand: .visa, last4: "0366", expiryLabel: "03/29")
         let second = SavedCard(id: "b", brand: .visa, last4: "0366", expiryLabel: "03/29")
@@ -122,22 +76,6 @@ final class TestIdentifierTests: XCTestCase {
 
     // MARK: - Containers that keep their children
 
-    /// `payCrossContainerIdentifier` establishes the element boundary *before*
-    /// it names it.
-    ///
-    /// Order is the whole fix. A plain identifier on a container is inherited by
-    /// every descendant not already inside an element of its own, and the
-    /// container's string wins: 0.7.0 published `paycross.sheet` on the Pay
-    /// button and `paycross.savedCards` on all three picker rows, so the
-    /// README's own example found nothing. `children: .contain` applied first
-    /// makes the container an element, and the identifier lands on it alone.
-    /// Applied second it would name the boundary and leave the propagation
-    /// where it was.
-    ///
-    /// The composed type is the assertion because the rendered tree is not
-    /// readable here; see the note at the top of this file. `SwiftUI` names
-    /// these two modifiers, so a release that renames either fails this test
-    /// rather than the sheet — measure it again and rewrite this.
     func testAContainerIdentifierEstablishesItsBoundaryFirst() throws {
         let composed = String(describing: type(of:
             Color.clear.payCrossContainerIdentifier(.savedCards)
@@ -156,7 +94,6 @@ final class TestIdentifierTests: XCTestCase {
         )
     }
 
-    /// The picker, which published `paycross.savedCards` on every row.
     func testTheStoredCardPickerIsAContainer() {
         let picker = SavedCardPicker(
             cards: [Self.storedCard],
@@ -173,8 +110,6 @@ final class TestIdentifierTests: XCTestCase {
         )
     }
 
-    /// The sheet's own content, which published `paycross.sheet` on the Pay
-    /// button and on the initial spinner.
     func testTheSheetsContentIsAContainer() {
         let view = PaymentSheetView(model: makeModel(isPreparing: false))
         XCTAssertTrue(
@@ -186,8 +121,6 @@ final class TestIdentifierTests: XCTestCase {
 
     // MARK: - The rendered tree
 
-    /// The four UIKit-backed controls, on a real render: three card fields and
-    /// Apple's own button.
     func testTheUIKitBackedControlsPublishTheirIdentifiers() throws {
         let window = hostForm(showsApplePayButton: true)
         let found = identifiers(in: window)
@@ -200,8 +133,6 @@ final class TestIdentifierTests: XCTestCase {
         }
     }
 
-    /// The 0.6.0 names are gone from the same render rather than merely joined
-    /// by the new ones.
     func testTheFlatNamesTheseReplacedAreGone() throws {
         let window = hostForm(showsApplePayButton: true)
         let found = identifiers(in: window)
@@ -211,17 +142,6 @@ final class TestIdentifierTests: XCTestCase {
         }
     }
 
-    /// Neither confirmation may be a system alert.
-    ///
-    /// This is the measurement `ConfirmationDialog` exists for. With the cancel
-    /// confirmation open through `.alert`, the presented `UIAlertController`
-    /// answered `accessibilityIdentifier` with nil on both of its actions and
-    /// carried none anywhere in its view tree, so the four button identifiers
-    /// the README promises could not be reached by name. Drawn in the sheet
-    /// they are ordinary SwiftUI identifiers, like the Pay button's.
-    ///
-    /// Nothing presented over the sheet is what that comes down to, and it is
-    /// the one half of it a unit test can hold.
     func testAConfirmationIsDrawnInTheSheetRatherThanPresentedOverIt() throws {
         let model = makeModel(isPreparing: false)
         let window = host(PaymentSheetView(model: model))
@@ -245,8 +165,6 @@ final class TestIdentifierTests: XCTestCase {
         XCTAssertNil(window.rootViewController?.presentedViewController)
     }
 
-    /// The Done control above the keypad, which lives on a `UIBarButtonItem`
-    /// rather than in the view tree.
     func testTheKeypadAccessoryPublishesItsIdentifier() throws {
         let window = hostForm()
         let field = try XCTUnwrap(

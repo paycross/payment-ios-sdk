@@ -1,11 +1,7 @@
 import XCTest
 @testable import PayCrossCore
 
-/// Core cannot look a string up — `L(...)` is iOS-only — so the sheet hands it
-/// these. The defaults are what the SDK said before it spoke a second language,
-/// which is why every other Core test still asserts English prose.
 final class FlowMessagesTests: XCTestCase {
-
     func testTheDefaultsAreTheEnglishTheSDKAlreadyShipped() {
         let messages = FlowMessages.english
         XCTAssertEqual(messages.paymentFailed, "Payment failed. Please try again.")
@@ -20,8 +16,6 @@ final class FlowMessagesTests: XCTestCase {
         XCTAssertEqual(FlowMessages.english.invalidMessage(for: "Postcode"), "Postcode is invalid")
     }
 
-    /// French puts the label last. The template decides where it goes, so a
-    /// translation is not stuck with English word order.
     func testATemplateDecidesWhereTheLabelGoes() {
         let french = FlowMessages(
             fieldRequired: "Champ obligatoire : %@",
@@ -31,8 +25,6 @@ final class FlowMessagesTests: XCTestCase {
         XCTAssertEqual(french.invalidMessage(for: "Code postal"), "Champ non valide : Code postal")
     }
 
-    /// A merchant override of these keys is a string somebody typed, so both of
-    /// the ways they can get it wrong have to be survivable rather than fatal.
     func testATemplateWithNoPlaceholderIsUsedAsItStands() {
         let messages = FlowMessages(fieldRequired: "Champ obligatoire")
         XCTAssertEqual(messages.requiredMessage(for: "Code postal"), "Champ obligatoire")

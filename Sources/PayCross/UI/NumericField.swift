@@ -2,25 +2,12 @@
 import SwiftUI
 import UIKit
 
-/// A numeric entry field that carries a Done button above the keypad.
-///
-/// `UIKeyboardType.numberPad` has no Return key and iOS attaches no accessory of
-/// its own, so a SwiftUI `TextField`/`SecureField` on that keyboard offers the
-/// shopper nothing that puts the pad away. The only place to hang a control is
-/// `inputAccessoryView`, which SwiftUI does not expose, so these three fields are
-/// UIKit ones. The alphabetic cardholder-name field keeps its Return key and stays
-/// a SwiftUI `TextField`.
-///
-/// Holds no validation: text goes out through the binding to `CardFormReducer`,
-/// exactly as the SwiftUI fields did.
+// A number pad has no Return key, and inputAccessoryView is the only place for a Done bar, which SwiftUI does not expose.
 struct NumericField: UIViewRepresentable {
     @Environment(\.payCrossAppearance) private var style
     let placeholder: String
     @Binding var text: String
-    /// What the field is called out loud, which is the heading drawn above it.
-    /// Without it `UITextField` falls back to its placeholder, so the card
-    /// number announces its own example digits and the security code announces
-    /// three bullets.
+    // Without a label UITextField announces its placeholder, so the card number would read its example digits.
     let accessibleName: String
     var isSecure = false
     var contentType: UITextContentType?
@@ -31,13 +18,7 @@ struct NumericField: UIViewRepresentable {
         field.keyboardType = .numberPad
         field.isSecureTextEntry = isSecure
         field.textContentType = contentType
-        // Off, deliberately. UIKit's own re-scaling reads the device's setting
-        // and knows nothing about the sheet's clamp, so it would walk the card
-        // fields past a ceiling every other label on the screen respects.
-        // `applyStyle` resolves the size against the clamped traits instead, and
-        // runs again on every render — the appearance carries the shopper's step
-        // and compares unequal when it changes, so a setting changed mid-payment
-        // still lands.
+        // UIKit's own re-scaling ignores the sheet's size clamp, so applyStyle scales the font through UIFontMetrics instead.
         field.adjustsFontForContentSizeCategory = false
         applyStyle(to: field)
         field.accessibilityIdentifier = identifier
@@ -49,8 +30,7 @@ struct NumericField: UIViewRepresentable {
             action: #selector(Coordinator.editingChanged(_:)),
             for: .editingChanged
         )
-        // A bare UITextField in an HStack collapses to its text; these make it
-        // take the space the old SwiftUI field took.
+        // A bare UITextField in an HStack collapses to its text, so it needs the priorities below.
         field.setContentHuggingPriority(.defaultLow, for: .horizontal)
         field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         context.coordinator.field = field
@@ -59,12 +39,8 @@ struct NumericField: UIViewRepresentable {
     }
 
     func updateUIView(_ field: UITextField, context: Context) {
-        // The binding is captured per render, so the coordinator has to be handed
-        // the current one or edits write into a stale view's state.
         context.coordinator.text = $text
-        // Re-applied on every render for the same reason the style is: the
-        // heading is looked up in the sheet's language, which is installed
-        // twice per payment.
+        // The heading is localized per sheet install, so the label is set on every render.
         field.accessibilityLabel = accessibleName
         applyStyle(to: field)
         if field.text != text {
@@ -72,14 +48,7 @@ struct NumericField: UIViewRepresentable {
         }
     }
 
-    /// The appearance reaches these three fields here rather than through a
-    /// SwiftUI modifier: `.font` and `.foregroundStyle` do not cross into the
-    /// `UIView` a representable wraps, so the card number would keep the system
-    /// colour on a merchant's dark surface and ignore the size factor.
-    ///
-    /// `UIFontMetrics` still does the Dynamic Type scaling; the merchant's
-    /// factor multiplies the point size it is given, and the traits it scales
-    /// against are the sheet's clamped ones rather than the device's.
+    // SwiftUI's .font and .foregroundStyle do not reach the UIView a representable wraps.
     private func applyStyle(to field: UITextField) {
         field.font = UIFontMetrics(forTextStyle: .body).scaledFont(
             for: .monospacedDigitSystemFont(
@@ -103,11 +72,9 @@ struct NumericField: UIViewRepresentable {
     @MainActor
     final class Coordinator: NSObject, UITextFieldDelegate {
         var text: Binding<String>
-        /// Weak: the field owns the accessory, which owns this.
+        // Weak, since the field owns the accessory bar, which owns this coordinator.
         weak var field: UITextField?
 
-        /// Built once and shared by the field it is attached to. The identifier is
-        /// on the button so the E2E runner that found this bug can press it.
         lazy var doneBar: UIToolbar = {
             let bar = UIToolbar(frame: CGRect(x: 0, y: 0, width: 0, height: 44))
             let done = UIBarButtonItem(
@@ -130,19 +97,12 @@ struct NumericField: UIViewRepresentable {
             text.wrappedValue = field.text ?? ""
         }
 
-        /// Resigns the field this bar belongs to.
         @objc func dismissKeypad() {
             field?.resignFirstResponder()
         }
 
-        /// A secure `UITextField` replaces its whole contents on the first edit
-        /// after it regains focus — measured, not assumed: typing "1", leaving the
-        /// field, returning and typing "2" leaves "2". A shopper who taps back to
-        /// check their expiry would silently lose the digits already entered.
-        ///
-        /// Rewriting the text here spends that first edit, so the shopper's next
-        /// keystroke appends. The obvious place for this, the delegate's
-        /// `shouldChangeCharactersIn`, is not reached by every input path.
+        // A secure UITextField replaces its whole text on the first edit after it regains focus.
+        // Rewriting the text here spends that edit, since shouldChangeCharactersIn is not reached by every input path.
         func textFieldDidBeginEditing(_ field: UITextField) {
             guard field.isSecureTextEntry, let existing = field.text, !existing.isEmpty else {
                 return
@@ -153,17 +113,10 @@ struct NumericField: UIViewRepresentable {
     }
 }
 
-/// Puts away the keypad the sheet raised.
-///
-/// The tap-anywhere gesture holds no reference to any field, so it comes through
-/// here. Scoped to the SDK's own fields on purpose: the one-line idioms for this
-/// — `endEditing` on every window, or `sendAction` to a nil target — reach into
-/// the host app's view hierarchy, which is not this SDK's to close.
+// Scoped to the SDK's own fields, since endEditing or sendAction to a nil target would reach the host app's views.
 @MainActor
 enum KeypadDismissal {
-    /// The fields the sheet has built. Weak boxes, holding references to the
-    /// fields and never to anything typed into them; a dismissed sheet's entries
-    /// go nil and are dropped on the next call.
+    // Weak, so the registry never keeps a dismissed sheet's fields alive.
     private struct Box { weak var field: UITextField? }
     private static var boxes: [Box] = []
 
@@ -172,7 +125,6 @@ enum KeypadDismissal {
         boxes.append(Box(field: field))
     }
 
-    /// True when there was a keypad to put away.
     @discardableResult
     static func resignFirstResponder() -> Bool {
         boxes.removeAll { $0.field == nil }

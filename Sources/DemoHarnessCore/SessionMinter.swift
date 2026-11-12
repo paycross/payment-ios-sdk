@@ -4,22 +4,15 @@ import Foundation
 import FoundationNetworking
 #endif
 
-/// A session the harness created.
 public struct MintedSession: Sendable, Equatable {
     public let sessionID: String
     public let sessionToken: String
     public let checkoutURL: String
     public let sessionURL: String
-    /// Exactly what was posted, kept so a run can be reproduced.
     public let sentBody: String
 }
 
-/// Mints checkout sessions the way a merchant backend would.
-///
-/// This is the merchant's half of the integration, deliberately living in the
-/// harness rather than the SDK: an SDK that could mint its own sessions would
-/// need the client secret on the device, which is exactly what the session-token
-/// design exists to avoid.
+// Demo only: the client secret must never ship in a merchant app. Mint sessions on your server.
 public struct SessionMinter: Sendable {
     public typealias Transport = @Sendable (URLRequest) async throws -> (Data, HTTPURLResponse)
 
@@ -29,7 +22,6 @@ public struct SessionMinter: Sendable {
         self.send = send
     }
 
-    /// Client-credentials token, then a session.
     public func mint(
         merchant: Merchant,
         requestBody: String,
@@ -39,13 +31,6 @@ public struct SessionMinter: Sendable {
     ) async throws -> MintedSession {
         let token = try await accessToken(for: merchant)
 
-        // Substitute FIRST, then rewrite the URLs. Order matters: a {{uuid}}
-        // inside return_url would otherwise be substituted and then overwritten.
-        // Kotlin does the same at SessionMinter.kt:43.
-        //
-        // This call is the fix for a defect where BodyTemplate.substitute had no
-        // production caller at all, so every seed body posted the literal string
-        // "IOS-{{timestamp}}" as its merchant reference.
         let substituted = BodyTemplate.substitute(
             requestBody, timestamp: timestamp, uuid: uuid
         )
@@ -120,8 +105,6 @@ public struct SessionMinter: Sendable {
         guard let sessionToken = object["session_token"] as? String else {
             throw HarnessError.missingField("session_token")
         }
-        // A browser or QR run opens this URL. Defaulting it to "" made such a run
-        // silently open nothing and then hang until the poll timeout.
         guard let checkoutURL = (object["checkout_url"] as? String),
               !checkoutURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw HarnessError.missingField("checkout_url")
@@ -140,19 +123,13 @@ public struct SessionMinter: Sendable {
         )
     }
 
-    /// `Authorization: Basic base64(clientId:clientSecret)`.
     func basicCredential(_ merchant: Merchant) -> String {
         Data("\(merchant.clientID):\(merchant.clientSecret)".utf8).base64EncodedString()
     }
 }
 
-/// Generates a runnable `curl` that reproduces a mint.
-///
-/// The credentials are read from the environment rather than interpolated, so a
-/// copied command cannot leak a client secret into a chat window or a shell
-/// history file.
+// The secret is read from the environment, so a copied command cannot leak it into a chat window or shell history.
 public enum CurlBuilder {
-
     public static func mintCommand(merchant: Merchant, body: String) -> String {
         """
         # Set these first; they are deliberately not written into the command.

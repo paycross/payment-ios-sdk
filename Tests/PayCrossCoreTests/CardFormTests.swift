@@ -3,10 +3,6 @@ import XCTest
 
 final class CardFormTests: XCTestCase {
 
-    /// The picker row, the trash's VoiceOver label and the delete confirmation
-    /// all name the same card, so they compose that name in one place. Two
-    /// compositions is an alert that says `Visa •••• 1111` over a row reading
-    /// something else.
     func testASavedCardNamesItselfTheSameWayEverywhere() {
         let card = SavedCard(id: "a", brand: .visa, last4: "1111", expiryLabel: "12/30")
         XCTAssertEqual(card.rowTitle, "Visa •••• 1111")
@@ -57,8 +53,6 @@ final class CardFormTests: XCTestCase {
         XCTAssertEqual(state.cardholderName, "A PERSON")
     }
 
-    /// Typing an Amex 4-digit CVV then changing to a Visa PAN must not leave an
-    /// over-length CVV behind.
     func testCVVIsTrimmedWhenTheBrandChanges() {
         var state = CardFormState()
         CardFormReducer.reduce(state: &state, event: .panChanged("378282246310005"))
@@ -134,7 +128,6 @@ final class CardFormTests: XCTestCase {
         XCTAssertNil(card.savedUUID)
     }
 
-    /// Android sends `save` as null rather than false when unticked.
     func testSaveIsOmittedRatherThanFalse() throws {
         var state = CardFormState()
         fill(&state)
@@ -169,9 +162,6 @@ final class CardFormTests: XCTestCase {
         XCTAssertNil(card.save)
     }
 
-    /// A saved Amex is the only card whose CID is four digits, and the saved card
-    /// carries its own brand, so nothing has to be re-detected from a PAN we no
-    /// longer hold.
     func testSavedAmexCardTakesAFourDigitCVV() {
         var state = CardFormState()
         CardFormReducer.reduce(
@@ -224,8 +214,6 @@ final class CardFormTests: XCTestCase {
         XCTAssertEqual(state.savedCards.map(\.id), ["uuid-2"])
     }
 
-    /// The selection cannot survive the card it points at. Leaving it would
-    /// submit a token the server has just disabled.
     func testRemovingTheSelectedCardFallsBackToNewCardAndClearsTheCVV() {
         var state = CardFormState(savedCards: twoSavedCards)
         CardFormReducer.reduce(state: &state, event: .sourceSelected(.saved(savedCard)))
@@ -250,8 +238,6 @@ final class CardFormTests: XCTestCase {
         XCTAssertEqual(state.savedCards.map(\.id), ["uuid-1"])
     }
 
-    /// The removal is confirmed by a server that answers 204 whether or not the
-    /// card was still there, so the same uuid can arrive twice.
     func testRemovingACardThatIsAlreadyGoneChangesNothing() {
         var state = CardFormState(savedCards: twoSavedCards)
         CardFormReducer.reduce(state: &state, event: .savedCardRemoved(uuid: "uuid-1"))
@@ -261,8 +247,6 @@ final class CardFormTests: XCTestCase {
         XCTAssertEqual(state, after)
     }
 
-    /// A saved card is submittable on a CVV alone, so preselecting one puts a
-    /// form one field short of a charge in front of the shopper -- not one tap.
     func testAPreselectedCardStillCannotPayWithoutItsCVV() {
         var state = CardFormState(savedCards: twoSavedCards)
         CardFormReducer.reduce(state: &state, event: .sourceSelected(.saved(savedCard)))
@@ -273,8 +257,6 @@ final class CardFormTests: XCTestCase {
 
     // MARK: - PCI
 
-    /// PCI DSS 3.3.1 forbids retaining sensitive authentication data after
-    /// authorization. The CVV must not survive the submit.
     func testCVVIsClearedOnSubmit() {
         var state = CardFormState()
         fill(&state)
@@ -293,10 +275,6 @@ final class CardFormTests: XCTestCase {
         XCTAssertEqual(state.inlineError, "Card declined")
     }
 
-    /// A wallet decline is not an authorization of the card on the form. The
-    /// shopper typed a CVV, tried Apple Pay instead, and it failed; nothing they
-    /// typed left the device, so there is nothing PCI requires be discarded and no
-    /// reason to make them type it again.
     func testAWalletDeclineKeepsTheCVV() {
         var state = CardFormState()
         fill(&state)
@@ -307,7 +285,6 @@ final class CardFormTests: XCTestCase {
         XCTAssertEqual(state.panDigits, "4111111111111111")
     }
 
-    /// The card path is unchanged: there the CVV really was handed off.
     func testACardDeclineStillClearsTheCVV() {
         var state = CardFormState()
         fill(&state)

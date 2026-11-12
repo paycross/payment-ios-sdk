@@ -5,12 +5,6 @@ import UIKit
 @testable import PayCross
 @testable import PayCrossCore
 
-/// The accessibility floor, on real renders.
-///
-/// Every item here is geometry or a side effect, which is why it is asserted at
-/// this level rather than in Core: the clamp is a number that has to reach a
-/// `UIFont`, the stack is two fields that have to end up above one another, and
-/// the announcement is a call that has to happen when a banner appears.
 @MainActor
 final class AccessibilityFloorTests: XCTestCase {
 
@@ -23,8 +17,6 @@ final class AccessibilityFloorTests: XCTestCase {
 
     // MARK: - The clamp
 
-    /// A merchant's factor multiplies a size that has already been clamped, so
-    /// the product cannot walk past the ceiling either.
     func testTheMerchantFactorMultipliesAClampedSize() {
         let style = Self.scaledStyle(1.3)
 
@@ -37,8 +29,6 @@ final class AccessibilityFloorTests: XCTestCase {
         }
     }
 
-    /// And below the ceiling it still tracks the shopper's setting, which is the
-    /// half a clamp is easy to break.
     func testTheMerchantFactorStillTracksSizesUnderTheCeiling() {
         let style = Self.scaledStyle(1.3)
         XCTAssertNotEqual(
@@ -60,8 +50,6 @@ final class AccessibilityFloorTests: XCTestCase {
         )
     }
 
-    /// The clamp reaching the appearance through the modifier the sheet applies,
-    /// rather than only through a value a test built by hand.
     func testTheSheetsClampReachesTheAppearanceItsViewsRead() throws {
         let seen = TypeSizeSpy()
         _ = host(
@@ -82,9 +70,6 @@ final class AccessibilityFloorTests: XCTestCase {
 
     // MARK: - Layout
 
-    /// The expiry and the CVV sit side by side at ordinary sizes and stack at
-    /// accessibility ones. Measured on the two fields themselves, because the
-    /// bug this replaces was them staying side by side and going to slivers.
     func testTheExpiryAndTheCVVStackAtAccessibilitySizes() throws {
         let ordinary = try expiryAndCVV(at: .xxLarge)
         XCTAssertEqual(
@@ -103,8 +88,6 @@ final class AccessibilityFloorTests: XCTestCase {
         )
     }
 
-    /// A stacked CVV is a usable width rather than the sliver the squeeze
-    /// produced: both fields take the column.
     func testAStackedFieldTakesTheFullWidth() throws {
         let large = try expiryAndCVV(at: .accessibility3)
         XCTAssertEqual(
@@ -114,19 +97,6 @@ final class AccessibilityFloorTests: XCTestCase {
         XCTAssertGreaterThan(large.cvv.width, 200, "the CVV field is still being squeezed")
     }
 
-    /// Apple's 44pt minimum, on the three fields whose control is a `UIView`
-    /// this test can measure.
-    ///
-    /// It caught the defect it now guards: 12pt of padding around a one-line
-    /// `UITextField` drew a 46pt box whose tappable half was 22pt. A
-    /// `UIViewRepresentable` fills the frame it is given, so a minimum height
-    /// on the field is the whole fix for these three.
-    ///
-    /// The cardholder name and the server-driven fields are SwiftUI
-    /// `TextField`s, which centre a one-line control inside the frame instead
-    /// of filling it. Measuring their `UITextField` reports 22pt however large
-    /// the box is, so the floor there is held by the box claiming the tap and
-    /// handing on the focus, which no unit test can press.
     func testEveryUIKitBackedFieldIsATouchTarget() throws {
         for size in [DynamicTypeSize.large, .accessibility3] {
             let window = hostForm(at: size, fieldGroups: Self.billingGroup)
@@ -154,8 +124,6 @@ final class AccessibilityFloorTests: XCTestCase {
         XCTAssertEqual(spoken, ["Payment failed. Please try again."])
     }
 
-    /// A second decline with a different reason reuses the view, so appearing is
-    /// not the only moment worth speaking.
     func testASecondReasonIsAnnouncedToo() throws {
         var spoken: [String] = []
         let messages = MessageBox(value: "Payment failed. Please try again.")
@@ -171,17 +139,6 @@ final class AccessibilityFloorTests: XCTestCase {
 
     // MARK: - The confirmations
 
-    /// A drawn confirmation has to tell VoiceOver it arrived.
-    ///
-    /// The system alert this replaces did it for free. A view appearing moves
-    /// nobody's focus, so without this a shopper pressed a card's trash and
-    /// heard silence, with focus still on the trash of the card the sheet was
-    /// already asking about.
-    ///
-    /// Where the focus lands is `.accessibilityFocused` on the title plus the
-    /// `.isModal` trait, and neither is readable from a test process with no
-    /// VoiceOver in it. That it is signalled at all is readable, through the
-    /// same kind of seam the error banner uses.
     func testAConfirmationTellsVoiceOverItAppeared() throws {
         var announced = 0
         _ = host(
@@ -252,7 +209,6 @@ final class AccessibilityFloorTests: XCTestCase {
 
 }
 
-/// Records what the appearance reported, from inside the tree that set it.
 @MainActor
 private final class TypeSizeSpy {
     var step: TypeSizeStep?

@@ -12,7 +12,7 @@ import PayCrossCore
 public enum PayCrossAPI {
 
     /// The SDK version, stamped into the User-Agent.
-    public static let version = "0.8.0"
+    public static let version = "0.8.1"
 
     private static let state = ConfigurationBox()
 
@@ -43,41 +43,19 @@ public struct Configuration: Sendable {
     public let environment: PayCrossEnvironment
     public let testCardPrefill: TestCardPrefill?
 
-    /// The merchant's own Apple merchant identifier, e.g. `merchant.example.com`.
+    /// The merchant's Apple merchant identifier, such as `merchant.example.com`.
     ///
-    /// Nil means no Apple Pay button, ever, and that is the correct default:
-    /// Apple's key derivation hashes this string into every payment token's
-    /// key, so a payment made without it cannot be decrypted by anybody. The
-    /// same string has to appear in three places -- here, in the app's Apple Pay
-    /// entitlement, and on the merchant record in the PayCross back office --
-    /// and the edge refuses a payment where the first and the last disagree.
+    /// It must match the app's Apple Pay merchant ID entitlement. Nil hides the Apple Pay button.
     public let applePayMerchantIdentifier: String?
 
-    /// How the sheet should look.
-    ///
-    /// Nil is not "no theming": the sheet still picks up the brand colour the
-    /// merchant set in the back office, which arrives with the session. Every
-    /// role a merchant leaves unset keeps the platform colour the sheet already
-    /// draws, so an appearance that names one colour changes one colour.
+    /// How the sheet should look. Nil keeps the session's brand colour and the platform defaults.
     public let appearance: PayCrossAppearance?
 
-    /// The language the sheet should speak, as a BCP-47 tag such as `fr` or
-    /// `fr-CA`.
+    /// The language the sheet should speak, as a BCP-47 tag such as `fr` or `fr-CA`.
     ///
-    /// Nil means the sheet decides: the session's own `locale` if the server
-    /// sent one, else the shopper's device, else English. Set it only when the
-    /// merchant's app has already asked the shopper what language they read in
-    /// and wants the sheet to agree.
-    ///
-    /// A tag the SDK ships no strings for is passed over rather than ending the
-    /// search, so asking for a language the sheet does not speak leaves the
-    /// session and the device their turn at it. The amount is a separate answer
-    /// and is not clamped to what the SDK ships: see `LOCALIZATION.md`.
+    /// Nil lets the sheet choose from the session, then the device, then English.
     public let locale: String?
 
-    /// Defaulted rather than left to the synthesised memberwise initialiser, so
-    /// that adding a field here does not break every call site that never had
-    /// an opinion about it.
     init(
         environment: PayCrossEnvironment,
         testCardPrefill: TestCardPrefill? = nil,
@@ -92,16 +70,14 @@ public struct Configuration: Sendable {
         self.locale = locale
     }
 
-    /// Prefill is ignored in production, matching `effectiveTestPrefill()` on Android.
+    /// The prefill when the environment allows one, otherwise nil.
     public var effectiveTestCardPrefill: TestCardPrefill? {
         environment.allowsTestCardPrefill ? testCardPrefill : nil
     }
 }
 
+// Not Codable, so the PAN and CVV cannot be persisted by accident.
 /// Prefills the card form for manual test runs. Ignored in production.
-///
-/// Deliberately not `Codable`: it carries a PAN and a CVV, and a synthesised
-/// encoder is an invitation to persist them.
 public struct TestCardPrefill: Sendable {
     public var cardholderName: String
     public var pan: String
@@ -136,7 +112,6 @@ extension TestCardPrefill: CustomStringConvertible, CustomDebugStringConvertible
     public var debugDescription: String { description }
 }
 
-/// Holds configuration across threads without requiring an actor hop at read time.
 private final class ConfigurationBox: @unchecked Sendable {
     private let lock = NSLock()
     private var value: Configuration?

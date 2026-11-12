@@ -6,34 +6,12 @@ import UIKit
 @testable import PayCross
 @testable import PayCrossCore
 
-/// Pins the parts of the Apple Pay branch that only a running iOS process can
-/// prove: that Apple's button is in the view hierarchy exactly when the model
-/// says it should be, that a tap reaches the model, that the model hands the
-/// authorizer the session's own numbers, and that field groups are validated
-/// before the sheet rather than after.
-///
-/// The simulator cannot make a real Apple Pay payment -- there is no
-/// entitlement under `CODE_SIGNING_ALLOWED=NO` and a simulator Wallet returns a
-/// stub token the vault refuses -- so nothing here asserts on a payment. What
-/// is asserted is which code runs and what it is handed.
 @MainActor
 final class ApplePayPresentationTests: XCTestCase {
 
 
-    /// Held for the duration of the test; a released window takes the hierarchy
-    /// under test with it.
-    ///
-    /// No `tearDown()` override releasing it, unlike `ThreeDSPresentationTests`:
-    /// `tearDown()` is a nonisolated override and this class is `@MainActor`, so
-    /// touching main-actor state from it is a Swift 6 diagnostic that can only
-    /// be silenced with an escape hatch. XCTest holds one instance per test
-    /// method for the length of the run, which is three windows here, and they
-    /// go when the suite does.
     private let host = ViewHost()
 
-    /// Nothing in this file is about the user agent, and WebKit's helper processes
-    /// can take tens of seconds to launch on a loaded CI machine — or never answer.
-    /// A stub keeps these tests measuring what they are about.
     private var originalUserAgentProvider: UserAgentProvider!
 
     override func setUp() {
@@ -49,8 +27,6 @@ final class ApplePayPresentationTests: XCTestCase {
 
     // MARK: - The button in the hierarchy
 
-    /// Hosts the card form in a real window and lets SwiftUI commit its layout,
-    /// so the `UIViewRepresentable` actually makes its `PKPaymentButton`.
     private func hostForm(
         showsApplePayButton: Bool,
         isLoading: Bool = false,
@@ -73,8 +49,6 @@ final class ApplePayPresentationTests: XCTestCase {
         )
     }
 
-    /// The negative half. Without it the test above passes against a form that
-    /// always draws the button.
     func testTheButtonIsAbsentWhenTheFormIsNotToldToShowIt() throws {
         let window = hostForm(showsApplePayButton: false)
         XCTAssertNil(
@@ -83,21 +57,10 @@ final class ApplePayPresentationTests: XCTestCase {
         )
     }
 
-    /// The primary action of the whole feature must not lie about its state.
-    ///
-    /// For the submit-and-poll phase, which this file's own comments say can
-    /// run to a deadline of minutes, the button was fully lit and did nothing
-    /// when tapped, because the model's re-entry guard swallowed it. The
-    /// spinner is on the card button, which is not the control the shopper is
-    /// looking at.
     func testTheButtonIsDisabledWhileAPaymentIsInFlight() throws {
         let busy = hostForm(showsApplePayButton: true, isLoading: true)
         let button = try XCTUnwrap(firstSubview(PKPaymentButton.self, in: busy))
 
-        // Asserted on `isUserInteractionEnabled` rather than `isEnabled`,
-        // because PKPaymentButton ignores the latter -- measured, not assumed:
-        // with both set false on the same view, the alpha changed and
-        // `isEnabled` still read true.
         XCTAssertFalse(
             button.isUserInteractionEnabled,
             "a lit button that does nothing when tapped is worse than a dim one"
@@ -113,9 +76,6 @@ final class ApplePayPresentationTests: XCTestCase {
         XCTAssertEqual(button.alpha, 1, accuracy: 0.001)
     }
 
-    /// SwiftUI puts `.accessibilityIdentifier` on its own accessibility node,
-    /// not on the wrapped control, so anything walking `UIView`s -- a UI test,
-    /// the demo harness in task 08 -- finds nothing without this.
     func testTheButtonCarriesItsIdentifierOnTheControlItself() throws {
         let window = hostForm(showsApplePayButton: true)
         let button = try XCTUnwrap(firstSubview(PKPaymentButton.self, in: window))
@@ -128,15 +88,6 @@ final class ApplePayPresentationTests: XCTestCase {
         let window = hostForm(showsApplePayButton: true) { taps.value += 1 }
         let button = try XCTUnwrap(firstSubview(PKPaymentButton.self, in: window))
 
-        // Dispatched through the registered target-action pair rather than
-        // `sendActions(for: .touchUpInside)`. That call routes through
-        // UIApplication's event machinery, an xctest bundle with no host app
-        // has no UIApplication object, and the count stays zero however well
-        // the button is wired -- measured, not assumed. Reaching for the pair
-        // is the route ThreeDSPresentationTests already uses for the
-        // challenge's Cancel, and it asserts strictly more: that a target is
-        // registered for a tap at all, and that the selector on it is the one
-        // the view installed.
         let target = try XCTUnwrap(
             button.allTargets.first as? NSObject,
             "Apple's button has no target, so a tap would go nowhere"
@@ -152,12 +103,6 @@ final class ApplePayPresentationTests: XCTestCase {
 
     // MARK: - The model's visibility rule, one truth table
 
-    /// The positive row, and the one that makes the four negatives mean
-    /// anything. On a simulator the real `canMakePayments` is always false --
-    /// a fresh device has an empty Wallet -- so a model that asked PassKit
-    /// directly would answer "no button" to every question here and every
-    /// negative row would pass for a reason that has nothing to do with what
-    /// it claims to test.
     func testTheModelOffersTheButtonWhenEveryConditionHolds() {
         let model = makeModel(
             sessionData: SessionData(wallets: WalletsAvailability(applePay: true)),
@@ -176,10 +121,6 @@ final class ApplePayPresentationTests: XCTestCase {
         XCTAssertFalse(model.showsApplePayButton)
     }
 
-    /// The gate's `data:` argument, exercised at the model level. This is the
-    /// only test that needs the initialiser's `sessionData:` seam: the
-    /// published property is `private(set)` and `@testable` does not defeat
-    /// that, and its only other writer is reached through a real network call.
     func testASessionThatSaysApplePayFalseMeansNoButton() {
         let model = makeModel(
             sessionData: SessionData(wallets: WalletsAvailability(applePay: false)),
@@ -198,15 +139,6 @@ final class ApplePayPresentationTests: XCTestCase {
         XCTAssertFalse(model.showsApplePayButton)
     }
 
-    /// A session that never loaded is not a session with no opinion.
-    ///
-    /// Core's gate answers `true` for nil data on purpose, because an absent
-    /// `wallets` block means the server said nothing and every snapshot minted
-    /// before the backend shipped that block reads that way. But `load()`
-    /// swallows a transport failure and a 5xx alike, so nil is also what a
-    /// session that never arrived looks like -- and the request spec needs the
-    /// session's own currency and amount. Rendering here would offer a button
-    /// that opens onto nothing.
     func testASessionThatNeverLoadedMeansNoButton() {
         let model = makeModel(
             sessionData: nil,
@@ -233,7 +165,6 @@ final class ApplePayPresentationTests: XCTestCase {
         )
 
         model.payWithApplePay()
-        // Hoisted out of XCTUnwrap: its argument is an autoclosure and cannot await.
         let recorded = await firstSpec(from: authorizer)
         let spec = try XCTUnwrap(recorded, "the authorizer was never called")
 
@@ -243,14 +174,6 @@ final class ApplePayPresentationTests: XCTestCase {
         XCTAssertEqual(spec.amount.minorUnits, 2599)
     }
 
-    /// The identifier is trimmed before it becomes payload.
-    ///
-    /// `WalletGate.offersApplePay` trims before answering and
-    /// `WalletToken.applePay` trims before building the submit body, so a
-    /// padded value left untrimmed here would put a merchant identifier Apple
-    /// cannot match on the `PKPaymentRequest` beside a body carrying the right
-    /// one. The sheet would never open and the only report would be that Apple
-    /// Pay could not be presented.
     func testAPaddedIdentifierReachesTheSheetTrimmed() async throws {
         let authorizer = FakeWalletAuthorizer(outcome: .cancelled)
         let model = makeModel(
@@ -261,7 +184,6 @@ final class ApplePayPresentationTests: XCTestCase {
         )
 
         model.payWithApplePay()
-        // Hoisted out of XCTUnwrap: its argument is an autoclosure and cannot await.
         let recorded = await firstSpec(from: authorizer)
         let spec = try XCTUnwrap(recorded, "the authorizer was never called")
 
@@ -289,18 +211,10 @@ final class ApplePayPresentationTests: XCTestCase {
         XCTAssertFalse(model.isLoading, "the shopper is back on the card form and it must be usable")
         XCTAssertNil(model.form.inlineError, "a cancel is not an error and must not be shown as one")
 
-        // Resume the sheet's own continuation so the test does not leak it.
         model.cancel()
         _ = await waiter.value
     }
 
-    /// The ordering the design is explicit about, asserted the only way that
-    /// distinguishes it: a **zero** call count. Asserting that an error appeared
-    /// would pass just as well against a sheet that opened first and validated
-    /// afterwards, which is exactly the failure this ordering exists to
-    /// prevent -- core rejects those field groups server-side, so the shopper
-    /// would have spent a Face ID authorisation on a rejection they could have
-    /// been shown before the sheet.
     func testInvalidFieldGroupsNeverReachTheAuthorizer() async {
         let authorizer = FakeWalletAuthorizer(outcome: .cancelled)
         let groups = [FieldGroup(key: "billing", label: "Billing address", fields: [
@@ -317,9 +231,6 @@ final class ApplePayPresentationTests: XCTestCase {
         )
 
         model.payWithApplePay()
-        // Long enough that a sheet opened before validation would have been
-        // recorded by now. Short on purpose: this waits to prove the sheet never
-        // opens, so it always runs to the deadline.
         _ = await waitUntil(timeout: 0.5) { await authorizer.callCount > 0 }
 
         let calls = await authorizer.callCount
@@ -330,18 +241,6 @@ final class ApplePayPresentationTests: XCTestCase {
 
     // MARK: - The join between the model and the sheet
 
-    /// The whole feature's on-switch.
-    ///
-    /// `PaymentSheetView` passing `model.showsApplePayButton` into
-    /// `CardFormView` is one line, and before this test it had no cover at all:
-    /// hardcoding it to `false` -- what a merge conflict resolution produces --
-    /// left every other test in this file green while Apple Pay simply never
-    /// appeared. The model's rule and the form's rendering were each pinned;
-    /// the wire between them was not.
-    ///
-    /// Driven through a stub transport rather than an injected snapshot, so the
-    /// session arrives the way it really does and the button appears in
-    /// response to it.
     func testTheSheetShowsTheButtonWhenTheLoadedSessionAllowsIt() async throws {
         let (window, model) = hostSheet(merchantIdentifier: "merchant.pay-cross.com")
 
@@ -353,8 +252,6 @@ final class ApplePayPresentationTests: XCTestCase {
         XCTAssertTrue(appeared, "the sheet must pass the model's answer into the form")
     }
 
-    /// The negative half, and it waits for the same session to land first, so
-    /// it cannot pass merely by looking too early.
     func testTheSheetHidesTheButtonWhenNoIdentifierIsConfigured() async throws {
         let (window, model) = hostSheet(merchantIdentifier: nil)
 
@@ -363,11 +260,6 @@ final class ApplePayPresentationTests: XCTestCase {
         XCTAssertFalse(model.showsApplePayButton)
 
         window.layoutIfNeeded()
-        // Watched for a second rather than sampled once, so this cannot pass by
-        // looking before SwiftUI has committed the update the session triggered.
-        // Short on purpose: it proves the button never appears, so it always runs
-        // to the deadline. The session it depends on was already awaited above,
-        // with the generous ceiling.
         let appeared = await waitUntil(timeout: 1) {
             self.firstSubview(PKPaymentButton.self, in: window) != nil
         }
@@ -376,12 +268,6 @@ final class ApplePayPresentationTests: XCTestCase {
 
     // MARK: - The authorised path
 
-    /// The one path that carries a payment token, end to end.
-    ///
-    /// Everything from the authorised outcome to the bytes on the wire was
-    /// untested: the `.authorized` branch, `WalletToken.applePay`, the wallet
-    /// `SubmitCardRequest`, and the runner tail. Core pins those builders in
-    /// isolation on Linux; nothing pinned that this model reaches them.
     func testAnAuthorizedTokenReachesTheSubmitBodyVerbatim() async throws {
         let token = try JSONDecoder().decode(JSONValue.self, from: Data(Self.appleTokenJSON.utf8))
         let transport = StubTransport(replies: [
@@ -421,16 +307,11 @@ final class ApplePayPresentationTests: XCTestCase {
 
         let wallet = try XCTUnwrap(body["wallet_token"] as? [String: Any])
         XCTAssertEqual(wallet["type"] as? String, "apple_pay")
-        // Read off the encoded JSON, not the struct. An omitted
-        // merchant_identifier is not a validation error at the edge: it reads
-        // as a web token, the vault falls back to the environment default and
-        // derives the wrong key, and the shopper gets a generic 400.
         XCTAssertTrue(wallet.keys.contains("merchant_identifier"))
         let identifier = try XCTUnwrap(wallet["merchant_identifier"] as? String)
         XCTAssertEqual(identifier, "merchant.pay-cross.com")
         XCTAssertFalse(identifier.isEmpty)
 
-        // Verbatim, walked by named key path rather than compared to itself.
         let data = try XCTUnwrap(wallet["data"] as? [String: Any])
         let paymentData = try XCTUnwrap(data["paymentData"] as? [String: Any])
         let header = try XCTUnwrap(paymentData["header"] as? [String: Any])
@@ -449,7 +330,6 @@ final class ApplePayPresentationTests: XCTestCase {
         _ = await waiter.value
     }
 
-    /// A rejected wallet token lands exactly where a rejected card lands.
     func testABackendRejectionSurfacesLikeACardDecline() async throws {
         let token = try JSONDecoder().decode(JSONValue.self, from: Data(Self.appleTokenJSON.utf8))
         let transport = StubTransport(replies: [
@@ -478,7 +358,6 @@ final class ApplePayPresentationTests: XCTestCase {
 
     // MARK: - Helpers
 
-    /// An Apple Pay token body, in the shape the web checkout posts.
     private static let appleTokenJSON = #"""
     {
       "paymentData": {
@@ -500,7 +379,6 @@ final class ApplePayPresentationTests: XCTestCase {
     }
     """#
 
-    /// The session the sheet's own `load()` fetches, allowing the wallet.
     private static let openSessionJSON = #"""
     {"session_id":"sess_1","status":"open",
      "data":{"merchant_country":"GB","wallets":{"apple_pay":true}}}
@@ -533,9 +411,6 @@ final class ApplePayPresentationTests: XCTestCase {
                 sessionID: "sess_1", merchantID: "m1", customerID: "c1",
                 brandingID: nil, amount: amount, expiresAt: nil
             ),
-            // Read off the model, never off PayCrossAPI: the static
-            // configuration is a process-wide box nothing resets, and this
-            // target also runs ScreenshotTests and ThreeDSPresentationTests.
             configuration: Configuration(
                 environment: .sandbox,
                 testCardPrefill: nil,
@@ -545,8 +420,6 @@ final class ApplePayPresentationTests: XCTestCase {
             deviceCanPay: { deviceCanPay },
             sessionData: sessionData,
             isPreparing: isPreparing,
-            // Never the real one. A model left holding URLSessionTransport
-            // would open a socket to the live checkout API from a unit test.
             transport: transport
         )
     }
@@ -556,16 +429,6 @@ final class ApplePayPresentationTests: XCTestCase {
         return await authorizer.received.first
     }
 
-    /// Polls until `condition` holds, or the ceiling passes.
-    ///
-    /// The ceiling is generous because it costs nothing: this returns the instant
-    /// the condition is true, so a fast machine never waits and a slow one is not
-    /// failed for being slow. A model that is genuinely broken still fails, on the
-    /// caller's own assertion and its message, rather than on the clock.
-    ///
-    /// Two calls in this file pass a deliberately *short* ceiling instead, and must
-    /// keep it. They wait to prove something never happens, so they always run to
-    /// the deadline and a generous one would only make the suite slow.
     private func waitUntil(
         timeout: TimeInterval = 30,
         _ condition: () async -> Bool
@@ -587,15 +450,6 @@ final class ApplePayPresentationTests: XCTestCase {
     }
 }
 
-/// Records every spec it is asked to authorize.
-///
-/// An actor rather than a class with a lock, and certainly rather than
-/// `@unchecked Sendable`: `WalletAuthorizing` is `Sendable`, the fake holds
-/// mutable state, and normalising the escape hatch into the test target is how
-/// it ends up in the SDK.
-///
-/// Recording is the point. A fake that only answers makes every test compile
-/// and proves nothing about what Apple was asked for.
 private actor FakeWalletAuthorizer: WalletAuthorizing {
     private(set) var received: [ApplePayRequestSpec] = []
     private let outcome: WalletAuthorizationOutcome
@@ -612,7 +466,6 @@ private actor FakeWalletAuthorizer: WalletAuthorizing {
     }
 }
 
-/// Boxed so an escaping closure and the assertions read the same value.
 @MainActor
 private final class Counter {
     var value = 0
@@ -623,8 +476,6 @@ private final class ResultBox {
     var value: PaymentResult?
 }
 
-/// Supplies the two bindings `CardFormView` needs in a context that has no
-/// `@State` of its own.
 private struct FormHarness: View {
     let showsApplePayButton: Bool
     let isLoading: Bool

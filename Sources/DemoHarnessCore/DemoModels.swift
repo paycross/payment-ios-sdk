@@ -1,6 +1,5 @@
 import Foundation
 
-/// A merchant the harness can mint sessions against.
 public struct Merchant: Codable, Sendable, Hashable, Identifiable {
     public enum Environment: String, Codable, Sendable {
         case staging = "STAGING"
@@ -38,7 +37,6 @@ public struct Merchant: Codable, Sendable, Hashable, Identifiable {
 
     public var isProduction: Bool { environment == .production }
 
-    /// Older harness configs wrote `payment_sessions`; the API path is hyphenated.
     public var sessionsURL: String {
         paymentAPIURL.replacingOccurrences(of: "payment_sessions", with: "payment-sessions")
     }
@@ -68,7 +66,6 @@ public struct CardPrefill: Codable, Sendable, Hashable {
         self.saveCard = saveCard
     }
 
-    /// Nil when there is no card to prefill, matching `toTestCardPrefillOrNull`.
     public var isUsable: Bool {
         !pan.trimmingCharacters(in: .whitespaces).isEmpty
     }
@@ -99,23 +96,15 @@ public struct Scenario: Codable, Sendable, Hashable, Identifiable {
     }
 }
 
-/// Which surface a session was opened on.
 public enum CheckoutSurface: String, Codable, Sendable, CaseIterable {
-    /// The native SDK sheet.
     case sdk
-    /// The hosted checkout page in a browser.
     case browser
-    /// A copied link, opened wherever.
     case link
-    /// A QR code, scanned on another device.
     case qr
 
-    /// Whether outcomes for this surface must be discovered by polling the
-    /// session rather than from an SDK callback.
     public var requiresPolling: Bool { self != .sdk }
 }
 
-/// One minted session on any surface.
 public struct RunRecord: Codable, Sendable, Hashable, Identifiable {
     public var id: String
     public var timestamp: Date
@@ -172,7 +161,6 @@ public struct DemoData: Codable, Sendable {
     public var selectedMerchantID: String?
     public var runs: [RunRecord]
 
-    /// Bounded so the harness cannot grow without limit on a test device.
     public static let maxRuns = 50
 
     public init(

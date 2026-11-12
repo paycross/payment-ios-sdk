@@ -50,8 +50,6 @@ final class FieldGroupLogicTests: XCTestCase {
         XCTAssertFalse(state.isRequired, "a hidden field is never required")
     }
 
-    /// A missing control value is "" and simply fails the `in` test; it must not
-    /// crash or accidentally satisfy the condition.
     func testAbsentControlValueIsTreatedAsEmpty() {
         let state = FieldGroupLogic.fieldState(
             for: field("state", condition: FieldCondition(
@@ -62,8 +60,6 @@ final class FieldGroupLogicTests: XCTestCase {
         XCTAssertFalse(state.isVisible)
     }
 
-    /// With no `default`, an unmet condition leaves the field visible and
-    /// optional — nil is not "hidden".
     func testNilDefaultLeavesTheFieldVisible() {
         let state = FieldGroupLogic.fieldState(
             for: field("state", condition: FieldCondition(
@@ -124,7 +120,6 @@ final class FieldGroupLogicTests: XCTestCase {
         XCTAssertEqual(errors.count, 1)
     }
 
-    /// The whole point of conditions: a hidden field must never block submission.
     func testHiddenFieldsAreNotValidated() {
         let groups = [FieldGroup(key: "billing", fields: [
             field("state", required: true, condition: FieldCondition(
@@ -191,8 +186,6 @@ final class FieldGroupLogicTests: XCTestCase {
         )
     }
 
-    /// The server writes these for one field in one merchant's own words, so they
-    /// are not translatable and they still win over anything the sheet resolved.
     func testAServerSuppliedMessageStillBeatsTheResolvedFallback() {
         let groups = [FieldGroup(key: "b", fields: [
             field(
@@ -209,9 +202,6 @@ final class FieldGroupLogicTests: XCTestCase {
 
     // MARK: - Validation in the sheet's language
 
-    /// The server sends its own sentences in every language it renders, so the
-    /// message that beats the resolved fallback is now the one for the language
-    /// the sheet resolved rather than the single string it used to send.
     func testAServerMessageComesOutInTheSheetsLanguage() {
         let validation = FieldValidation(
             pattern: "^[0-9]+$",
@@ -241,8 +231,6 @@ final class FieldGroupLogicTests: XCTestCase {
         )
     }
 
-    /// A session minted before the maps existed, and a language the maps do not
-    /// name, both read the singular value.
     func testAMessageWithNoMapForTheLanguageFallsBackToTheSingularOne() {
         let groups = [FieldGroup(key: "b", fields: [
             field(
@@ -256,9 +244,6 @@ final class FieldGroupLogicTests: XCTestCase {
         )
     }
 
-    /// The same per-rule fallback as the reader has, through `validate`: the
-    /// French shopper reads the French `required` and the pattern sentence the
-    /// server wrote once, not our own wording for the second one.
     func testARuleMissingFromItsLanguagesMapStillComesFromTheServer() {
         let validation = FieldValidation(
             pattern: "^[0-9]+$",
@@ -281,8 +266,6 @@ final class FieldGroupLogicTests: XCTestCase {
         )
     }
 
-    /// The fallback sentence names the field, so the name it uses has to be the
-    /// label the shopper is actually looking at.
     func testTheFallbackSentenceNamesTheFieldInTheSheetsLanguage() {
         let groups = [FieldGroup(key: "b", fields: [
             field(
@@ -303,17 +286,12 @@ final class FieldGroupLogicTests: XCTestCase {
         )
     }
 
-    /// Kotlin uses containsMatchIn, i.e. a substring match. Treating an unanchored
-    /// server pattern as a whole-string match would reject values the checkout
-    /// page accepts.
     func testPatternMatchingIsSubstringNotWholeString() {
         XCTAssertTrue(FieldGroupLogic.matches("AB12CD", pattern: "[0-9]+"))
         XCTAssertTrue(FieldGroupLogic.matches("abc", pattern: "b"))
         XCTAssertFalse(FieldGroupLogic.matches("abc", pattern: "^[0-9]+$"))
     }
 
-    /// A broken server pattern must not make checkout impossible; the server
-    /// validates too.
     func testMalformedPatternPassesRatherThanBlocking() {
         XCTAssertTrue(FieldGroupLogic.matches("anything", pattern: "([unclosed"))
     }
@@ -388,8 +366,6 @@ final class FieldGroupLogicTests: XCTestCase {
         fields: [FieldDefinition(name: "email", label: "Email", required: true)]
     )
 
-    /// A shipping group the merchant offers rather than requires. Its fields are
-    /// required *if* the group counts at all, which is the whole difficulty.
     private let shipping = FieldGroup(
         key: "shipping_address",
         label: "Shipping Address",
@@ -401,7 +377,6 @@ final class FieldGroupLogicTests: XCTestCase {
         ]
     )
 
-    /// The same group as a merchant who did not mark it sends it.
     private var shippingMandatory: FieldGroup {
         FieldGroup(
             key: shipping.key, label: shipping.label, labels: shipping.labels,
@@ -419,9 +394,6 @@ final class FieldGroupLogicTests: XCTestCase {
         XCTAssertTrue(FieldGroupLogic.isActive(shipping, optedIn: ["shipping_address"]))
     }
 
-    /// The flag is what makes a group declinable. A key in the set that names a
-    /// group nobody marked must not turn that group off, or a stale entry would
-    /// silently drop a mandatory address.
     func testAMandatoryGroupAlwaysCountsWhateverTheSetHolds() {
         XCTAssertTrue(FieldGroupLogic.isActive(contact, optedIn: []))
         XCTAssertTrue(FieldGroupLogic.isActive(shippingMandatory, optedIn: []))
@@ -441,8 +413,6 @@ final class FieldGroupLogicTests: XCTestCase {
         )
     }
 
-    /// The bug as filed: five required shipping fields with no way to decline,
-    /// so a shopper who wanted delivery to the billing address could not pay.
     func testADeclinedGroupsRequiredFieldsDoNotBlockThePayment() {
         let errors = FieldGroupLogic.validate(
             groups: FieldGroupLogic.activeGroups([contact, shipping], optedIn: []),
@@ -462,8 +432,6 @@ final class FieldGroupLogicTests: XCTestCase {
         XCTAssertEqual(errors.first?.groupKey, "shipping_address")
     }
 
-    /// Without the flag nothing changes: the same group still blocks the same
-    /// payment it blocked before, whatever the set says.
     func testAGroupWithoutTheFlagStillBlocksThePayment() {
         let errors = FieldGroupLogic.validate(
             groups: FieldGroupLogic.activeGroups(
@@ -474,16 +442,11 @@ final class FieldGroupLogicTests: XCTestCase {
         XCTAssertEqual(errors.map(\.fieldName), ["line1", "city"])
     }
 
-    /// Omitted, not emptied. An empty dictionary under `shipping_address` is a
-    /// shopper saying "here is my shipping address: nothing", which is a
-    /// different claim from not having been asked.
     func testADeclinedGroupIsAbsentFromTheSubmissionEntirely() {
         let submitted = FieldGroupLogic.submissionValues(
             groups: FieldGroupLogic.activeGroups([contact, shipping], optedIn: []),
             values: [
                 "contact": ["email": "a@b.test"],
-                // The merchant prefilled it and the shopper never ticked the
-                // group. Held in state so ticking restores it; never sent.
                 "shipping_address": ["line1": "1 Rue de Rivoli", "city": "Paris"]
             ]
         )
@@ -508,8 +471,6 @@ final class FieldGroupLogicTests: XCTestCase {
 
     // MARK: - The server's length limit
 
-    /// 254 rather than a round number, so an off-by-one shows up as the wrong
-    /// count rather than as a plausible one.
     private let limit = 254
 
     private func notesErrors(
@@ -545,8 +506,6 @@ final class FieldGroupLogicTests: XCTestCase {
         XCTAssertEqual(errors.first?.message, "Notes must be 254 characters or fewer")
     }
 
-    /// The sentence has to name both the field and the limit. One without the
-    /// other leaves the shopper knowing either what to shorten or how far.
     func testTheFallbackSentenceNamesTheFieldAndTheLimit() throws {
         let message = try XCTUnwrap(
             notesErrors(String(repeating: "a", count: limit + 1)).first?.message
@@ -555,8 +514,6 @@ final class FieldGroupLogicTests: XCTestCase {
         XCTAssertTrue(message.contains("254"), message)
     }
 
-    /// The shopper reads this in the language the sheet is in, and the SDK's own
-    /// wording reaches Core already looked up.
     func testTheFallbackSentenceIsTheSheetsOwn() {
         var french = FlowMessages.english
         french.fieldTooLong = "Champ trop long : %@ (%@ caractères maximum)"
@@ -568,8 +525,6 @@ final class FieldGroupLogicTests: XCTestCase {
         )
     }
 
-    /// A sentence the server wrote for this one field wins over ours, in the
-    /// sheet's language, exactly as `required` and `pattern` already do.
     func testTheServersOwnSentenceWinsInTheSheetsLanguage() {
         let errors = notesErrors(
             String(repeating: "a", count: limit + 1),
@@ -583,8 +538,6 @@ final class FieldGroupLogicTests: XCTestCase {
         XCTAssertEqual(errors.first?.message, "Trop long, désolé")
     }
 
-    /// A session minted before the per-language maps carries one sentence, and
-    /// it is still the server's to give.
     func testTheServersSingularSentenceIsUsedWhenItSendsNoMaps() {
         let errors = notesErrors(
             String(repeating: "a", count: limit + 1),
@@ -595,10 +548,6 @@ final class FieldGroupLogicTests: XCTestCase {
         XCTAssertEqual(errors.first?.message, "Keep it short")
     }
 
-    /// UTF-16 code units, because that is what Kotlin's `String.length` and
-    /// JavaScript's `String.slice` count. Swift's own `count` is grapheme
-    /// clusters, and a family emoji is one of those and eleven code units, so
-    /// the two answers differ by ten on a single character.
     func testTheLimitIsCountedInUTF16CodeUnitsLikeTheOtherClients() {
         let family = "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}\u{1F466}"
         XCTAssertEqual(family.count, 1, "the fixture is not the character it claims to be")
@@ -614,8 +563,6 @@ final class FieldGroupLogicTests: XCTestCase {
         XCTAssertEqual(notesErrors(family, validation: FieldValidation(maxLength: 11)), [])
     }
 
-    /// One complaint per field. A value that is both too long and off-pattern
-    /// must not stack two messages under one box.
     func testALengthFailureIsReportedInsteadOfThePatternNotAsWell() {
         let errors = notesErrors(
             String(repeating: "a", count: limit + 1),
@@ -625,7 +572,6 @@ final class FieldGroupLogicTests: XCTestCase {
         XCTAssertEqual(errors.first?.message, "Notes must be 254 characters or fewer")
     }
 
-    /// A field the shopper left alone is not too long, however low the limit.
     func testABlankOptionalFieldIsNeverTooLong() {
         XCTAssertEqual(notesErrors("", validation: FieldValidation(maxLength: 1)), [])
         XCTAssertEqual(notesErrors("   ", validation: FieldValidation(maxLength: 1)), [])
@@ -633,7 +579,6 @@ final class FieldGroupLogicTests: XCTestCase {
 
     // MARK: - The name an assistive technology speaks
 
-    /// The sheet's own copy, as it reaches Core already looked up.
     private let requiredEN = "%@, required"
     private let requiredFR = "%@, obligatoire"
 
@@ -648,8 +593,6 @@ final class FieldGroupLogicTests: XCTestCase {
         placeholders: ["en": "123 Main St", "fr": "123 Main St"]
     )
 
-    /// The bug this replaces: the spoken name was the placeholder, so the
-    /// billing line announced the example address instead of the field.
     func testAnOptionalFieldIsSpokenAsItsLabel() {
         XCTAssertEqual(
             FieldGroupLogic.accessibleName(
@@ -676,7 +619,6 @@ final class FieldGroupLogicTests: XCTestCase {
         )
     }
 
-    /// A session minted before the per-language maps existed still has a name.
     func testASessionWithoutTheMapsIsSpokenAsItsSingularLabel() {
         let singular = FieldDefinition(name: "line1", label: "Address line 1")
         XCTAssertEqual(
@@ -687,8 +629,6 @@ final class FieldGroupLogicTests: XCTestCase {
         )
     }
 
-    /// The last resort. A field the merchant labelled nothing announced nothing
-    /// at all before, because its placeholder was null too.
     func testAFieldWithNoLabelIsSpokenAsItsName() {
         XCTAssertEqual(
             FieldGroupLogic.accessibleName(
@@ -698,9 +638,6 @@ final class FieldGroupLogicTests: XCTestCase {
         )
     }
 
-    /// An empty label is not a name. This is the field the whole fix is for —
-    /// the one nothing on screen identifies — so handing it an explicitly empty
-    /// name would leave it exactly as unnamed as the placeholder fallback did.
     func testAFieldWhoseLabelIsEmptyIsSpokenAsItsName() {
         let blank = FieldDefinition(
             name: "first_name", label: "", labels: ["en": "", "fr": ""]
@@ -713,9 +650,6 @@ final class FieldGroupLogicTests: XCTestCase {
         )
     }
 
-    /// Required-ness comes from the state, not from `field.required`. A field a
-    /// condition makes required carries `required: nil` on the wire, so reading
-    /// the flag would leave the shopper who most needs the word without it.
     func testAFieldMadeRequiredByItsConditionIsSpokenAsRequired() {
         let state = FieldGroupLogic.fieldState(
             for: field("state", condition: FieldCondition(

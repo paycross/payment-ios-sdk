@@ -3,11 +3,6 @@ import SwiftUI
 import DemoHarnessCore
 import PayCrossCore
 
-/// Every session this harness has minted, newest first.
-///
-/// History exists because the interesting failures are the ones you notice after
-/// the fact: a run that reported success but took no money, or a scenario that
-/// behaves differently on the browser surface than in the sheet.
 public struct HarnessHistoryView: View {
     let runs: [RunRecord]
     let onSelect: (RunRecord) -> Void
@@ -20,8 +15,6 @@ public struct HarnessHistoryView: View {
     public var body: some View {
         Group {
             if runs.isEmpty {
-                // Hand-rolled rather than ContentUnavailableView, which is iOS 17+
-                // while this package targets iOS 16.
                 VStack(spacing: 8) {
                     Image(systemName: "clock")
                         .font(.largeTitle)
@@ -36,8 +29,6 @@ public struct HarnessHistoryView: View {
             } else {
                 List(runs) { run in
                     Button { onSelect(run) } label: { RunRow(run: run) }
-                        // Otherwise the row inherits the accent tint and the
-                        // outcome badge loses its green/red/orange meaning.
                         .buttonStyle(.plain)
                 }
             }
@@ -64,10 +55,6 @@ private struct RunRow: View {
                     .padding(.vertical, 2)
                     .background(Color.secondary.opacity(0.15), in: Capsule())
                 if let amount = run.amount, let currency = run.currency {
-                    // Minor units. Interpolating them raw renders 2599 cents as
-                    // "2,599 EUR" - SwiftUI's Text even adds a grouping separator -
-                    // which reads as two and a half thousand euros. Amounts knows
-                    // about zero-decimal currencies too.
                     Text(Amounts.formatted(Amount(minorUnits: amount, currencyCode: currency)))
                         .monospacedDigit()
                 }
@@ -83,8 +70,6 @@ private struct RunRow: View {
     }
 }
 
-/// State is carried by shape and text, not colour alone, so it survives a
-/// colour-blind reader and a greyscale screenshot.
 private struct OutcomeBadge: View {
     let outcome: String
 
@@ -107,7 +92,6 @@ private struct OutcomeBadge: View {
     }
 }
 
-/// One run in full, including the exact body that was posted.
 public struct RunDetailView: View {
     let run: RunRecord
     let curlCommand: String

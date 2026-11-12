@@ -3,28 +3,14 @@ import XCTest
 @testable import PayCross
 @testable import PayCrossCore
 
-/// The version in the User-Agent must be the version the merchant installed.
-///
-/// It was `0.1.0-alpha` while the pods shipped `0.1.1`, so every payment made
-/// through this SDK told the backend it came from a version that was never
-/// released. That is not cosmetic: the User-Agent is how a support question
-/// about one merchant's payments gets narrowed to one SDK build.
 @MainActor
 final class VersionTests: XCTestCase {
 
-    /// Read from the podspecs rather than restated here. A test that repeats
-    /// the literal is a second place to edit at the next release and catches
-    /// nothing that reading the diff would not.
-    ///
-    /// Both podspecs, because `PayCross.podspec` declares
-    /// `s.dependency 'PayCrossCore', "#{s.version}"`: bump one and not the
-    /// other and nothing fails until `pod lib lint` refuses at publish time,
-    /// with the version already chosen.
     private func podspecVersion(_ name: String = "PayCross") throws -> String {
         let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // PayCrossUITests
-            .deletingLastPathComponent()   // Tests
-            .deletingLastPathComponent()   // repo root
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
         let podspec = try String(
             contentsOf: root.appendingPathComponent("\(name).podspec"), encoding: .utf8
         )
@@ -47,14 +33,6 @@ final class VersionTests: XCTestCase {
         )
     }
 
-    /// The same comparison from the far end: the byte that actually goes on the
-    /// wire.
-    ///
-    /// An earlier version of this test compared the constant to itself, with
-    /// the same interpolated prefix on both sides, so it could not fail
-    /// independently of the test above and never read a shipped string at all.
-    /// This drives a real session fetch through a stub transport and reads the
-    /// header off the request the client built.
     func testTheHeaderOnTheWireCarriesTheShippedVersion() async throws {
         let transport = StubTransport(json: #"{"session_id":"sess_1","status":"open"}"#)
         let model = PaymentSheetModel(
@@ -79,8 +57,6 @@ final class VersionTests: XCTestCase {
         )
     }
 
-    /// The fallback User-Agent is a shipped string too: it is what a 3DS
-    /// submission carries until the real device agent resolves.
     func testTheFallbackUserAgentCarriesTheShippedVersion() throws {
         XCTAssertTrue(
             DeviceInfo.defaultUserAgent.contains("PayCrossSDK-iOS/\(try podspecVersion())"),

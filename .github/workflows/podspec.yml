@@ -1,16 +1,8 @@
 name: Podspec
 
-# CocoaPods is how a Flutter plugin's iOS side consumes this SDK, and a podspec
-# can only be validated by CocoaPods on a Mac - there is no Linux equivalent, and
-# the machine these are written on has no Ruby at all.
+# Lints the podspecs with CocoaPods, which runs only on macOS; kept out of ci.yml as it runs only when a podspec changes.
 #
-# Deliberately not part of ci.yml: that runs on every push, and this is macOS
-# time (~10x Linux on a private repo) spent proving something that only changes
-# when a podspec or the source layout does.
-#
-# `tags:` is deliberately absent. Listing it alongside `paths:` under the same
-# push filter means branch pushes stop matching entirely, which is how the first
-# version of this file managed to never run at all.
+# No `tags:` filter: with `paths:` it stops branch pushes from matching.
 on:
   push:
     branches: [main]
@@ -38,9 +30,7 @@ jobs:
           pod --version
           xcodebuild -version
 
-      # PayCrossCore first: PayCross depends on it, so linting PayCross against
-      # the trunk CDN would 404 on a pod that is not published there. --include-podspecs
-      # points it at the local sibling instead.
+      # PayCrossCore goes first; --include-podspecs makes PayCross resolve it locally, not from the trunk CDN.
       - name: Lint PayCrossCore
         run: |
           pod lib lint PayCrossCore.podspec \

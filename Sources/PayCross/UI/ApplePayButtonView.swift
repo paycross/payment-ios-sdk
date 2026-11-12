@@ -2,34 +2,19 @@
 import PassKit
 import SwiftUI
 
-/// Apple's own button, wrapped for SwiftUI.
-///
-/// `PKPaymentButton` rather than anything drawn here: Apple's brand guidelines
-/// require their control, and an app shipping a lookalike is a review
-/// rejection. `.automatic` style so it follows the shopper's appearance
-/// setting, which SwiftUI cannot do for a UIKit control any other way.
+// Apple's brand guidelines require its own control, so PKPaymentButton is wrapped rather than drawn.
 struct ApplePayButtonView: UIViewRepresentable {
     @Environment(\.payCrossAppearance) private var style
     let action: () -> Void
 
-    /// False while a payment is being submitted.
-    ///
-    /// Set on the control itself, because SwiftUI's `.disabled()` does not
-    /// reach the `UIView` a `UIViewRepresentable` wraps. Without it the primary
-    /// action of the whole feature stays fully lit for the submit and poll
-    /// phase, which can run for minutes, doing nothing when tapped -- while the
-    /// spinner sits on the card button, the one control the shopper is not
-    /// looking at.
+    // SwiftUI's `.disabled()` does not reach the UIView a UIViewRepresentable wraps, so the control is disabled directly.
     var isEnabled: Bool = true
 
     func makeUIView(context: Context) -> PKPaymentButton {
         let button = PKPaymentButton(paymentButtonType: .buy, paymentButtonStyle: .automatic)
-        // The radius is the only property of this control the SDK may change:
-        // Apple's guidelines own its colours, its label and its type.
+        // Apple's guidelines own the colours, label and type, so only the corner radius is set.
         button.cornerRadius = style.buttonCornerRadius(or: 10)
-        // On the control as well as on the SwiftUI node, which is where the
-        // modifier in CardFormView puts it. Anything walking UIViews -- a UI
-        // test, the demo harness -- finds nothing otherwise.
+        // UI tests walk UIViews, so the identifier is set on the control as well as on the SwiftUI node.
         button.accessibilityIdentifier = PayCrossTestIdentifiers.walletButton.rawValue
         button.addTarget(context.coordinator, action: #selector(Coordinator.tapped), for: .touchUpInside)
         return button
@@ -37,11 +22,7 @@ struct ApplePayButtonView: UIViewRepresentable {
 
     func updateUIView(_ uiView: PKPaymentButton, context: Context) {
         context.coordinator.action = action
-        // `isUserInteractionEnabled`, not `isEnabled` alone: PKPaymentButton
-        // ignores `isEnabled` and reports true however it is set -- measured on
-        // iOS 26.5, where the alpha took effect on the same view and the
-        // enabled flag did not. Both are set anyway, so the control is right if
-        // Apple ever starts honouring it.
+        // PKPaymentButton ignores `isEnabled`, so `isUserInteractionEnabled` is set as well.
         uiView.cornerRadius = style.buttonCornerRadius(or: 10)
         uiView.isEnabled = isEnabled
         uiView.isUserInteractionEnabled = isEnabled
@@ -50,14 +31,7 @@ struct ApplePayButtonView: UIViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator(action: action) }
 
-    /// `NSObject`, not a bare Swift class.
-    ///
-    /// `addTarget(_:action:for:)` is Objective-C target-action, and UIKit hands
-    /// the registered targets back through `allTargets`, whose elements bridge
-    /// as `NSObject`. A Swift-native coordinator registers without complaint
-    /// and then traps the moment anything reads that set -- which the
-    /// presentation test does, to prove a tap has somewhere to go. Inheriting
-    /// from `NSObject` is what this API has always expected of a target.
+    // UIKit reads targets back as NSObject, so the coordinator inherits NSObject.
     final class Coordinator: NSObject {
         var action: () -> Void
         init(action: @escaping () -> Void) { self.action = action }

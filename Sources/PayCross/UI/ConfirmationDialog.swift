@@ -1,34 +1,12 @@
 #if os(iOS)
 import SwiftUI
 
-/// A confirmation the sheet draws itself, rather than a `.alert`.
-///
-/// **Measured, not assumed.** SwiftUI renders `.alert` through a
-/// `UIAlertController`, and it does not carry a `Button`'s
-/// `accessibilityIdentifier` onto the resulting `UIAlertAction`: with the cancel
-/// confirmation open on iOS 26.5, both actions answered `accessibilityIdentifier`
-/// with nil and the alert's whole view tree carried none. So the four buttons the
-/// README promises could not be reached by name, and neither could the two
-/// dialogs, which have no view the SDK ever holds.
-///
-/// Drawn here instead, the six identifiers are ordinary SwiftUI ones, applied the
-/// same way as the Pay button's and reachable the same way. That is the whole
-/// reason this exists: it is not a nicer alert, it is an addressable one, and it
-/// matches the dialog identifiers Android already publishes.
-///
-/// A title, a message, then the two answers stacked, destructive first and the
-/// one that changes nothing under it where the thumb rests. Stacked at every
-/// size rather than only at accessibility ones: `Continue Payment` already wraps
-/// beside `Yes, Cancel` on a 390pt sheet, and `Continuer le paiement` is longer
-/// still. A row that has to be measured before it is safe is a row that breaks
-/// in the next language.
+// A SwiftUI .alert does not carry accessibilityIdentifier onto its buttons, so the dialog is drawn here.
+// The answers stack at every size, since longer translations do not fit side by side on a 390pt sheet.
 struct ConfirmationDialog: View {
     @Environment(\.payCrossAppearance) private var style
-    /// Where VoiceOver is put when the question appears. The `.isModal` trait
-    /// below keeps it inside; this is what gets it in.
     @AccessibilityFocusState private var titleFocused: Bool
 
-    /// One of the two answers.
     struct Choice {
         let title: String
         let identifier: PayCrossTestIdentifiers
@@ -38,20 +16,13 @@ struct ConfirmationDialog: View {
     let identifier: PayCrossTestIdentifiers
     let title: String
     let message: String
-    /// The one that goes through with it. Drawn in the error colour, because
-    /// both of these end something the shopper cannot get back.
     let confirm: Choice
-    /// The one that leaves everything as it was.
     let dismiss: Choice
-    /// Announces the appearance to VoiceOver. Injected only so a test can watch
-    /// it happen: focus state is not readable, and there is no VoiceOver in a
-    /// test process to read it with.
     var announceAppearance: () -> Void = { SheetAnnouncement.screenChanged() }
 
     var body: some View {
         ZStack {
-            // Opaque enough to read against, and it takes the touches: a tap
-            // outside is not an answer, exactly as a system alert has it.
+            // The scrim takes the touches, so a tap outside is not an answer.
             Color.black.opacity(0.4)
                 .ignoresSafeArea()
                 .contentShape(Rectangle())
@@ -83,18 +54,14 @@ struct ConfirmationDialog: View {
             )
             .payCrossForeground(style.color(\.text))
             .padding(24)
-            // VoiceOver stays inside the question until it is answered. Without
-            // it the form underneath is still read out, and still operable.
+            // VoiceOver stays inside the question; without this it reads and operates the form underneath.
             .accessibilityElement(children: .contain)
             .accessibilityAddTraits(.isModal)
             .payCrossIdentifier(identifier)
         }
         .onAppear {
-            // A question drawn over a raised keypad is a question half off the
-            // screen. The alert this replaces put the keypad away on the way up.
+            // The dialog resigns the keypad, since a raised keypad would leave the question half off screen.
             KeypadDismissal.resignFirstResponder()
-            // And it moved VoiceOver onto itself. Both halves: the notification
-            // tells VoiceOver to re-orient, the focus state says where to land.
             announceAppearance()
             titleFocused = true
         }

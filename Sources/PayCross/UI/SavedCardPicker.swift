@@ -2,23 +2,13 @@
 import SwiftUI
 import PayCrossCore
 
-/// The stored-card rows, plus the row that switches back to card entry.
-///
-/// Holds no state and no logic. Selecting a card and asking to delete one both
-/// leave through a closure; what they mean is decided in Core and in the sheet.
-/// The delete confirmation lives on the sheet beside the cancel confirmation,
-/// because both are the sheet asking the shopper to stand behind something.
 struct SavedCardPicker: View {
     @Environment(\.payCrossAppearance) private var style
     let cards: [SavedCard]
     let selection: CardEntrySource
     let allowsRemoval: Bool
-    /// A payment is in flight. The trash goes away rather than going dead: a
-    /// control that is still there and does nothing reads as a broken sheet.
     let isPaying: Bool
     let onSelect: (CardEntrySource) -> Void
-    /// Reports that the shopper pressed the trash. Nothing is deleted here: the
-    /// sheet raises the confirmation and only then calls the server.
     let onRemoveRequested: (SavedCard) -> Void
 
     private var offersRemoval: Bool { allowsRemoval && !isPaying }
@@ -56,10 +46,7 @@ struct SavedCardPicker: View {
         remove: (() -> Void)? = nil,
         removeIdentifier: String = ""
     ) -> some View {
-        // Siblings rather than a delete button nested inside the selection
-        // button: a tap landing on the wrong one of two overlapping controls
-        // either charges a card the shopper meant to delete or deletes one they
-        // meant to pay with.
+        // Nested buttons share one tap area in SwiftUI, so the trash is a sibling of the selection button.
         HStack(spacing: 0) {
             Button(action: action) {
                 HStack {
@@ -89,15 +76,10 @@ struct SavedCardPicker: View {
                 Button(action: remove) {
                     Image(systemName: "trash")
                         .foregroundStyle(style.foreground(\.icon, default: .secondary))
-                        // The row is 44pt tall; the trash matches it, so the
-                        // target is a target rather than a glyph.
                         .frame(minWidth: 44, minHeight: 44)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                // Named after the row it belongs to. Every trash on the screen
-                // is otherwise the same control to VoiceOver, on a screen whose
-                // whole point is telling the cards apart.
                 .accessibilityLabel(
                     L("paycross_remove_card", "Remove card, %@", label)
                 )

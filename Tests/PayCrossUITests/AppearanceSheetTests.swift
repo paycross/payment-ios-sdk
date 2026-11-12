@@ -4,9 +4,6 @@ import SwiftUI
 @testable import PayCross
 @testable import PayCrossCore
 
-/// The two things about the appearance that only exist above Core: the sheet's
-/// own window carrying a pinned mode, and the merchant's back-office brand
-/// colour arriving on the session rather than in code.
 @MainActor
 final class AppearanceSheetTests: XCTestCase {
 
@@ -33,9 +30,6 @@ final class AppearanceSheetTests: XCTestCase {
 
     // MARK: - Pinned mode
 
-    /// A pinned mode reaches the sheet's own window and nothing else. Set at
-    /// init because the mode is a code setting, so it is known long before the
-    /// session is fetched, and the window resolves its style before then.
     func testTheHostPinsTheSheetToTheThemeMode() {
         let expected: [PayCrossThemeMode: UIUserInterfaceStyle] = [
             .system: .unspecified, .light: .light, .dark: .dark
@@ -49,8 +43,6 @@ final class AppearanceSheetTests: XCTestCase {
         }
     }
 
-    /// No appearance at all is not a pinned mode. An integration that never
-    /// mentions theming must leave the sheet following the device.
     func testAnUnconfiguredSheetFollowsTheDevice() {
         let host = PaymentHostController(model: makeModel())
         XCTAssertEqual(host.overrideUserInterfaceStyle, .unspecified)
@@ -58,8 +50,6 @@ final class AppearanceSheetTests: XCTestCase {
 
     // MARK: - The server's brand colour
 
-    /// The whole point of the back-office field: an integration that passes no
-    /// appearance still comes up in the merchant's own colour.
     func testTheSessionBrandColourReachesTheSheetInBothAppearances() async {
         let model = makeModel(json: Self.brandedSession)
         await model.load()
@@ -68,8 +58,6 @@ final class AppearanceSheetTests: XCTestCase {
         XCTAssertEqual(model.appearance.resolved.dark.brand, Self.serverBlue)
     }
 
-    /// Precedence, at the level a merchant actually meets it: their own code
-    /// beats what their back office published.
     func testACodeSetBrandBeatsTheSessionBrandColour() async {
         let code = PayCrossColor(argb: 0xFF67_50A4)
         let model = makeModel(appearance: .brand(code), json: Self.brandedSession)
@@ -79,8 +67,6 @@ final class AppearanceSheetTests: XCTestCase {
         XCTAssertEqual(model.appearance.resolved.dark.brand, code)
     }
 
-    /// A code appearance that themes something else does not shut the server's
-    /// colour out: precedence is per role, not per appearance.
     func testACodeAppearanceWithoutABrandStillTakesTheServerColour() async {
         let model = makeModel(
             appearance: PayCrossAppearance(light: PayCrossColors(surface: .white)),
@@ -92,8 +78,6 @@ final class AppearanceSheetTests: XCTestCase {
         XCTAssertEqual(model.appearance.resolved.light.surface, .white)
     }
 
-    /// Sessions minted before the backend shipped the block carry none, and
-    /// there will be live ones. The sheet keeps the platform's own accent.
     func testASessionWithoutBrandingLeavesThePlatformAccent() async {
         let model = makeModel()
         await model.load()
@@ -102,8 +86,6 @@ final class AppearanceSheetTests: XCTestCase {
         XCTAssertNil(model.appearance.color(\.brand))
     }
 
-    /// The label on the Pay button is derived from whichever brand won, so a
-    /// server colour gets the contrast rule the same as a code one.
     func testTheServerColourGetsTheContrastRuleToo() async {
         let model = makeModel(json: ##"""
         {"session_id":"sess_1","status":"open","data":{"branding":{"brand_color":"#FFEB3B"}}}

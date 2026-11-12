@@ -5,15 +5,6 @@ import SwiftUI
 @testable import PayCross
 @testable import PayCrossCore
 
-/// A field the session locks has to look locked.
-///
-/// The lock itself has always worked — the control is disabled, it refuses the
-/// focus, and typing at it leaves its value byte-identical. Only the drawing
-/// was missing, so every existing assertion passed while the shopper's only way
-/// to discover a locked field was to tap it and watch nothing happen. That is
-/// exactly the shape of defect a render comparison catches and a behavioural
-/// test cannot: measured on the SDK before this change, a read-only field and
-/// an editable one differed by zero pixels.
 @MainActor
 final class ReadOnlyFieldTests: XCTestCase {
 
@@ -31,7 +22,6 @@ final class ReadOnlyFieldTests: XCTestCase {
 
     // MARK: - Fixtures
 
-    /// One field, differing from its twin by the lock and nothing else.
     private func group(readOnly: Bool) -> FieldGroup {
         FieldGroup(
             key: "billing",
@@ -47,8 +37,6 @@ final class ReadOnlyFieldTests: XCTestCase {
         )
     }
 
-    /// A locked select. Its empty row has to sit on something, so the rule
-    /// there is the dash rather than nothing at all.
     private func select(readOnly: Bool) -> FieldGroup {
         FieldGroup(
             key: "billing",
@@ -88,9 +76,6 @@ final class ReadOnlyFieldTests: XCTestCase {
         _ group: FieldGroup, _ values: [String: [String: String]] = [:]
     ) -> UIImage {
         let window = form(group, values)
-        // Longer than the shared settle, for the reason the language suite
-        // gives: a layer read before the text has drawn compares two blank
-        // forms and reports no difference between them.
         host.settle(0.4)
         return UIGraphicsImageRenderer(bounds: window.bounds).image { context in
             window.layer.render(in: context.cgContext)
@@ -101,10 +86,8 @@ final class ReadOnlyFieldTests: XCTestCase {
         textFields(in: window).compactMap { $0.placeholder ?? $0.attributedPlaceholder?.string }
     }
 
-    // MARK: - The two fields no longer draw the same
+    // MARK: - Read-only field drawing
 
-    /// The issue as filed. Both fields carry the same value, so nothing but the
-    /// treatment of the lock can move a pixel.
     func testALockedFieldIsDrawnDifferentlyFromAnEditableOne() throws {
         XCTAssertGreaterThan(
             try differingPixels(
@@ -115,8 +98,6 @@ final class ReadOnlyFieldTests: XCTestCase {
         )
     }
 
-    /// The control. Without it a comparison that always differs would look like
-    /// a proof.
     func testTwoEditableFieldsDrawIdentically() throws {
         XCTAssertEqual(
             try differingPixels(
@@ -127,9 +108,6 @@ final class ReadOnlyFieldTests: XCTestCase {
         )
     }
 
-    /// The worse case found while testing: a locked field with no value drew a
-    /// grey example, which reads as a city the merchant filled in rather than
-    /// as one to type. There is nothing to type into.
     func testALockedEmptyFieldDrawsNoPlaceholder() {
         XCTAssertFalse(
             placeholders(in: form(group(readOnly: true), [:])).contains("CITY EXAMPLE"),
@@ -144,8 +122,6 @@ final class ReadOnlyFieldTests: XCTestCase {
         )
     }
 
-    /// A select cannot draw nothing: its empty row is the thing the closed menu
-    /// shows. The dash is what an unset select has always sat on.
     func testALockedEmptySelectDrawsTheDashRatherThanItsPlaceholder() throws {
         XCTAssertGreaterThan(
             try differingPixels(render(select(readOnly: true)), render(select(readOnly: false))),
@@ -154,13 +130,7 @@ final class ReadOnlyFieldTests: XCTestCase {
         )
     }
 
-    /// The fill and the text colour are two changes, and the render comparison
-    /// above would pass on either one alone. The text colour reaches the
-    /// `UITextField` under the SwiftUI field, so it can be read back exactly.
     func testALockedFieldDrawsItsTextInTheSupportingColour() throws {
-        // The group's own field is the last on the form; the card fields are
-        // drawn above it. Comparing the same field both ways rather than
-        // against a card field, so nothing but the lock differs.
         let locked = try XCTUnwrap(textFields(in: form(group(readOnly: true), filled)).last)
         let editable = try XCTUnwrap(textFields(in: form(group(readOnly: false), filled)).last)
         XCTAssertFalse(locked.isEnabled, "the last field on the form is not the locked one")
@@ -171,10 +141,6 @@ final class ReadOnlyFieldTests: XCTestCase {
         )
     }
 
-    /// The caret needs no code of its own and never did: a disabled control
-    /// takes no first responder, and the row hands it no tap to focus with.
-    /// Pinned here because the fix is described as three things, and this is
-    /// the one that was already true.
     func testALockedFieldTakesNoInput() {
         let locked = textFields(in: form(group(readOnly: true), filled))
             .filter { !$0.isEnabled }
@@ -184,9 +150,6 @@ final class ReadOnlyFieldTests: XCTestCase {
 
     // MARK: - The colour comes from the appearance system
 
-    /// Derived rather than named. A merchant who themed the component colour
-    /// gets a locked box that still belongs to their palette instead of a grey
-    /// one dropped into a branded form.
     func testTheLockedFillIsDerivedFromTheMerchantsOwnComponentColour() {
         let brandComponent = PayCrossColor(red: 0x1E, green: 0x88, blue: 0xE5)
         let style = AppearanceStyle(resolved: AppearanceResolver.resolve(
@@ -203,9 +166,6 @@ final class ReadOnlyFieldTests: XCTestCase {
         XCTAssertEqual(locked.payCrossColor, AppearanceResolver.muted(brandComponent))
     }
 
-    /// And an unthemed sheet mutes by the same rule rather than by a second,
-    /// hardcoded colour: the fill being muted is then the platform's own, which
-    /// is near-white in one appearance and near-black in the other.
     func testAnUnthemedSheetMutesThePlatformsOwnFillInBothAppearances() {
         let locked = UIColor(AppearanceStyle.unstyled.readOnlyComponent)
         for style in [UIUserInterfaceStyle.light, .dark] {
