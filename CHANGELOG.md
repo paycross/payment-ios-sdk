@@ -7,7 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-* CocoaPods is no longer supported. Install with Swift Package Manager; 0.8.1 is the last release on CocoaPods trunk.
+### Removed
+
+- CocoaPods support. Install with Swift Package Manager; 0.8.1 is the last release on CocoaPods trunk.
+
+## [0.8.1] - 2026-11-12
+
+### Changed
+
+- Source comments are trimmed to plain API docs. No API or behaviour change.
 
 ## [0.8.0] - 2026-09-10
 
@@ -530,7 +538,8 @@ Initial public release.
   merchant-facing types; internal collaborators moved to package access.
 - The payments client no longer caches status poll responses.
 
-[Unreleased]: https://github.com/paycross/payment-ios-sdk/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/paycross/payment-ios-sdk/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/paycross/payment-ios-sdk/releases/tag/v0.8.1
 [0.8.0]: https://github.com/paycross/payment-ios-sdk/releases/tag/v0.8.0
 [0.7.3]: https://github.com/paycross/payment-ios-sdk/releases/tag/v0.7.3
 [0.7.2]: https://github.com/paycross/payment-ios-sdk/releases/tag/v0.7.2

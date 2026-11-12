@@ -10,7 +10,7 @@ sheet. Your app hands it a payment session token and gets a result back.
 ```swift
 .package(
     url: "https://github.com/paycross/payment-ios-sdk.git",
-    from: "0.8.1"
+    .upToNextMinor(from: "0.8.1")
 )
 ```
 
