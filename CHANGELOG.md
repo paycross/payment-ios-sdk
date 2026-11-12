@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+* CocoaPods is no longer supported. Install with Swift Package Manager; 0.8.1 is the last release on CocoaPods trunk.
+
 ## [0.8.0] - 2026-09-10
 
 ### Added

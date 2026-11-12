@@ -5,18 +5,12 @@ sheet. Your app hands it a payment session token and gets a result back.
 
 ## Install
 
-### CocoaPods
-
-```ruby
-pod 'PayCross', '~> 0.8.0'
-```
-
 ### Swift Package Manager
 
 ```swift
 .package(
     url: "https://github.com/paycross/payment-ios-sdk.git",
-    .upToNextMinor(from: "0.8.0")
+    from: "0.8.1"
 )
 ```
 
