@@ -1,10 +1,7 @@
 // swift-tools-version: 6.0
 import PackageDescription
 
-// PayCrossCore is deliberately free of UIKit/SwiftUI/WebKit so it builds and tests
-// on Linux. That is not an abstract nicety: the SDK is developed from WSL2 with no
-// Apple hardware, so every behaviour that lives in Core is verifiable on every
-// commit, and everything in PayCross is not.
+// PayCrossCore imports no UIKit, SwiftUI or WebKit, so it builds and tests on Linux.
 let package = Package(
     name: "PayCross",
     defaultLocalization: "en",
@@ -30,26 +27,18 @@ let package = Package(
             dependencies: ["PayCrossCore"],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
-        // Renders the SwiftUI surfaces to PNGs on a macOS runner. Empty on Linux.
+        // Renders SwiftUI surfaces to PNGs on a macOS runner; empty on Linux.
         .testTarget(
             name: "PayCrossUITests",
             dependencies: ["PayCross", "PayCrossCore", "DemoHarnessCore", "DemoHarnessUI"],
-            // en.lproj and fr.lproj of its own, so a test can pass its
-            // Bundle.module to L as the merchant app and watch the override
-            // land. Both are load-bearing: the French one is how the sheet
-            // proves an override comes out in the language IT resolved to,
-            // rather than in whatever the device is set to.
+            // Both lproj folders are needed: the French one proves an override beats the device language.
             resources: [.process("Resources")],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
-        // The demo harness's logic: seeds, minting, deep links, outcome reading.
-        // Platform-agnostic on purpose, so the automation contract is testable.
         .target(
             name: "DemoHarnessCore",
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
-        // Harness screens. Lives in the package rather than only in an app target
-        // so the screenshot pipeline can render it before an app exists.
         .target(
             name: "DemoHarnessUI",
             dependencies: ["DemoHarnessCore", "PayCross", "PayCrossCore"],

@@ -16,22 +16,16 @@ Pod::Spec.new do |s|
     :tag => "v#{s.version}"
   }
 
-  # Must track Package.swift's platforms:. A mismatch surfaces to the merchant as
-  # an opaque CocoaPods resolution failure rather than a clear minimum-version error.
+  # Must match Package.swift's platforms:, or CocoaPods fails to resolve instead of reporting the version.
   s.ios.deployment_target = '16.0'
 
-  # .swiftLanguageMode(.v6) is a SwiftPM setting and is not carried into a Pods
-  # project, so the sources would silently build in Swift 5 mode. The strict
-  # concurrency this SDK is written against is not optional, so pin it here too.
+  # .swiftLanguageMode(.v6) is not carried into a Pods project, so the Swift 6 mode is pinned here.
   s.swift_versions = ['6.0']
-  # Both pods must compile as one Swift package so `package`-access symbols in
-  # Core stay invisible to merchants but usable by PayCross.
+  # Both pods compile as one Swift package so package-access symbols in Core stay usable by PayCross.
   s.pod_target_xcconfig = { 'SWIFT_VERSION' => '6.0', 'OTHER_SWIFT_FLAGS' => '-package-name PayCross' }
 
   s.source_files = 'Sources/PayCrossCore/**/*.swift'
 
-  # Apple requires SDKs to ship a privacy manifest; CocoaPods/Apple guidance is
-  # to place it in a resource bundle named after the pod so the built app gets
-  # a PayCrossCorePrivacy.bundle/PrivacyInfo.xcprivacy Apple's tooling expects.
+  # Apple requires SDKs to ship a privacy manifest in a bundle named after the pod.
   s.resource_bundles = { 'PayCrossCorePrivacy' => ['Sources/PayCrossCore/Resources/PrivacyInfo.xcprivacy'] }
 end

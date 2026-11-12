@@ -1,7 +1,6 @@
 name: Reference
 
-# Not swift-docc-plugin: adding it to Package.swift would make it a resolved
-# dependency of every SPM consumer of PayCross. xcodebuild docbuild needs nothing.
+# Uses xcodebuild docbuild, not swift-docc-plugin: that would be a dependency of every SPM consumer.
 
 on:
   push:

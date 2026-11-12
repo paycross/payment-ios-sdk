@@ -2,12 +2,6 @@
 import SwiftUI
 import DemoHarnessCore
 
-/// The harness home screen: pick a merchant, pick a scenario, pick a surface, run.
-///
-/// The surface choice is the point of this app. A teammate wanted to show the
-/// payment page in a browser rather than in the app, so minting, presenting and
-/// observing are deliberately decoupled — the outcome comes from polling the
-/// session regardless of where the shopper actually paid.
 public struct HarnessHomeView: View {
     @Binding var data: DemoData
     @Binding var surface: CheckoutSurface
@@ -106,7 +100,6 @@ public struct HarnessHomeView: View {
     }
 }
 
-/// Production is a different colour and says so in words, never colour alone.
 private struct ProductionWarning: View {
     var body: some View {
         Label {
@@ -142,25 +135,11 @@ private struct ScenarioRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
         }
-        // Without .plain the whole label inherits the accent tint and the
-        // foregroundStyle calls above are silently ignored - name, hint and
-        // last-four all render blue.
         .buttonStyle(.plain)
         .accessibilityIdentifier("scenario-\(scenario.name)")
     }
 }
 
-/// The confirmation gate for production runs.
-///
-/// Presented when `HarnessRunner.decide` returns `.confirmProduction`, which is
-/// evaluated before anything is minted — a gate that fires after the session
-/// exists has already spent real money's worth of setup.
-///
-/// The decision deliberately lives in Core rather than here, because the
-/// deep-link entry point never passes through this view. An earlier version of
-/// this file carried a comment claiming the gate was enforced when no gate
-/// existed at all, and wrongly attributed the defect to the Android harness,
-/// which gates correctly.
 public struct ProductionGateView: View {
     let merchantName: String
     let scenarioName: String
